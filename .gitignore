@@ -73,3 +73,12 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# APK files
+*.apk
+
+# Screenshots
+screenshot*.png
+
+# Android bundle assets (generated)
+android/app/src/main/assets/

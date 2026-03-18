@@ -1,4 +1,4 @@
-package com.blockblast
+package com.cubricks.game
 
 import android.app.Application
 import com.facebook.react.PackageList

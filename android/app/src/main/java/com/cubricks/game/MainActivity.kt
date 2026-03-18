@@ -1,4 +1,4 @@
-package com.blockblast
+package com.cubricks.game
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
