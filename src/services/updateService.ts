@@ -3,8 +3,8 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 
 // 현재 앱 버전 — 새 빌드마다 여기를 올려야 함
 // 버전코드 = major*100 + minor*10 + patch (v1.2.1 → 121)
-export const CURRENT_VERSION_CODE = 122;
-export const CURRENT_VERSION_NAME = '1.2.2';
+export const CURRENT_VERSION_CODE = 123;
+export const CURRENT_VERSION_NAME = '1.2.3';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 
@@ -45,7 +45,6 @@ export async function checkForUpdate(): Promise<{
 
     if (latestCode <= CURRENT_VERSION_CODE) return null;
 
-    // Find APK asset
     const apkAsset = release.assets.find(a => a.name.endsWith('.apk'));
     if (!apkAsset) return null;
 
@@ -59,48 +58,52 @@ export async function checkForUpdate(): Promise<{
   }
 }
 
-export function showUpdateDialog(update: {
-  versionName: string;
-  downloadUrl: string;
-  releaseNotes: string;
-}) {
+export function showUpdateDialog(
+  update: {versionName: string; downloadUrl: string; releaseNotes: string},
+  onStartDownload: (update: {versionName: string; downloadUrl: string}) => void,
+) {
   Alert.alert(
     `새 버전 ${update.versionName}`,
     update.releaseNotes || '새로운 업데이트가 있습니다.',
     [
       {text: '나중에', style: 'cancel'},
-      {text: '업데이트', onPress: () => downloadAndInstall(update)},
+      {text: '업데이트', onPress: () => onStartDownload(update)},
     ],
   );
 }
 
-async function downloadAndInstall(update: {
-  versionName: string;
-  downloadUrl: string;
-}) {
+export async function downloadAndInstall(
+  update: {versionName: string; downloadUrl: string},
+  onProgress: (pct: number) => void,
+  onDone: () => void,
+  onError: (msg: string) => void,
+) {
+  if (Platform.OS !== 'android') {
+    Linking.openURL(update.downloadUrl);
+    onDone();
+    return;
+  }
+
   try {
-    if (Platform.OS !== 'android') {
-      Linking.openURL(update.downloadUrl);
-      return;
-    }
+    const filePath = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/blockhero_${update.versionName}.apk`;
 
-    Alert.alert('다운로드 중', 'APK를 다운로드하고 있습니다. 잠시 기다려주세요...');
-
-    const dirs = ReactNativeBlobUtil.fs.dirs;
-    const filePath = `${dirs.CacheDir}/blockhero_${update.versionName}.apk`;
-
-    // 직접 다운로드 (DownloadManager 사용하지 않음)
     const res = await ReactNativeBlobUtil.config({
       fileCache: true,
       path: filePath,
-    }).fetch('GET', update.downloadUrl);
+    })
+      .fetch('GET', update.downloadUrl)
+      .progress({interval: 200}, (received, total) => {
+        const pct = total > 0 ? Math.round((received / total) * 100) : 0;
+        onProgress(pct);
+      });
 
-    // 다운로드 완료 후 설치 인텐트 실행
+    onDone();
+
     ReactNativeBlobUtil.android.actionViewIntent(
       res.path(),
       'application/vnd.android.package-archive',
     );
   } catch (e: any) {
-    Alert.alert('업데이트 실패', '다운로드 중 오류가 발생했습니다.\n' + (e?.message || ''));
+    onError(e?.message || '알 수 없는 오류');
   }
 }
