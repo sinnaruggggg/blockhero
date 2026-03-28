@@ -3,8 +3,8 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 
 // 현재 앱 버전 — 새 빌드마다 여기를 올려야 함
 // 버전코드 = major*100 + minor*10 + patch (v1.2.1 → 121)
-export const CURRENT_VERSION_CODE = 125;
-export const CURRENT_VERSION_NAME = '1.2.5';
+export const CURRENT_VERSION_CODE = 126;
+export const CURRENT_VERSION_NAME = '1.2.6';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 
