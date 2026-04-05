@@ -1,12 +1,12 @@
 import {Alert, Linking, Platform} from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import {isNewerVersion} from './updateVersion';
 
-// 현재 앱 버전 — 새 빌드마다 여기를 올려야 함
-// 버전코드 = major*100 + minor*10 + patch (v1.2.1 → 121)
-export const CURRENT_VERSION_CODE = 126;
-export const CURRENT_VERSION_NAME = '1.2.6';
+export const CURRENT_VERSION_CODE = 145;
+export const CURRENT_VERSION_NAME = '1.3.17-codex';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
+const APK_MIME = 'application/vnd.android.package-archive';
 
 interface GitHubRelease {
   tag_name: string;
@@ -18,38 +18,35 @@ interface GitHubRelease {
   }[];
 }
 
-function parseVersionCode(tag: string): number {
-  // v1.2 → 120, v1.2.1 → 121, v2.0 → 200
-  const match = tag.replace(/^v/, '').match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
-  if (!match) return 0;
-  const major = parseInt(match[1], 10);
-  const minor = parseInt(match[2], 10);
-  const patch = match[3] ? parseInt(match[3], 10) : 0;
-  return major * 100 + minor * 10 + patch;
-}
-
 export async function checkForUpdate(): Promise<{
   versionName: string;
   downloadUrl: string;
   releaseNotes: string;
 } | null> {
   try {
-    const res = await fetch(
+    const response = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
       {headers: {Accept: 'application/vnd.github.v3+json'}},
     );
-    if (!res.ok) return null;
 
-    const release: GitHubRelease = await res.json();
-    const latestCode = parseVersionCode(release.tag_name);
+    if (!response.ok) {
+      return null;
+    }
 
-    if (latestCode <= CURRENT_VERSION_CODE) return null;
+    const release: GitHubRelease = await response.json();
+    const latestVersionName = release.tag_name.replace(/^v/, '');
 
-    const apkAsset = release.assets.find(a => a.name.endsWith('.apk'));
-    if (!apkAsset) return null;
+    if (!isNewerVersion(latestVersionName, CURRENT_VERSION_NAME)) {
+      return null;
+    }
+
+    const apkAsset = release.assets.find(asset => asset.name.endsWith('.apk'));
+    if (!apkAsset) {
+      return null;
+    }
 
     return {
-      versionName: release.tag_name.replace(/^v/, ''),
+      versionName: latestVersionName,
       downloadUrl: apkAsset.browser_download_url,
       releaseNotes: release.body || '',
     };
@@ -85,25 +82,31 @@ export async function downloadAndInstall(
   }
 
   try {
-    const filePath = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/blockhero_${update.versionName}.apk`;
+    const apkFileName = `blockhero_${update.versionName}.apk`;
+    const downloadPath = `${ReactNativeBlobUtil.fs.dirs.DownloadDir}/${apkFileName}`;
 
-    const res = await ReactNativeBlobUtil.config({
-      fileCache: true,
-      path: filePath,
+    const result = await ReactNativeBlobUtil.config({
+      addAndroidDownloads: {
+        useDownloadManager: true,
+        notification: true,
+        title: apkFileName,
+        description: `BlockHero Codex ${update.versionName} 업데이트`,
+        path: downloadPath,
+        mime: APK_MIME,
+        mediaScannable: true,
+      },
     })
       .fetch('GET', update.downloadUrl)
       .progress({interval: 200}, (received, total) => {
-        const pct = total > 0 ? Math.round((received / total) * 100) : 0;
-        onProgress(pct);
+        const percent = total > 0 ? Math.round((received / total) * 100) : 0;
+        onProgress(percent);
       });
 
+    await ReactNativeBlobUtil.android.actionViewIntent(result.path(), APK_MIME);
     onDone();
-
-    ReactNativeBlobUtil.android.actionViewIntent(
-      res.path(),
-      'application/vnd.android.package-archive',
-    );
-  } catch (e: any) {
-    onError(e?.message || '알 수 없는 오류');
+  } catch (error: any) {
+    const fallbackMessage =
+      '업데이트 다운로드 또는 설치 화면을 열지 못했습니다. 다시 시도해 주세요.';
+    onError(error?.message || fallbackMessage);
   }
 }
