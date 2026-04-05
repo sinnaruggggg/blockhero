@@ -67,7 +67,25 @@ interface PartyMemberLocal {
   nickname: string;
 }
 
-const QUERY_TIMEOUT_MS = 7000;
+type LoadIssueKind = 'timeout' | 'supabase' | 'thrown' | 'unknown';
+
+interface LoadIssue {
+  label: string;
+  kind: LoadIssueKind;
+  message?: string;
+}
+
+interface LoadSummary {
+  blocking: boolean;
+  message: string;
+  detail?: string;
+  issues: LoadIssue[];
+}
+
+const QUERY_TIMEOUT_MS = 10000;
+const PARTIAL_LOAD_DETAIL = '일반 레이드는 계속 플레이할 수 있습니다.';
+const SOCIAL_LOAD_LABELS = new Set(['friendIds', 'friends', 'party', 'partyMembers']);
+const PROGRESSION_LOAD_LABELS = new Set(['normalRaidProgress', 'levelProgress']);
 
 function getBossNameColorStyle(color: string) {
   return {color};
@@ -95,10 +113,130 @@ function withTimeout<T>(
   });
 }
 
+function getIssueMessage(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as {message?: unknown}).message === 'string'
+  ) {
+    return (error as {message: string}).message;
+  }
+  return undefined;
+}
+
+function isSupabaseLikeError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as Record<string, unknown>;
+  return (
+    typeof candidate.message === 'string' ||
+    typeof candidate.code === 'string' ||
+    typeof candidate.details === 'string' ||
+    typeof candidate.hint === 'string'
+  );
+}
+
+function classifyLoadIssue(label: string, error: unknown): LoadIssue {
+  const message = getIssueMessage(error);
+
+  if (message === `${label}_timeout` || message?.endsWith('_timeout')) {
+    return {label, kind: 'timeout', message};
+  }
+
+  if (isSupabaseLikeError(error)) {
+    return {label, kind: 'supabase', message};
+  }
+
+  if (message) {
+    return {label, kind: 'thrown', message};
+  }
+
+  return {label, kind: 'unknown'};
+}
+
+function getResponseLoadIssue(label: string, value: unknown): LoadIssue | null {
+  if (!value || typeof value !== 'object' || !('error' in value)) {
+    return null;
+  }
+
+  const responseError = (value as {error?: unknown}).error;
+  if (!responseError) {
+    return null;
+  }
+
+  return classifyLoadIssue(label, responseError);
+}
+
+function logLoadIssue(issue: LoadIssue, error: unknown) {
+  console.warn(`RaidLobbyScreen ${issue.label} ${issue.kind} error:`, error);
+}
+
+function buildPartialLoadSummary(issues: LoadIssue[]): LoadSummary | null {
+  if (issues.length === 0) {
+    return null;
+  }
+
+  const labels = new Set(issues.map(issue => issue.label));
+  const hasActiveRaidIssue = labels.has('activeRaids');
+  const hasSocialIssue = Array.from(labels).some(label => SOCIAL_LOAD_LABELS.has(label));
+  const hasProgressIssue = Array.from(labels).some(label => PROGRESSION_LOAD_LABELS.has(label));
+
+  if (hasActiveRaidIssue && !hasSocialIssue && !hasProgressIssue) {
+    return {
+      blocking: false,
+      message: '활성 레이드 목록을 불러오지 못했습니다. 다시 시도해 주세요.',
+      detail: PARTIAL_LOAD_DETAIL,
+      issues,
+    };
+  }
+
+  if (hasSocialIssue && !hasActiveRaidIssue && !hasProgressIssue) {
+    return {
+      blocking: false,
+      message: '친구 또는 파티 정보를 일부 불러오지 못했습니다.',
+      detail: PARTIAL_LOAD_DETAIL,
+      issues,
+    };
+  }
+
+  if (hasProgressIssue && !hasActiveRaidIssue && !hasSocialIssue) {
+    return {
+      blocking: false,
+      message: '일부 레이드 진행 정보를 불러오지 못했습니다.',
+      detail: PARTIAL_LOAD_DETAIL,
+      issues,
+    };
+  }
+
+  return {
+    blocking: false,
+    message: '일부 레이드 정보를 불러오지 못했습니다. 다시 시도해 주세요.',
+    detail: PARTIAL_LOAD_DETAIL,
+    issues,
+  };
+}
+
+function buildBlockingLoadSummary(issue: LoadIssue): LoadSummary {
+  return {
+    blocking: true,
+    message: '레이드 정보를 불러오지 못했습니다. 다시 시도해 주세요.',
+    issues: [issue],
+  };
+}
+
 export default function RaidLobbyScreen({navigation}: any) {
   const [raidMode, setRaidMode] = useState<'normal' | 'boss'>('normal');
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const [, setTick] = useState(0);
   const [activeRaids, setActiveRaids] = useState<ActiveRaid[]>([]);
   const [normalRaidProgress, setNormalRaidProgress] = useState<any>({});
@@ -170,7 +308,7 @@ export default function RaidLobbyScreen({navigation}: any) {
     }
 
     setLoading(true);
-    setLoadError(null);
+    setLoadSummary(null);
 
     try {
       const [playerId, nickname] = await withTimeout(
@@ -183,17 +321,25 @@ export default function RaidLobbyScreen({navigation}: any) {
       playerIdRef.current = playerId;
       nicknameRef.current = nickname;
 
-      const loadErrors: string[] = [];
+      const loadIssues: LoadIssue[] = [];
       const safeLoad = async <T,>(
         label: string,
         task: () => Promise<T>,
         fallback: T,
       ): Promise<T> => {
         try {
-          return await withTimeout(task(), label);
+          const value = await withTimeout(task(), label);
+          const responseIssue = getResponseLoadIssue(label, value);
+          if (responseIssue) {
+            loadIssues.push(responseIssue);
+            logLoadIssue(responseIssue, (value as {error?: unknown}).error);
+            return fallback;
+          }
+          return value;
         } catch (error) {
-          loadErrors.push(label);
-          console.warn(`RaidLobbyScreen ${label} error:`, error);
+          const issue = classifyLoadIssue(label, error);
+          loadIssues.push(issue);
+          logLoadIssue(issue, error);
           return fallback;
         }
       };
@@ -229,11 +375,6 @@ export default function RaidLobbyScreen({navigation}: any) {
       setNormalRaidProgress(raidProgress);
       setUnlockedBossStages(getUnlockedBossRaidStages(levelProgress));
       setFriendList(loadedFriendList.data || []);
-      setLoadError(
-        loadErrors.length > 0
-          ? '일부 레이드 정보를 불러오지 못했습니다. 다시 시도할 수 있습니다.'
-          : null,
-      );
 
       if (partyResult.data) {
         const party = partyResult.data;
@@ -266,15 +407,12 @@ export default function RaidLobbyScreen({navigation}: any) {
         setIsLeader(false);
       }
 
-      setLoadError(
-        loadErrors.length > 0
-          ? '일부 레이드 정보를 불러오지 못했습니다. 다시 시도할 수 있습니다.'
-          : null,
-      );
+      setLoadSummary(buildPartialLoadSummary(loadIssues));
     } catch (error) {
-      console.warn('RaidLobbyScreen loadData error:', error);
+      const issue = classifyLoadIssue('playerProfile', error);
+      logLoadIssue(issue, error);
       if (isCurrentRequest()) {
-        setLoadError('레이드 정보를 불러오지 못했습니다. 다시 시도해 주세요.');
+        setLoadSummary(buildBlockingLoadSummary(issue));
       }
     } finally {
       if (isCurrentRequest()) {
@@ -595,9 +733,14 @@ export default function RaidLobbyScreen({navigation}: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {loadError && (
-          <View style={styles.loadErrorCard}>
-            <Text style={styles.loadErrorText}>{loadError}</Text>
+        {loadSummary && (
+          <View
+            style={styles.loadErrorCard}
+            testID={loadSummary.blocking ? 'raid-load-error-blocking' : 'raid-load-error-partial'}>
+            <Text style={styles.loadErrorText}>{loadSummary.message}</Text>
+            {loadSummary.detail ? (
+              <Text style={styles.loadErrorDetail}>{loadSummary.detail}</Text>
+            ) : null}
             <TouchableOpacity style={styles.retryBtn} onPress={() => loadData()}>
               <Text style={styles.retryBtnText}>다시 시도</Text>
             </TouchableOpacity>
@@ -870,6 +1013,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     fontWeight: '700',
+  },
+  loadErrorDetail: {
+    color: '#fde68a',
+    fontSize: 11,
+    lineHeight: 16,
   },
   retryBtn: {
     alignSelf: 'flex-start',

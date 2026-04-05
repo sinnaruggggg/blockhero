@@ -1,5 +1,6 @@
 import React from 'react';
-import {View, StyleSheet, Text, TouchableOpacity} from 'react-native';
+import {View, StyleSheet, Text} from 'react-native';
+import BackImageButton from './BackImageButton';
 import {t} from '../i18n';
 
 interface GameHeaderProps {
@@ -29,9 +30,7 @@ export default function GameHeader({
     <View style={styles.container}>
       <View style={styles.topRow}>
         {onBack && (
-          <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Text style={styles.backText}>{t('common.backExit')}</Text>
-          </TouchableOpacity>
+          <BackImageButton onPress={onBack} size={40} style={styles.backBtn} />
         )}
         {level && <Text style={styles.levelText}>{level}</Text>}
       </View>
@@ -95,12 +94,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   backBtn: {
-    padding: 4,
-  },
-  backText: {
-    color: '#a5b4fc',
-    fontSize: 14,
-    fontWeight: '600',
+    marginRight: 8,
   },
   levelText: {
     color: '#fbbf24',

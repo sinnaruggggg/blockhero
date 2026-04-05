@@ -1,9 +1,13 @@
 import React, {useRef, useMemo, useEffect} from 'react';
 import {View, StyleSheet, PanResponder, Animated} from 'react-native';
 import {Piece} from '../game/engine';
+import {CELL_SIZE, CELL_GAP} from './Board';
 
 const BLOCK_SIZE = 18;
-const DRAG_OFFSET_Y = -80;
+const COMPACT_BLOCK_SIZE = 16;
+const BOARD_CELL_STEP = CELL_SIZE + CELL_GAP;
+const DRAG_OFFSET_Y = -Math.round(BOARD_CELL_STEP * 2.5); // 2 board blocks above finger
+const DRAG_EXTRA = 0.05; // 5% extra movement distance
 const BEVEL = 2;
 
 // Voxel helpers
@@ -62,6 +66,7 @@ interface DraggablePieceProps {
   onDragMove: (absoluteX: number, absoluteY: number) => void;
   onDragEnd: (absoluteX: number, absoluteY: number) => void;
   onDragCancel: () => void;
+  compact?: boolean;
 }
 
 export default function DraggablePiece({
@@ -70,9 +75,11 @@ export default function DraggablePiece({
   onDragMove,
   onDragEnd,
   onDragCancel,
+  compact = false,
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const blockSize = compact ? COMPACT_BLOCK_SIZE : BLOCK_SIZE;
 
   const callbacksRef = useRef({onDragStart, onDragMove, onDragEnd, onDragCancel});
   const pieceRef = useRef(piece);
@@ -90,22 +97,25 @@ export default function DraggablePiece({
         onPanResponderGrant: () => {
           pan.setValue({x: 0, y: DRAG_OFFSET_Y});
           Animated.spring(scale, {
-            toValue: 1.1,
+            toValue: 1.5,
             useNativeDriver: false,
             friction: 8,
           }).start();
           callbacksRef.current.onDragStart();
         },
         onPanResponderMove: (evt, gs) => {
-          pan.setValue({x: gs.dx, y: gs.dy + DRAG_OFFSET_Y});
+          pan.setValue({
+            x: gs.dx * (1 + DRAG_EXTRA),
+            y: gs.dy * (1 + DRAG_EXTRA) + DRAG_OFFSET_Y,
+          });
           callbacksRef.current.onDragMove(
-            evt.nativeEvent.pageX,
-            evt.nativeEvent.pageY + DRAG_OFFSET_Y,
+            evt.nativeEvent.pageX + gs.dx * DRAG_EXTRA,
+            evt.nativeEvent.pageY + gs.dy * DRAG_EXTRA + DRAG_OFFSET_Y,
           );
         },
-        onPanResponderRelease: (evt) => {
-          const finalX = evt.nativeEvent.pageX;
-          const finalY = evt.nativeEvent.pageY + DRAG_OFFSET_Y;
+        onPanResponderRelease: (evt, gs) => {
+          const finalX = evt.nativeEvent.pageX + gs.dx * DRAG_EXTRA;
+          const finalY = evt.nativeEvent.pageY + gs.dy * DRAG_EXTRA + DRAG_OFFSET_Y;
           Animated.spring(scale, {
             toValue: 1,
             useNativeDriver: false,
@@ -127,17 +137,18 @@ export default function DraggablePiece({
           callbacksRef.current.onDragCancel();
         },
       }),
-    [],
+    [pan, scale],
   );
 
   if (!piece) {
-    return <View style={styles.emptyContainer} />;
+    return <View style={[styles.emptyContainer, compact && styles.emptyContainerCompact]} />;
   }
 
   return (
     <Animated.View
       style={[
         styles.container,
+        compact && styles.containerCompact,
         {
           transform: [
             {translateX: pan.x},
@@ -149,11 +160,11 @@ export default function DraggablePiece({
       {...panResponder.panHandlers}>
       {piece.shape.map((row, r) => (
         <View key={r} style={styles.pieceRow}>
-          {row.map((cell, c) =>
+              {row.map((cell, c) =>
             cell === 1 ? (
-              <VoxelBlock key={c} color={piece.color} size={BLOCK_SIZE} />
+              <VoxelBlock key={c} color={piece.color} size={blockSize} />
             ) : (
-              <View key={c} style={{width: BLOCK_SIZE, height: BLOCK_SIZE, margin: 1}} />
+              <View key={c} style={{width: blockSize, height: blockSize, margin: 1}} />
             ),
           )}
         </View>
@@ -166,12 +177,17 @@ const styles = StyleSheet.create({
   container: {
     minWidth: 64,
     minHeight: 64,
-    backgroundColor: 'rgba(15, 10, 40, 0.7)',
+    backgroundColor: 'transparent',
     borderRadius: 10,
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+  containerCompact: {
+    minWidth: 56,
+    minHeight: 56,
+    padding: 6,
   },
   emptyContainer: {
     minWidth: 64,
@@ -179,6 +195,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 10, 40, 0.3)',
     borderRadius: 10,
     opacity: 0.3,
+  },
+  emptyContainerCompact: {
+    minWidth: 56,
+    minHeight: 56,
   },
   pieceRow: {
     flexDirection: 'row',

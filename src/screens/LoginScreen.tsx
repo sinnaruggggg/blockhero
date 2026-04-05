@@ -1,43 +1,130 @@
 import React, {useState} from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {supabase} from '../services/supabase';
 import {t} from '../i18n';
 
 let GoogleSignin: any = null;
 try {
-  const gsi = require('@react-native-google-signin/google-signin');
-  GoogleSignin = gsi.GoogleSignin;
-  // Google Cloud Console > APIs & Credentials > OAuth 2.0 Client ID (Web)
-  // Supabase Dashboard > Authentication > Providers > Google 에 같은 Client ID 설정
+  const googleSignIn = require('@react-native-google-signin/google-signin');
+  GoogleSignin = googleSignIn.GoogleSignin;
   GoogleSignin.configure({
-    webClientId: '916951227577-tg9iq1q07e95d595pt07t3qje1jafbl6.apps.googleusercontent.com',
+    webClientId:
+      '916951227577-tg9iq1q07e95d595pt07t3qje1jafbl6.apps.googleusercontent.com',
     offlineAccess: true,
   });
-} catch {
-  // Google Sign-In not available
-}
+} catch {}
 
 type Mode = 'login' | 'signup';
 
-export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => void}) {
+const GUEST_EMAIL_KEY = 'guestAuthEmail';
+const GUEST_PASSWORD_KEY = 'guestAuthPassword';
+const GUEST_NICKNAME_KEY = 'guestAuthNickname';
+
+function createGuestSeed() {
+  return `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export default function LoginScreen({
+  onLoginSuccess,
+}: {
+  onLoginSuccess: () => void;
+}) {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const ensureGuestProfile = async (userId: string, guestNickname: string) => {
+    await supabase.from('profiles').upsert({
+      id: userId,
+      nickname: guestNickname,
+      provider: 'guest',
+    });
+    await AsyncStorage.setItem('nickname', guestNickname);
+    await AsyncStorage.setItem(GUEST_NICKNAME_KEY, guestNickname);
+  };
+
+  const signInWithStoredGuest = async () => {
+    const savedEmail = await AsyncStorage.getItem(GUEST_EMAIL_KEY);
+    const savedPassword = await AsyncStorage.getItem(GUEST_PASSWORD_KEY);
+    const savedNickname =
+      (await AsyncStorage.getItem(GUEST_NICKNAME_KEY)) ||
+      (await AsyncStorage.getItem('nickname')) ||
+      `게스트${Math.floor(1000 + Math.random() * 9000)}`;
+
+    if (!savedEmail || !savedPassword) {
+      return false;
+    }
+
+    const {data, error} = await supabase.auth.signInWithPassword({
+      email: savedEmail,
+      password: savedPassword,
+    });
+
+    if (error || !data.user) {
+      return false;
+    }
+
+    await ensureGuestProfile(data.user.id, savedNickname);
+    return true;
+  };
+
+  const createGuestAccountFallback = async () => {
+    if (await signInWithStoredGuest()) {
+      return;
+    }
+
+    const seed = createGuestSeed();
+    const guestEmail = `guest_${seed}@blockhero.local`;
+    const guestPassword = `Guest#${seed}`;
+    const guestNickname =
+      (await AsyncStorage.getItem('nickname')) ||
+      `게스트${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const {data, error} = await supabase.auth.signUp({
+      email: guestEmail,
+      password: guestPassword,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    let user = data.user;
+    if (!data.session) {
+      const signInResult = await supabase.auth.signInWithPassword({
+        email: guestEmail,
+        password: guestPassword,
+      });
+      if (signInResult.error || !signInResult.data.user) {
+        throw signInResult.error || new Error('게스트 로그인에 실패했습니다.');
+      }
+      user = signInResult.data.user;
+    }
+
+    if (!user) {
+      throw new Error('게스트 로그인에 실패했습니다.');
+    }
+
+    await ensureGuestProfile(user.id, guestNickname);
+    await AsyncStorage.setItem(GUEST_EMAIL_KEY, guestEmail);
+    await AsyncStorage.setItem(GUEST_PASSWORD_KEY, guestPassword);
+  };
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -67,8 +154,10 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
           email: email.trim(),
           password,
         });
-        if (error) throw error;
-        // 프로필 직접 생성
+        if (error) {
+          throw error;
+        }
+
         if (data.user) {
           await supabase.from('profiles').upsert({
             id: data.user.id,
@@ -76,6 +165,7 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
             provider: 'email',
           });
         }
+
         Alert.alert(t('common.notice'), t('auth.signupSuccess'));
         onLoginSuccess();
       } else {
@@ -83,11 +173,13 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
           email: email.trim(),
           password,
         });
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
         onLoginSuccess();
       }
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.message);
+    } catch (error: any) {
+      Alert.alert(t('common.error'), error.message);
     } finally {
       setLoading(false);
     }
@@ -95,9 +187,10 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
 
   const handleGoogleLogin = async () => {
     if (!GoogleSignin) {
-      Alert.alert(t('common.notice'), 'Google Sign-In is not configured.');
+      Alert.alert(t('common.notice'), '구글 로그인이 설정되지 않았습니다.');
       return;
     }
+
     setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
@@ -105,7 +198,7 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
       const idToken = response.data?.idToken;
 
       if (!idToken) {
-        throw new Error('Google Sign-In failed: no ID token');
+        throw new Error('구글 로그인에 실패했습니다. 토큰을 가져오지 못했습니다.');
       }
 
       const {error} = await supabase.auth.signInWithIdToken({
@@ -113,11 +206,14 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
         token: idToken,
       });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
       onLoginSuccess();
-    } catch (err: any) {
-      if (err.code !== 'SIGN_IN_CANCELLED') {
-        Alert.alert(t('common.error'), err.message);
+    } catch (error: any) {
+      if (error.code !== 'SIGN_IN_CANCELLED') {
+        Alert.alert(t('common.error'), error.message);
       }
     } finally {
       setLoading(false);
@@ -128,10 +224,17 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
     setLoading(true);
     try {
       const {error} = await supabase.auth.signInAnonymously();
-      if (error) throw error;
+      if (error) {
+        const message = String(error.message || '');
+        if (message.toLowerCase().includes('anonymous sign-ins are disabled')) {
+          await createGuestAccountFallback();
+        } else {
+          throw error;
+        }
+      }
       onLoginSuccess();
-    } catch (err: any) {
-      Alert.alert(t('common.error'), err.message);
+    } catch (error: any) {
+      Alert.alert(t('common.error'), error.message);
     } finally {
       setLoading(false);
     }
@@ -145,69 +248,66 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled">
-          {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoRow}>
-              <View style={[styles.block, {backgroundColor: '#818cf8'}]} />
-              <View style={[styles.block, {backgroundColor: '#6366f1'}]} />
-              <View style={[styles.block, {backgroundColor: '#a78bfa'}]} />
+              <View style={[styles.block, styles.blockPrimary]} />
+              <View style={[styles.block, styles.blockSecondary]} />
+              <View style={[styles.block, styles.blockAccent]} />
             </View>
-            <Text style={styles.title}>CUBRICKS</Text>
+            <Text style={styles.title}>BlockHero</Text>
             <Text style={styles.subtitle}>
               {mode === 'login' ? t('auth.loginTitle') : t('auth.signupTitle')}
             </Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             {mode === 'signup' && (
               <TextInput
-                style={styles.input}
+                autoCapitalize="none"
+                maxLength={10}
                 placeholder={t('auth.nickname')}
                 placeholderTextColor="#64748b"
+                style={styles.input}
                 value={nickname}
                 onChangeText={setNickname}
-                maxLength={10}
-                autoCapitalize="none"
               />
             )}
 
             <TextInput
-              style={styles.input}
-              placeholder={t('auth.email')}
-              placeholderTextColor="#64748b"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType="email-address"
+              placeholder={t('auth.email')}
+              placeholderTextColor="#64748b"
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
             />
 
             <TextInput
-              style={styles.input}
               placeholder={t('auth.password')}
               placeholderTextColor="#64748b"
+              secureTextEntry
+              style={styles.input}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
             />
 
             {mode === 'signup' && (
               <TextInput
-                style={styles.input}
                 placeholder={t('auth.confirmPassword')}
                 placeholderTextColor="#64748b"
+                secureTextEntry
+                style={styles.input}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                secureTextEntry
               />
             )}
 
-            {/* Email Auth Button */}
             <TouchableOpacity
+              disabled={loading}
               style={styles.primaryBtn}
-              onPress={handleEmailAuth}
-              disabled={loading}>
+              onPress={handleEmailAuth}>
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -217,7 +317,6 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
               )}
             </TouchableOpacity>
 
-            {/* Toggle Login/Signup */}
             <TouchableOpacity
               onPress={() => setMode(mode === 'login' ? 'signup' : 'login')}>
               <Text style={styles.toggleText}>
@@ -226,28 +325,25 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
             </TouchableOpacity>
           </View>
 
-          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
+            <Text style={styles.dividerText}>또는</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social Login */}
           <View style={styles.socialContainer}>
             <TouchableOpacity
+              disabled={loading}
               style={styles.googleBtn}
-              onPress={handleGoogleLogin}
-              disabled={loading}>
+              onPress={handleGoogleLogin}>
               <Text style={styles.googleIcon}>G</Text>
               <Text style={styles.googleText}>{t('auth.googleLogin')}</Text>
             </TouchableOpacity>
 
-            {/* Guest Login */}
             <TouchableOpacity
+              disabled={loading}
               style={styles.guestBtn}
-              onPress={handleGuestLogin}
-              disabled={loading}>
+              onPress={handleGuestLogin}>
               <Text style={styles.guestText}>{t('auth.guestLogin')}</Text>
             </TouchableOpacity>
           </View>
@@ -258,17 +354,12 @@ export default function LoginScreen({onLoginSuccess}: {onLoginSuccess: () => voi
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f0a2e',
-  },
-  flex: {
-    flex: 1,
-  },
+  container: {backgroundColor: '#0f0a2e', flex: 1},
+  flex: {flex: 1},
   scroll: {
-    padding: 24,
     flexGrow: 1,
     justifyContent: 'center',
+    padding: 24,
   },
   header: {
     alignItems: 'center',
@@ -280,40 +371,42 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   block: {
-    width: 24,
-    height: 24,
     borderRadius: 4,
+    height: 24,
+    width: 24,
   },
+  blockPrimary: {backgroundColor: '#818cf8'},
+  blockSecondary: {backgroundColor: '#6366f1'},
+  blockAccent: {backgroundColor: '#a78bfa'},
   title: {
+    color: '#e2e8f0',
     fontSize: 32,
     fontWeight: '900',
-    color: '#e2e8f0',
     letterSpacing: 4,
   },
   subtitle: {
-    fontSize: 14,
     color: '#a5b4fc',
+    fontSize: 14,
     marginTop: 8,
+    textAlign: 'center',
   },
-  form: {
-    gap: 12,
-  },
+  form: {gap: 12},
   input: {
     backgroundColor: '#1e1b4b',
-    color: '#e2e8f0',
+    borderColor: '#312e81',
     borderRadius: 12,
+    borderWidth: 1,
+    color: '#e2e8f0',
+    fontSize: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#312e81',
   },
   primaryBtn: {
+    alignItems: 'center',
     backgroundColor: '#6366f1',
     borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
     marginTop: 4,
+    paddingVertical: 16,
   },
   primaryBtnText: {
     color: '#fff',
@@ -323,41 +416,39 @@ const styles = StyleSheet.create({
   toggleText: {
     color: '#a5b4fc',
     fontSize: 14,
-    textAlign: 'center',
     marginTop: 8,
+    textAlign: 'center',
   },
   divider: {
-    flexDirection: 'row',
     alignItems: 'center',
+    flexDirection: 'row',
     marginVertical: 24,
   },
   dividerLine: {
+    backgroundColor: '#312e81',
     flex: 1,
     height: 1,
-    backgroundColor: '#312e81',
   },
   dividerText: {
     color: '#64748b',
-    marginHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
+    marginHorizontal: 16,
   },
-  socialContainer: {
-    gap: 12,
-  },
+  socialContainer: {gap: 12},
   googleBtn: {
+    alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
-    paddingVertical: 14,
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
     gap: 10,
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
   googleIcon: {
+    color: '#4285F4',
     fontSize: 20,
     fontWeight: '800',
-    color: '#4285F4',
   },
   googleText: {
     color: '#333',
@@ -365,11 +456,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   guestBtn: {
-    borderRadius: 12,
-    paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 1,
     borderColor: '#312e81',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 14,
   },
   guestText: {
     color: '#94a3b8',

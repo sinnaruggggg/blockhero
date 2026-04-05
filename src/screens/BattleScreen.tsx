@@ -1,6 +1,7 @@
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {View, Text, StyleSheet, Alert, TouchableOpacity, Animated, Vibration, Dimensions} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import BackImageButton from '../components/BackImageButton';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import {useDragDrop} from '../game/useDragDrop';
@@ -11,6 +12,7 @@ import {
   generateAttackLines, Piece, Board as BoardType,
 } from '../game/engine';
 import {getPlayerId, getNickname} from '../stores/gameStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {supabase} from '../services/supabase';
 import {t} from '../i18n';
 
@@ -40,7 +42,7 @@ function PlaceEffect({x, y, color, onDone}: {x: number; y: number; color: string
         Animated.timing(s.anim, {toValue: 1, duration: 250 + Math.random() * 200, useNativeDriver: true}),
       ),
     ]).start(onDone);
-  }, []);
+  }, [flash, onDone, sparks]);
 
   return (
     <View style={[StyleSheet.absoluteFill, {pointerEvents: 'none'}]}>
@@ -99,7 +101,7 @@ function SingleMissile({delay, startX, onDone}: {delay: number; startX: number; 
       ]).start(() => onDone?.());
     }, delay);
     return () => clearTimeout(timeout);
-  }, []);
+  }, [delay, flash, onDone, pos, trailWiggle]);
 
   const trailLength = 12 + Math.random() * 20;
   const trailColor = Math.random() > 0.5 ? '#fbbf24' : '#fb923c';
@@ -183,9 +185,22 @@ function MissileEffect({count, onDone}: {count: number; onDone: () => void}) {
 // Impact shake effect
 function useShake() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const vibrationRef = useRef(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const settings = await AsyncStorage.getItem('gameSettings');
+        if (settings) {
+          const parsed = JSON.parse(settings);
+          if (parsed.vibration === false) vibrationRef.current = false;
+        }
+      } catch {}
+    })();
+  }, []);
 
   const triggerShake = useCallback(() => {
-    Vibration.vibrate([0, 100, 50, 100]);
+    if (vibrationRef.current) Vibration.vibrate([0, 100, 50, 100]);
     Animated.sequence([
       Animated.timing(shakeAnim, {toValue: 10, duration: 50, useNativeDriver: true}),
       Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
@@ -201,15 +216,13 @@ function useShake() {
 
 // Reconnection constants
 const HEARTBEAT_INTERVAL = 5000; // 5 seconds
-const RECONNECT_TIMEOUT = 60000; // 1 minute
-
 export default function BattleScreen({route, navigation}: any) {
   const {roomCode, isHost} = route.params;
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [opponentBoard, setOpponentBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
-  const [score, setScore] = useState(0);
+  const [_score, setScore] = useState(0);
   const [attackPoints, setAttackPoints] = useState(0);
   const [round, setRound] = useState(0);
   const [gameOver, setGameOver] = useState(false);
@@ -286,7 +299,30 @@ export default function BattleScreen({route, navigation}: any) {
             if (payload.senderId !== playerIdRef.current) {
               // Attack received - shake + vibrate (NO missiles on receive)
               triggerShake();
-              setBoard(prev => generateAttackLines(prev, payload.lines));
+              setBoard(prev => {
+                const newBoard = generateAttackLines(prev, payload.lines);
+                // Check game over after attack lines
+                setTimeout(() => {
+                  setPieces(currentPieces => {
+                    const active = currentPieces.filter(p => p !== null) as Piece[];
+                    if (active.length > 0 && !canPlaceAnyPiece(newBoard, active)) {
+                      if (!gameOverRef.current) {
+                        gameOverRef.current = true;
+                        setGameOver(true);
+                        setResult('lose');
+                        supabase
+                          .from('players')
+                          .update({game_over: true})
+                          .eq('room_code', roomCode)
+                          .eq('player_id', playerIdRef.current)
+                          .then();
+                      }
+                    }
+                    return currentPieces;
+                  });
+                }, 100);
+                return newBoard;
+              });
             }
           })
           .on('broadcast', {event: 'heartbeat'}, ({payload}: any) => {
@@ -355,7 +391,7 @@ export default function BattleScreen({route, navigation}: any) {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       if (reconnectTimer.current) clearInterval(reconnectTimer.current);
     };
-  }, [roomCode, isHost]);
+  }, [isHost, navigation, roomCode, triggerShake]);
 
   const syncBoardToDB = useCallback((b: BoardType) => {
     supabase
@@ -476,13 +512,39 @@ export default function BattleScreen({route, navigation}: any) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {!gameOver && (
+        <View style={styles.backButtonDock}>
+          <BackImageButton
+            onPress={() => {
+              Alert.alert('대전 나가기', '지금 나가면 패배 처리됩니다. 나가시겠습니까?', [
+                {text: '취소', style: 'cancel'},
+                {
+                  text: '나가기',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await supabase
+                        .from('players')
+                        .update({game_over: true})
+                        .eq('room_code', roomCode)
+                        .eq('player_id', playerIdRef.current);
+                    } catch {}
+                    navigation.replace('Lobby');
+                  },
+                },
+              ]);
+            }}
+            size={42}
+          />
+        </View>
+      )}
       <View style={styles.opponentSection}>
-        <Text style={styles.opponentName}>👤 {opponentName}</Text>
+        <Text style={styles.opponentName}>상대 {opponentName}</Text>
         <Board board={opponentBoard} small />
       </View>
 
       <View style={styles.attackBar}>
-        <Text style={styles.attackLabel}>⚡ {attackPoints}</Text>
+        <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
         {ATTACKS.map((atk, i) => (
           <TouchableOpacity
             key={i}
@@ -506,6 +568,7 @@ export default function BattleScreen({route, navigation}: any) {
           compact
           previewCells={dragDrop.previewCells}
           invalidPreview={dragDrop.invalidPreview}
+          clearGuideCells={dragDrop.clearGuideCells}
         />
       </Animated.View>
 
@@ -562,6 +625,12 @@ export default function BattleScreen({route, navigation}: any) {
 
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#1a0a3e'},
+  backButtonDock: {
+    position: 'absolute',
+    top: 10,
+    left: 12,
+    zIndex: 20,
+  },
   opponentSection: {
     alignItems: 'center', paddingVertical: 4, backgroundColor: 'rgba(0,0,0,0.3)',
   },

@@ -1,13 +1,26 @@
-import React, {useState, useEffect} from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import BackImageButton from '../components/BackImageButton';
+import {ACHIEVEMENTS, DAILY_MISSIONS} from '../constants';
 import {t} from '../i18n';
-import {DAILY_MISSIONS, ACHIEVEMENTS} from '../constants';
 import {
-  loadGameData, addStars, loadDailyStats, loadEndlessStats,
-  loadMissionData, claimMission, loadAchievements, claimAchievement,
-  loadLevelProgress, GameData, DailyStats, MissionData, AchievementData,
+  AchievementData,
+  DailyStats,
+  GameData,
+  MissionData,
+  loadAchievements,
+  loadDailyStats,
+  loadEndlessStats,
+  loadGameData,
+  loadLevelProgress,
+  loadMissionData,
 } from '../stores/gameStore';
+import {
+  claimAchievementReward,
+  claimMissionReward,
+  getEconomyErrorCode,
+} from '../services/economyService';
 
 export default function MissionsScreen({navigation}: any) {
   const [tab, setTab] = useState<'missions' | 'achievements'>('missions');
@@ -15,67 +28,92 @@ export default function MissionsScreen({navigation}: any) {
   const [dailyStats, setDailyStats] = useState<DailyStats | null>(null);
   const [missionData, setMissionData] = useState<MissionData | null>(null);
   const [achievementData, setAchievementData] = useState<AchievementData>({});
-  const [allStats, setAllStats] = useState<any>({});
+  const [allStats, setAllStats] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
-      const gd = await loadGameData();
-      setGameData(gd);
+      const loadedGameData = await loadGameData();
+      setGameData(loadedGameData);
       setDailyStats(await loadDailyStats());
       setMissionData(await loadMissionData());
       setAchievementData(await loadAchievements());
 
-      const endless = await loadEndlessStats();
-      const progress = await loadLevelProgress();
-      const daily = await loadDailyStats();
-      const totalLevelClears = Object.values(progress).filter(p => p.cleared).length;
+      const endlessStats = await loadEndlessStats();
+      const levelProgress = await loadLevelProgress();
+      const todayStats = await loadDailyStats();
+      const totalLevelClears = Object.values(levelProgress).filter(progress => progress.cleared).length;
 
       setAllStats({
-        dailyGames: daily.games,
-        dailyScore: daily.score,
-        dailyLines: daily.lines,
-        dailyMaxCombo: daily.maxCombo,
-        dailyLevelClears: daily.levelClears,
+        dailyGames: todayStats.games,
+        dailyScore: todayStats.score,
+        dailyLines: todayStats.lines,
+        dailyMaxCombo: todayStats.maxCombo,
+        dailyLevelClears: todayStats.levelClears,
         totalLevelClears,
-        endlessHighScore: endless.highScore,
-        totalLines: endless.totalLines + daily.lines,
-        maxCombo: Math.max(endless.maxCombo, daily.maxCombo),
-        totalGames: endless.totalGames + daily.games,
-        endlessMaxLevel: endless.maxLevel,
+        endlessHighScore: endlessStats.highScore,
+        totalLines: endlessStats.totalLines + todayStats.lines,
+        maxCombo: Math.max(endlessStats.maxCombo, todayStats.maxCombo),
+        totalGames: endlessStats.totalGames + todayStats.games,
+        endlessMaxLevel: endlessStats.maxLevel,
       });
     });
+
     return unsubscribe;
   }, [navigation]);
 
   const handleClaimMission = async (missionId: string, reward: number) => {
-    if (!missionData || !gameData) return;
-    const updated = await claimMission(missionData, missionId);
-    setMissionData(updated);
-    const updatedGd = await addStars(gameData, reward);
-    setGameData(updatedGd);
-    Alert.alert(t('missions.rewardClaimed'), t('missions.starsEarned', reward));
+    if (!missionData || !gameData) {
+      return;
+    }
+
+    try {
+      const result = await claimMissionReward(missionId);
+      setMissionData(result.missionData);
+      setGameData(result.gameData);
+      Alert.alert(t('missions.rewardClaimed'), t('missions.starsEarned', result.reward));
+    } catch (error) {
+      const code = getEconomyErrorCode(error);
+      if (code === 'mission_already_claimed') {
+        Alert.alert(t('common.notice'), t('common.done'));
+        return;
+      }
+
+      Alert.alert(t('common.notice'), t('game.tryAgain'));
+    }
   };
 
   const handleClaimAchievement = async (achievementId: string, reward: number) => {
-    if (!gameData) return;
-    const updated = await claimAchievement(achievementData, achievementId);
-    setAchievementData(updated);
-    const updatedGd = await addStars(gameData, reward);
-    setGameData(updatedGd);
-    Alert.alert(t('missions.achievementClaimed'), t('missions.starsEarned', reward));
+    if (!gameData) {
+      return;
+    }
+
+    try {
+      const result = await claimAchievementReward(achievementId);
+      setAchievementData(result.achievementData);
+      setGameData(result.gameData);
+      Alert.alert(
+        t('missions.achievementClaimed'),
+        t('missions.starsEarned', result.reward),
+      );
+    } catch (error) {
+      const code = getEconomyErrorCode(error);
+      if (code === 'achievement_already_claimed') {
+        Alert.alert(t('common.notice'), t('common.done'));
+        return;
+      }
+
+      Alert.alert(t('common.notice'), t('game.tryAgain'));
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtn}>{t('common.home')}</Text>
-        </TouchableOpacity>
+        <BackImageButton onPress={() => navigation.goBack()} size={42} />
         <Text style={styles.title}>{t('missions.title')}</Text>
-        <Text style={styles.stars}>⭐ {gameData?.stars ?? 0}</Text>
+        <Text style={styles.stars}>골드 {gameData?.gold ?? 0}</Text>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity
           style={[styles.tab, tab === 'missions' && styles.activeTab]}
@@ -97,10 +135,11 @@ export default function MissionsScreen({navigation}: any) {
         {tab === 'missions' && dailyStats && missionData && (
           <>
             {DAILY_MISSIONS.map(mission => {
-              const current = allStats[mission.stat] || 0;
-              const progress = Math.min(current / mission.target, 1);
-              const completed = current >= mission.target;
+              const currentValue = allStats[mission.stat] || 0;
+              const progress = Math.min(currentValue / mission.target, 1);
+              const completed = currentValue >= mission.target;
               const claimed = missionData.claimed[mission.id];
+
               return (
                 <View key={mission.id} style={styles.missionCard}>
                   <View style={styles.missionInfo}>
@@ -109,19 +148,19 @@ export default function MissionsScreen({navigation}: any) {
                       <View style={[styles.progressFill, {width: `${progress * 100}%`}]} />
                     </View>
                     <Text style={styles.progressText}>
-                      {current} / {mission.target}
+                      {currentValue} / {mission.target}
                     </Text>
                   </View>
                   <TouchableOpacity
+                    disabled={!completed || claimed}
                     style={[
                       styles.claimBtn,
                       !completed && styles.claimDisabled,
                       claimed && styles.claimedBtn,
                     ]}
-                    onPress={() => handleClaimMission(mission.id, mission.reward)}
-                    disabled={!completed || claimed}>
+                    onPress={() => handleClaimMission(mission.id, mission.reward)}>
                     <Text style={styles.claimText}>
-                      {claimed ? t('common.done') : `⭐ ${mission.reward}`}
+                      {claimed ? t('common.done') : `골드 ${mission.reward}`}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -133,10 +172,11 @@ export default function MissionsScreen({navigation}: any) {
         {tab === 'achievements' && (
           <>
             {ACHIEVEMENTS.map(achievement => {
-              const current = allStats[achievement.stat] || 0;
-              const progress = Math.min(current / achievement.target, 1);
-              const completed = current >= achievement.target;
+              const currentValue = allStats[achievement.stat] || 0;
+              const progress = Math.min(currentValue / achievement.target, 1);
+              const completed = currentValue >= achievement.target;
               const claimed = achievementData[achievement.id];
+
               return (
                 <View key={achievement.id} style={styles.missionCard}>
                   <View style={styles.missionInfo}>
@@ -146,19 +186,19 @@ export default function MissionsScreen({navigation}: any) {
                       <View style={[styles.progressFill, {width: `${progress * 100}%`}]} />
                     </View>
                     <Text style={styles.progressText}>
-                      {current} / {achievement.target}
+                      {currentValue} / {achievement.target}
                     </Text>
                   </View>
                   <TouchableOpacity
+                    disabled={!completed || claimed}
                     style={[
                       styles.claimBtn,
                       !completed && styles.claimDisabled,
                       claimed && styles.claimedBtn,
                     ]}
-                    onPress={() => handleClaimAchievement(achievement.id, achievement.reward)}
-                    disabled={!completed || claimed}>
+                    onPress={() => handleClaimAchievement(achievement.id, achievement.reward)}>
                     <Text style={styles.claimText}>
-                      {claimed ? t('common.done') : `⭐ ${achievement.reward}`}
+                      {claimed ? t('common.done') : `골드 ${achievement.reward}`}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -172,40 +212,61 @@ export default function MissionsScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#0f0a2e'},
+  container: {backgroundColor: '#0f0a2e', flex: 1},
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  backBtn: {color: '#a5b4fc', fontSize: 14, fontWeight: '600'},
   title: {color: '#e2e8f0', fontSize: 18, fontWeight: '800'},
   stars: {color: '#fbbf24', fontSize: 14, fontWeight: '600'},
   tabs: {
-    flexDirection: 'row', marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: '#1e1b4b', borderRadius: 12, padding: 4,
+    backgroundColor: '#1e1b4b',
+    borderRadius: 12,
+    flexDirection: 'row',
+    marginBottom: 12,
+    marginHorizontal: 16,
+    padding: 4,
   },
-  tab: {flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10},
+  tab: {
+    alignItems: 'center',
+    borderRadius: 10,
+    flex: 1,
+    paddingVertical: 10,
+  },
   activeTab: {backgroundColor: '#6366f1'},
   tabText: {color: '#94a3b8', fontSize: 14, fontWeight: '700'},
   activeTabText: {color: '#fff'},
-  scroll: {padding: 16, gap: 10},
+  scroll: {gap: 10, padding: 16},
   missionCard: {
-    backgroundColor: '#1e1b4b', borderRadius: 12, padding: 14,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderColor: '#312e81',
+    alignItems: 'center',
+    backgroundColor: '#1e1b4b',
+    borderColor: '#312e81',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 14,
   },
   missionInfo: {flex: 1},
   missionTitle: {color: '#e2e8f0', fontSize: 14, fontWeight: '700'},
   achieveDesc: {color: '#94a3b8', fontSize: 11, marginTop: 2},
   progressBar: {
-    height: 6, backgroundColor: '#312e81', borderRadius: 3,
-    marginTop: 6, overflow: 'hidden',
+    backgroundColor: '#312e81',
+    borderRadius: 3,
+    height: 6,
+    marginTop: 6,
+    overflow: 'hidden',
   },
-  progressFill: {height: '100%', backgroundColor: '#6366f1', borderRadius: 3},
+  progressFill: {backgroundColor: '#6366f1', borderRadius: 3, height: '100%'},
   progressText: {color: '#94a3b8', fontSize: 11, marginTop: 4},
   claimBtn: {
-    backgroundColor: '#6366f1', paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: '#6366f1',
     borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   claimDisabled: {backgroundColor: '#374151', opacity: 0.5},
   claimedBtn: {backgroundColor: '#22c55e'},

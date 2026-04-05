@@ -9,6 +9,7 @@ import PieceSelector from '../components/PieceSelector';
 import BossDisplay from '../components/BossDisplay';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillBar from '../components/SkillBar';
+import KnightSprite from '../components/KnightSprite';
 import {RaidParticipant} from '../components/RaidParticipants';
 import {useDragDrop} from '../game/useDragDrop';
 import {COMBO_TIMEOUT_MS, FEVER_DURATION} from '../constants';
@@ -76,6 +77,11 @@ import {
   getRaidSummonSpriteSet,
   MonsterSpritePose,
 } from '../assets/monsterSprites';
+import {
+  getCachedCharacterVisualTunings,
+  loadCharacterVisualTunings,
+  subscribeCharacterVisualTunings,
+} from '../stores/characterVisualTuning';
 
 // Damage flash effect
 function DamageFlash({damage, onDone}: {damage: number; onDone: () => void}) {
@@ -170,6 +176,7 @@ export default function RaidScreen({route, navigation}: any) {
   const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
   const [damageEffect, setDamageEffect] = useState<number | null>(null);
   const [showBossHit, setShowBossHit] = useState(false);
+  const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [bossPose, setBossPose] = useState<MonsterSpritePose>('idle');
   const [round, setRound] = useState(0);
   const [attackTimerText, setAttackTimerText] = useState('10:00');
@@ -187,6 +194,9 @@ export default function RaidScreen({route, navigation}: any) {
   const [summonOverlayVisible, setSummonOverlayVisible] = useState(false);
   const [summonReturning, setSummonReturning] = useState(false);
   const [summonSpawnIndex, setSummonSpawnIndex] = useState(0);
+  const [characterVisualTunings, setCharacterVisualTunings] = useState(
+    getCachedCharacterVisualTunings(),
+  );
   const [raidSkillLevels, setRaidSkillLevels] = useState<Record<number, number>>({});
   const [failureReason, setFailureReason] =
     useState<'board_full' | 'hp_zero' | 'time_up'>('board_full');
@@ -242,6 +252,25 @@ export default function RaidScreen({route, navigation}: any) {
   const chatScrollRef = useRef<ScrollView>(null);
   const gameDataRef = useRef<GameData | null>(null);
   const playerHpAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    let active = true;
+    loadCharacterVisualTunings().then(nextTunings => {
+      if (active) {
+        setCharacterVisualTunings(nextTunings);
+      }
+    });
+    const unsubscribe = subscribeCharacterVisualTunings(nextTunings => {
+      if (active) {
+        setCharacterVisualTunings(nextTunings);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const getRaidEffects = useCallback(() => getCharacterSkillEffects(
     selectedCharacterRef.current,
@@ -956,6 +985,7 @@ export default function RaidScreen({route, navigation}: any) {
       }
 
       if (finalDamage > 0) {
+        setPlayerAttackPulse(previous => previous + 1);
         triggerBossPose('hurt', 260);
         setDamageEffect(finalDamage);
         if (finalDamage >= 10) {
@@ -1357,19 +1387,54 @@ export default function RaidScreen({route, navigation}: any) {
         styles.raidPlayerSpriteDock,
         compact && styles.raidPlayerSpriteDockCompact,
       ]}>
-      {myRaidPortrait ? (
-        <Image
-          source={myRaidPortrait}
-          resizeMode="contain"
-          fadeDuration={0}
-          style={[
-            styles.raidPlayerSpriteImage,
-            compact && styles.raidPlayerSpriteImageCompact,
-          ]}
-        />
-      ) : (
-        <Text style={styles.raidPlayerSpriteEmoji}>{myRaidVisual.emoji}</Text>
-      )}
+      {(() => {
+        const characterId = selectedCharacterRef.current ?? 'knight';
+        const tuning =
+          characterVisualTunings[
+            characterId as keyof typeof characterVisualTunings
+          ] ?? characterVisualTunings.knight;
+        const battleTransform = {
+          transform: [
+            {translateX: tuning.battleOffsetX},
+            {translateY: tuning.battleOffsetY},
+            {scale: tuning.battleScaleMultiplier},
+          ],
+        };
+
+        if (selectedCharacterRef.current === 'knight') {
+          return (
+            <View style={battleTransform}>
+              <KnightSprite
+                size={compact ? 40 : 44}
+                attackPulse={playerAttackPulse}
+                facing={-1}
+              />
+            </View>
+          );
+        }
+
+        if (myRaidPortrait) {
+          return (
+            <View style={battleTransform}>
+              <Image
+                source={myRaidPortrait}
+                resizeMode="contain"
+                fadeDuration={0}
+                style={[
+                  styles.raidPlayerSpriteImage,
+                  compact && styles.raidPlayerSpriteImageCompact,
+                ]}
+              />
+            </View>
+          );
+        }
+
+        return (
+          <View style={battleTransform}>
+            <Text style={styles.raidPlayerSpriteEmoji}>{myRaidVisual.emoji}</Text>
+          </View>
+        );
+      })()}
     </View>
   );
 

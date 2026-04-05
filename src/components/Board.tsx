@@ -1,5 +1,5 @@
 import React, {useRef, forwardRef} from 'react';
-import {View, StyleSheet, Dimensions, TouchableOpacity} from 'react-native';
+import {View, StyleSheet, Dimensions, TouchableOpacity, Text} from 'react-native';
 import {ROWS, COLS} from '../constants';
 import {Board as BoardType, CellValue} from '../game/engine';
 
@@ -39,9 +39,11 @@ interface BoardProps {
   board: BoardType;
   previewCells?: {row: number; col: number; color: string}[];
   invalidPreview?: boolean;
+  clearGuideCells?: {row: number; col: number}[];
   onCellPress?: (row: number, col: number) => void;
   small?: boolean;
   compact?: boolean;
+  backgroundColor?: string;
 }
 
 const Cell = React.memo(function Cell({
@@ -59,7 +61,7 @@ const Cell = React.memo(function Cell({
 }) {
   if (!cell && !isPreview) {
     return (
-      <View style={{width: size, height: size, borderRadius: 3, backgroundColor: '#15112e'}} />
+      <View style={{width: size, height: size, borderRadius: 3, backgroundColor: '#0a0820', borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.08)'}} />
     );
   }
 
@@ -90,22 +92,35 @@ const Cell = React.memo(function Cell({
   }
 
   return (
-    <View style={{width: size, height: size, borderRadius: 3, opacity}}>
+    <View style={{width: size, height: size, borderRadius: 4, opacity}}>
+      {/* Shadow edge */}
       <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 3, backgroundColor: darken(baseColor, 70)}} />
+      {/* Highlight edge */}
       <View style={{position: 'absolute', top: 0, left: 0, right: bevel, bottom: bevel, borderRadius: 3, backgroundColor: lighten(baseColor, 60)}} />
+      {/* Face */}
       <View style={{position: 'absolute', top: bevel, left: bevel, right: bevel, bottom: bevel, borderRadius: 2, backgroundColor: baseColor}} />
-      <View style={{
-        position: 'absolute', top: bevel + 1, left: bevel + 1,
-        width: Math.floor((size - bevel * 2) * 0.4),
-        height: Math.floor((size - bevel * 2) * 0.25),
-        borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)',
-      }} />
+      {/* Gloss */}
+      <View style={{position: 'absolute', top: bevel + 1, left: bevel + 1, width: Math.floor((size - bevel * 2) * 0.4), height: Math.floor((size - bevel * 2) * 0.25), borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.3)'}} />
+      {cell!.type === 'hard' && typeof cell!.hits === 'number' && (
+        <View style={styles.hardBadge}>
+          <Text style={styles.hardBadgeText}>x{cell!.hits}</Text>
+        </View>
+      )}
     </View>
   );
 });
 
 const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
-  {board, previewCells = [], invalidPreview = false, onCellPress, small = false, compact = false},
+  {
+    board,
+    previewCells = [],
+    invalidPreview = false,
+    clearGuideCells = [],
+    onCellPress,
+    small = false,
+    compact = false,
+    backgroundColor = '#0a0820',
+  },
   ref,
 ) {
   const scale = small ? 0.4 : compact ? COMPACT_SCALE : 1;
@@ -119,6 +134,12 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
     previewMap.current.set(`${p.row},${p.col}`, p.color);
   }
 
+  const clearGuideMap = useRef(new Set<string>());
+  clearGuideMap.current.clear();
+  for (const g of clearGuideCells) {
+    clearGuideMap.current.add(`${g.row},${g.col}`);
+  }
+
   return (
     <View
       ref={ref}
@@ -126,18 +147,31 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
         padding,
         width: cellSize * COLS + gap * (COLS - 1) + padding * 2,
         gap,
+        backgroundColor,
       }]}>
       {board.map((row, r) => (
         <View key={r} style={{flexDirection: 'row', gap}}>
           {row.map((cell, c) => {
             const key = `${r},${c}`;
             const isPreview = previewMap.current.has(key);
+            const isClearGuide = clearGuideMap.current.has(key);
             const cellNode = (
-              <Cell
-                key={c} cell={cell} isPreview={isPreview}
-                previewColor={previewMap.current.get(key)}
-                isInvalid={invalidPreview && isPreview} size={cellSize}
-              />
+              <View key={c} style={{width: cellSize, height: cellSize}}>
+                <Cell
+                  cell={cell} isPreview={isPreview}
+                  previewColor={previewMap.current.get(key)}
+                  isInvalid={invalidPreview && isPreview} size={cellSize}
+                />
+                {isClearGuide && (
+                  <View style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    borderRadius: 3,
+                    backgroundColor: 'rgba(255,255,255,0.15)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.3)',
+                  }} />
+                )}
+              </View>
             );
             if (onCellPress) {
               return (
@@ -179,5 +213,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a0820',
     borderRadius: 12,
     alignSelf: 'center',
+  },
+  hardBadge: {
+    position: 'absolute',
+    right: 2,
+    bottom: 1,
+    backgroundColor: 'rgba(15,23,42,0.9)',
+    paddingHorizontal: 2,
+    borderRadius: 4,
+  },
+  hardBadgeText: {
+    color: '#f8fafc',
+    fontSize: 8,
+    fontWeight: '800',
   },
 });

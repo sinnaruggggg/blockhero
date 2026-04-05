@@ -3,7 +3,7 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 import {isNewerVersion} from './updateVersion';
 
 export const CURRENT_VERSION_CODE = 145;
-export const CURRENT_VERSION_NAME = '1.3.17-codex';
+export const CURRENT_VERSION_NAME = '1.3.17';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const APK_MIME = 'application/vnd.android.package-archive';
@@ -90,7 +90,7 @@ export async function downloadAndInstall(
         useDownloadManager: true,
         notification: true,
         title: apkFileName,
-        description: `BlockHero Codex ${update.versionName} 업데이트`,
+        description: `BlockHero ${update.versionName} 업데이트`,
         path: downloadPath,
         mime: APK_MIME,
         mediaScannable: true,

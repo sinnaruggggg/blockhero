@@ -1,5 +1,37 @@
-import {supabase, getCurrentUserId} from './supabase';
-import {loadGameData, saveGameData, addStars, addItem, refillHearts, GameData} from '../stores/gameStore';
+import {claimPendingResourceGrants} from './economyService';
+import {supabase} from './supabase';
+
+const ADMIN_EMAIL = 'sinnaruggggg@gmail.com';
+
+export async function getAdminStatus(): Promise<boolean> {
+  const {
+    data: {user},
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return false;
+  }
+
+  const {data: profile} = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profile?.is_admin) {
+    return true;
+  }
+
+  if ((user.email || '').trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+    return false;
+  }
+
+  const {error} = await supabase
+    .from('profiles')
+    .upsert({id: user.id, is_admin: true}, {onConflict: 'id'});
+
+  return !error;
+}
 
 // Fetch active announcements
 export async function fetchAnnouncements(): Promise<{id: number; title: string; content: string; created_at: string}[]> {
@@ -14,52 +46,6 @@ export async function fetchAnnouncements(): Promise<{id: number; title: string; 
 
 // Check and claim pending resource grants
 export async function claimPendingGrants(): Promise<{type: string; amount: number; reason: string | null}[]> {
-  const userId = await getCurrentUserId();
-  if (!userId) return [];
-
-  const {data: grants} = await supabase
-    .from('resource_grants')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'pending')
-    .order('created_at', {ascending: true});
-
-  if (!grants || grants.length === 0) return [];
-
-  let gameData = await loadGameData();
-  const claimed: {type: string; amount: number; reason: string | null}[] = [];
-
-  for (const grant of grants) {
-    gameData = await applyGrant(gameData, grant.grant_type, grant.amount);
-    claimed.push({type: grant.grant_type, amount: grant.amount, reason: grant.reason});
-
-    // Mark as claimed
-    await supabase
-      .from('resource_grants')
-      .update({status: 'claimed', claimed_at: new Date().toISOString()})
-      .eq('id', grant.id);
-  }
-
-  return claimed;
-}
-
-async function applyGrant(data: GameData, type: string, amount: number): Promise<GameData> {
-  switch (type) {
-    case 'stars':
-      return addStars(data, amount);
-    case 'diamonds': {
-      const updated = {...data, diamonds: data.diamonds + amount};
-      await saveGameData(updated);
-      return updated;
-    }
-    case 'hearts':
-      return refillHearts(data);
-    case 'hammer':
-    case 'refresh':
-    case 'addTurns':
-    case 'bomb':
-      return addItem(data, type as keyof GameData['items'], amount);
-    default:
-      return data;
-  }
+  const result = await claimPendingResourceGrants();
+  return result.claimed;
 }

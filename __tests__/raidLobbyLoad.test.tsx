@@ -1,5 +1,5 @@
 import React from 'react';
-import {ActivityIndicator} from 'react-native';
+import {ActivityIndicator, Text} from 'react-native';
 import TestRenderer, {act} from 'react-test-renderer';
 import RaidLobbyScreen from '../src/screens/RaidLobbyScreen';
 
@@ -72,36 +72,149 @@ jest.mock('../src/i18n', () => ({
   t: jest.fn((key: string) => key),
 }));
 
+const mockedGameStore = require('../src/stores/gameStore');
+const mockedRaidService = require('../src/services/raidService');
+const mockedFriendService = require('../src/services/friendService');
+const mockedPartyService = require('../src/services/partyService');
+
 const flushMicrotasks = () =>
   new Promise<void>(resolve => {
     setImmediate(() => resolve());
   });
 
+function createNavigation() {
+  return {
+    addListener: jest.fn(() => jest.fn()),
+    goBack: jest.fn(),
+    navigate: jest.fn(),
+    replace: jest.fn(),
+  };
+}
+
+async function renderScreen() {
+  const navigation = createNavigation();
+  let tree: TestRenderer.ReactTestRenderer;
+
+  await act(async () => {
+    tree = TestRenderer.create(<RaidLobbyScreen navigation={navigation} />);
+    await flushMicrotasks();
+    await flushMicrotasks();
+  });
+
+  return {tree: tree!, navigation};
+}
+
+function flattenText(children: any): string[] {
+  if (typeof children === 'string') {
+    return [children];
+  }
+  if (Array.isArray(children)) {
+    return children.flatMap(child => flattenText(child));
+  }
+  return [];
+}
+
+function expectText(tree: TestRenderer.ReactTestRenderer, expected: string) {
+  const texts = tree.root.findAllByType(Text).flatMap(node => flattenText(node.props.children));
+  expect(texts.some(text => text.includes(expected))).toBe(true);
+}
+
 describe('RaidLobbyScreen bootstrap loading', () => {
-  test('starts loading immediately on mount without waiting for focus event', async () => {
-    const navigation = {
-      addListener: jest.fn(() => jest.fn()),
-      goBack: jest.fn(),
-      navigate: jest.fn(),
-      replace: jest.fn(),
-    };
+  let warnSpy: jest.SpyInstance;
 
-    let tree: TestRenderer.ReactTestRenderer;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await act(async () => {
-      tree = TestRenderer.create(<RaidLobbyScreen navigation={navigation} />);
-      await flushMicrotasks();
-      await flushMicrotasks();
+    mockedGameStore.getPlayerId.mockResolvedValue('player-1');
+    mockedGameStore.getNickname.mockResolvedValue('Player');
+    mockedGameStore.loadNormalRaidProgress.mockResolvedValue({});
+    mockedGameStore.loadLevelProgress.mockResolvedValue({1: {cleared: true}});
+    mockedGameStore.getSelectedCharacter.mockResolvedValue('knight');
+    mockedGameStore.loadCharacterData.mockResolvedValue({
+      level: 1,
+      personalAllocations: Array(10).fill(0),
+      partyAllocations: Array(10).fill(0),
     });
 
+    mockedRaidService.getActiveInstances.mockResolvedValue({data: []});
+    mockedFriendService.getFriendIds.mockResolvedValue([]);
+    mockedFriendService.getFriendList.mockResolvedValue({data: []});
+    mockedPartyService.getMyParty.mockResolvedValue({data: null, error: null});
+    mockedPartyService.getPartyMembers.mockResolvedValue({data: []});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  test('starts loading immediately on mount without waiting for focus event', async () => {
+    const {tree, navigation} = await renderScreen();
+
     expect(navigation.addListener).toHaveBeenCalledWith('focus', expect.any(Function));
-    expect(
-      require('../src/stores/gameStore').getPlayerId,
-    ).toHaveBeenCalledTimes(1);
-    expect(tree!.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(mockedGameStore.getPlayerId).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType(ActivityIndicator)).toHaveLength(0);
 
     act(() => {
-      tree!.unmount();
+      tree.unmount();
+    });
+  });
+
+  test('shows an active raid specific warning when active raid loading throws', async () => {
+    mockedRaidService.getActiveInstances.mockRejectedValueOnce(new Error('activeRaids_timeout'));
+
+    const {tree} = await renderScreen();
+
+    expect(tree.root.findByProps({testID: 'raid-load-error-partial'})).toBeTruthy();
+    expectText(tree, '활성 레이드 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
+    expectText(tree, '일반 레이드는 계속 플레이할 수 있습니다.');
+    expectText(tree, 'raid.boss1');
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  test('shows a social warning when party loading returns an error response', async () => {
+    mockedPartyService.getMyParty.mockResolvedValueOnce({
+      data: null,
+      error: {message: 'party lookup failed'},
+    });
+
+    const {tree} = await renderScreen();
+
+    expectText(tree, '친구 또는 파티 정보를 일부 불러오지 못했습니다.');
+    expectText(tree, '일반 레이드는 계속 플레이할 수 있습니다.');
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  test('shows a generic warning when multiple load groups fail together', async () => {
+    mockedRaidService.getActiveInstances.mockRejectedValueOnce(new Error('active query failed'));
+    mockedFriendService.getFriendList.mockRejectedValueOnce(new Error('friends query failed'));
+
+    const {tree} = await renderScreen();
+
+    expectText(tree, '일부 레이드 정보를 불러오지 못했습니다. 다시 시도해 주세요.');
+    expectText(tree, '일반 레이드는 계속 플레이할 수 있습니다.');
+
+    act(() => {
+      tree.unmount();
+    });
+  });
+
+  test('shows a blocking warning when the player profile cannot load', async () => {
+    mockedGameStore.getPlayerId.mockRejectedValueOnce(new Error('playerProfile_timeout'));
+
+    const {tree} = await renderScreen();
+
+    expect(tree.root.findByProps({testID: 'raid-load-error-blocking'})).toBeTruthy();
+    expectText(tree, '레이드 정보를 불러오지 못했습니다. 다시 시도해 주세요.');
+
+    act(() => {
+      tree.unmount();
     });
   });
 });

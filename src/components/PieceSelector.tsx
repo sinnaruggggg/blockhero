@@ -10,6 +10,7 @@ interface PieceSelectorProps {
   onDragMove: (index: number, x: number, y: number) => void;
   onDragEnd: (index: number, x: number, y: number) => void;
   onDragCancel: (index: number) => void;
+  compact?: boolean;
 }
 
 export default function PieceSelector({
@@ -18,11 +19,12 @@ export default function PieceSelector({
   onDragMove,
   onDragEnd,
   onDragCancel,
+  compact = false,
 }: PieceSelectorProps) {
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>{t('game.dragHint')}</Text>
-      <View style={styles.piecesRow}>
+    <View style={[styles.container, compact && styles.containerCompact]}>
+      <Text style={[styles.label, compact && styles.labelCompact]}>{t('game.dragHint')}</Text>
+      <View style={[styles.piecesRow, compact && styles.piecesRowCompact]}>
         {pieces.map((piece, i) => (
           <DraggablePiece
             key={piece?.id ?? `empty-${i}`}
@@ -31,6 +33,7 @@ export default function PieceSelector({
             onDragMove={(x, y) => onDragMove(i, x, y)}
             onDragEnd={(x, y) => onDragEnd(i, x, y)}
             onDragCancel={() => onDragCancel(i)}
+            compact={compact}
           />
         ))}
       </View>
@@ -42,15 +45,26 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     paddingVertical: 8,
+    flexShrink: 0,
+  },
+  containerCompact: {
+    paddingVertical: 4,
   },
   label: {
     color: '#64748b',
     fontSize: 11,
     marginBottom: 6,
   },
+  labelCompact: {
+    marginBottom: 4,
+    fontSize: 10,
+  },
   piecesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 16,
+  },
+  piecesRowCompact: {
+    gap: 10,
   },
 });

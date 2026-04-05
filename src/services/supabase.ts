@@ -102,7 +102,20 @@ export async function cleanupMatching(playerId: string) {
   await supabase.from('matching_queue').delete().eq('player_id', playerId);
 }
 
+// Clean up stale multiplayer state before entering battle flows again
+export async function cleanupBattleState(playerId: string) {
+  await Promise.allSettled([
+    supabase.from('matching_queue').delete().eq('player_id', playerId),
+    supabase.from('players').delete().eq('player_id', playerId),
+  ]);
+}
+
 // Get room channel for realtime
 export function getRoomChannel(roomCode: string) {
   return supabase.channel(`game:${roomCode}`);
 }
+
+// Raid, Friend, Party services are in separate files:
+// - src/services/raidService.ts
+// - src/services/friendService.ts
+// - src/services/partyService.ts

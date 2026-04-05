@@ -2,34 +2,51 @@ import React from 'react';
 import {View, StyleSheet, TouchableOpacity, Text} from 'react-native';
 
 interface ItemBarProps {
-  items: {hammer: number; refresh: number; addTurns: number; bomb: number};
+  items: {[key: string]: number};
   selectedItem: string | null;
   onSelectItem: (item: string) => void;
   showAddTurns?: boolean;
 }
 
 const ITEM_DEFS = [
-  {key: 'hammer', emoji: '🔨', label: '해머'},
+  {key: 'hammer', emoji: '🔨', label: '망치'},
   {key: 'bomb', emoji: '💣', label: '폭탄'},
   {key: 'refresh', emoji: '🔄', label: '새로고침'},
-  {key: 'addTurns', emoji: '⏰', label: '+3턴'},
+  {key: 'addTurns', emoji: '➕', label: '턴 추가'},
 ];
 
-export default function ItemBar({items, selectedItem, onSelectItem, showAddTurns = true}: ItemBarProps) {
-  const visibleItems = showAddTurns ? ITEM_DEFS : ITEM_DEFS.filter(d => d.key !== 'addTurns');
+const PIECE_ITEM_DEFS = [
+  {key: 'piece_square3', emoji: '🟪', label: '3x3'},
+  {key: 'piece_rect', emoji: '▭', label: '2x3'},
+  {key: 'piece_line5', emoji: '🟦', label: '5줄'},
+  {key: 'piece_num2', emoji: '2', label: 'No.2'},
+  {key: 'piece_diag', emoji: '╱', label: '대각'},
+];
+
+export default function ItemBar({
+  items,
+  selectedItem,
+  onSelectItem,
+  showAddTurns = true,
+}: ItemBarProps) {
+  const visibleItems = showAddTurns
+    ? ITEM_DEFS
+    : ITEM_DEFS.filter(item => item.key !== 'addTurns');
+  const ownedPieces = PIECE_ITEM_DEFS.filter(item => (items[item.key] || 0) > 0);
+  const allItems = [...visibleItems, ...ownedPieces];
 
   return (
     <View style={styles.container}>
-      {visibleItems.map(def => {
-        const count = items[def.key as keyof typeof items];
-        const selected = selectedItem === def.key;
+      {allItems.map(item => {
+        const count = items[item.key] || 0;
+        const selected = selectedItem === item.key;
         return (
           <TouchableOpacity
-            key={def.key}
+            key={item.key}
             style={[styles.itemBtn, selected && styles.selectedItem]}
-            onPress={() => onSelectItem(def.key)}
+            onPress={() => onSelectItem(item.key)}
             activeOpacity={0.7}>
-            <Text style={styles.emoji}>{def.emoji}</Text>
+            <Text style={styles.emoji}>{item.emoji}</Text>
             <Text style={styles.count}>{count}</Text>
           </TouchableOpacity>
         );
@@ -42,18 +59,20 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 8,
     paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   itemBtn: {
     backgroundColor: 'rgba(30, 27, 75, 0.8)',
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#312e81',
-    minWidth: 56,
+    minWidth: 50,
   },
   selectedItem: {
     borderColor: '#fbbf24',
