@@ -72,7 +72,23 @@ jobs:
 
       - name: 릴리즈 APK 빌드
         working-directory: android
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease --stacktrace --no-daemon
+
+      - name: 실패 로그 수집
+        if: failure()
+        run: |
+          mkdir -p ci-diagnostics
+          if [ -d android/build/reports ]; then cp -R android/build/reports ci-diagnostics/android-build-reports; fi
+          if [ -d android/app/build/reports ]; then cp -R android/app/build/reports ci-diagnostics/android-app-reports; fi
+          if [ -d android/app/build/outputs/logs ]; then cp -R android/app/build/outputs/logs ci-diagnostics/android-output-logs; fi
+
+      - name: 실패 진단 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blockhero-ci-diagnostics
+          path: ci-diagnostics
+          if-no-files-found: warn
 
       - name: APK 이름 정리
         run: |
