@@ -19,6 +19,7 @@ import {RAID_BOSSES} from '../constants/raidBosses';
 import {formatAttackTimer} from '../constants/raidConfig';
 import {getRaidBossAttackStats} from '../game/battleBalance';
 import {resolveCombatTurn} from '../game/combatFlow';
+import {formatComboMultiplier} from '../data/gameBalance';
 import {
   applyCombatDamageEffectsDetailed,
   applyDamageTakenReduction,
@@ -89,9 +90,7 @@ import {useBattleNotice} from '../hooks/useBattleNotice';
 import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
 import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
 import {
-  getLatestFloatingDamageHit,
   pushFloatingDamageHit,
-  removeFloatingDamageHit,
   type FloatingDamageHit,
 } from '../game/floatingDamage';
 
@@ -220,6 +219,7 @@ export default function RaidScreen({route, navigation}: any) {
   const [timeExpired, setTimeExpired] = useState(false);
   const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
   const [bossDamageHits, setBossDamageHits] = useState<FloatingDamageHit[]>([]);
+  const [bossImpactHit, setBossImpactHit] = useState<FloatingDamageHit | null>(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [bossPose, setBossPose] = useState<MonsterSpritePose>('idle');
   const [round, setRound] = useState(0);
@@ -300,7 +300,6 @@ export default function RaidScreen({route, navigation}: any) {
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const {message: battleNoticeMessage, showNotice: showBattleNotice} =
     useBattleNotice(3000);
-  const latestBossDamageHit = getLatestFloatingDamageHit(bossDamageHits);
 
   useEffect(() => {
     let active = true;
@@ -353,11 +352,9 @@ export default function RaidScreen({route, navigation}: any) {
   const queueBossDamageHit = useCallback((damage: number) => {
     floatingHitIdRef.current += 1;
     const hitId = floatingHitIdRef.current;
+    const nextHit = {id: hitId, damage};
     setBossDamageHits(current => pushFloatingDamageHit(current, hitId, damage));
-  }, []);
-
-  const removeBossDamageHit = useCallback((hitId: number) => {
-    setBossDamageHits(current => removeFloatingDamageHit(current, hitId));
+    setBossImpactHit(nextHit);
   }, []);
 
   const triggerBossPose = useCallback((pose: MonsterSpritePose, duration = 220) => {
@@ -410,6 +407,7 @@ export default function RaidScreen({route, navigation}: any) {
     setSummonReturning(false);
     setSummonSpawnIndex(0);
     setBossDamageHits([]);
+    setBossImpactHit(null);
     setSkillGauge(0);
     setActiveMultiplier(1);
     setRaidSkillLevels({});
@@ -1541,7 +1539,7 @@ export default function RaidScreen({route, navigation}: any) {
         </View>
         <View style={styles.playerMetaRow}>
           <Text style={styles.playerMetaText}>
-            {`${t('game.combo')}: ${combo > 0 ? `x${combo}` : '-'}`}
+            {`${t('game.combo')}: ${combo > 0 ? `${combo}콤보 ${formatComboMultiplier(combo)}` : '-'}`}
           </Text>
           <Text style={styles.playerMetaText}>
             {`${t('game.lines')}: ${linesCleared}`}
@@ -1687,22 +1685,31 @@ export default function RaidScreen({route, navigation}: any) {
                 ) : (
                   <Text style={styles.normalRaidBossEmoji}>{boss.emoji}</Text>
                 )}
-                {latestBossDamageHit && latestBossDamageHit.damage >= 10 && (
-                  <HitEffect damage={latestBossDamageHit.damage} onDone={() => {}} />
+                {bossImpactHit && bossImpactHit.damage >= 10 && (
+                  <HitEffect
+                    key={`raid-normal-hit-effect-${bossImpactHit.id}`}
+                    damage={bossImpactHit.damage}
+                    onDone={() =>
+                      setBossImpactHit(current =>
+                        current?.id === bossImpactHit.id ? null : current,
+                      )
+                    }
+                  />
                 )}
-                {bossDamageHits
-                  .slice()
-                  .reverse()
-                  .map((hit, index) => (
-                    <FloatingDamageLabel
-                      key={`raid-normal-hit-${hit.id}`}
-                      damage={hit.damage}
-                      stackIndex={index}
-                      baseTop={-16}
-                      stackGap={20}
-                      onDone={() => removeBossDamageHit(hit.id)}
-                    />
-                  ))}
+                <View pointerEvents="none" style={styles.normalRaidBossDamageHost}>
+                  {bossDamageHits
+                    .slice()
+                    .reverse()
+                    .map((hit, index) => (
+                      <FloatingDamageLabel
+                        key={`raid-normal-hit-${hit.id}`}
+                        damage={hit.damage}
+                        stackIndex={index}
+                        baseTop={8}
+                        stackGap={20}
+                      />
+                    ))}
+                </View>
               </View>
               <View pointerEvents="none" style={styles.normalRaidBossOverlayHost}>
                 {renderSummonOverlay(true)}
@@ -1750,14 +1757,14 @@ export default function RaidScreen({route, navigation}: any) {
                 nickname: p.nickname,
                 totalDamage: p.totalDamage,
               }))}
-            expandedStandings={standingsExpanded}
-            onToggleStandings={() => setStandingsExpanded(prev => !prev)}
-            damageHits={bossDamageHits}
-            onDamageHitDone={removeBossDamageHit}
-            overlay={renderSummonOverlay(false)}
-            bossPose={bossPose}
-            playerOverlay={renderRaidPlayerSprite(false)}
-          />
+              expandedStandings={standingsExpanded}
+              onToggleStandings={() => setStandingsExpanded(prev => !prev)}
+              damageHits={bossDamageHits}
+              activeDamageHit={bossImpactHit}
+              overlay={renderSummonOverlay(false)}
+              bossPose={bossPose}
+              playerOverlay={renderRaidPlayerSprite(false)}
+            />
 
           {renderTopStatusRow(false)}
         </>
@@ -2081,6 +2088,16 @@ const styles = StyleSheet.create({
   normalRaidBossOverlayHost: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'visible',
+  },
+  normalRaidBossDamageHost: {
+    position: 'absolute',
+    top: -18,
+    left: -24,
+    right: -24,
+    bottom: -10,
+    alignItems: 'center',
+    overflow: 'visible',
+    zIndex: 14,
   },
   raidPlayerSpriteDock: {
     position: 'absolute',

@@ -6,34 +6,34 @@ import {
 describe('battleBalance', () => {
   it('calculates level enemy attack and interval by stage tier', () => {
     expect(getLevelEnemyStats(1, 1)).toEqual({
-      attack: 22,
-      attackIntervalMs: 10000,
+      attack: 24,
+      attackIntervalMs: 5000,
       tier: 'normal',
     });
 
     expect(getLevelEnemyStats(9, 1)).toEqual({
-      attack: 30,
-      attackIntervalMs: 8000,
+      attack: 33,
+      attackIntervalMs: 4000,
       tier: 'elite',
     });
 
     expect(getLevelEnemyStats(30, 1)).toEqual({
-      attack: 49,
-      attackIntervalMs: 6000,
+      attack: 54,
+      attackIntervalMs: 3000,
       tier: 'boss',
     });
   });
 
   it('calculates raid boss attack stats from stage', () => {
     expect(getRaidBossAttackStats(1)).toEqual({
-      attack: 15,
-      attackIntervalMs: 6000,
+      attack: 16,
+      attackIntervalMs: 3000,
       tier: 'boss',
     });
 
     expect(getRaidBossAttackStats(10)).toEqual({
-      attack: 37,
-      attackIntervalMs: 6000,
+      attack: 41,
+      attackIntervalMs: 3000,
       tier: 'boss',
     });
   });

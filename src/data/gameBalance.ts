@@ -21,7 +21,6 @@ export const DEFAULT_ITEM_CAP = 2;
 export const DEFAULT_ITEM_IDS = ['hammer', 'bomb', 'refresh'] as const;
 
 export const LINE_CLEAR_DAMAGE_BONUS_PER_LINE = 0.15;
-export const COMBO_DAMAGE_STEP = 0.1;
 
 export const ENDLESS_SCORE_CONVERSION_RATE = 1;
 
@@ -67,7 +66,16 @@ export function getComboMultiplier(comboCount: number): number {
     return 1;
   }
 
-  return Math.min(2, 1 + comboCount * COMBO_DAMAGE_STEP);
+  let multiplier = 1;
+  for (let combo = 1; combo <= comboCount; combo += 1) {
+    const stepMultiplier = combo <= 10 ? 1 + combo * 0.1 : 2;
+    multiplier *= stepMultiplier;
+  }
+  return multiplier;
+}
+
+export function formatComboMultiplier(comboCount: number): string {
+  return `x${getComboMultiplier(comboCount).toFixed(2)}`;
 }
 
 export function getClearBonusMultiplier(clearedLinesThisAction: number): number {

@@ -12,7 +12,7 @@ describe('resolveCombatTurn', () => {
       feverGauge: 15,
     });
 
-    expect(result.damage).toBe(81);
+    expect(result.damage).toBe(89);
     expect(result.score).toBe(0);
     expect(result.nextCombo).toBe(2);
     expect(result.nextFeverGauge).toBe(25);
@@ -47,8 +47,8 @@ describe('resolveCombatTurn', () => {
       feverGauge: 40,
     });
 
-    expect(result.damage).toBe(36);
-    expect(result.score).toBe(36);
+    expect(result.damage).toBe(40);
+    expect(result.score).toBe(40);
     expect(result.nextCombo).toBe(2);
     expect(result.nextFeverGauge).toBe(40);
   });
@@ -64,7 +64,7 @@ describe('resolveCombatTurn', () => {
       feverGauge: 65,
     });
 
-    expect(result.damage).toBe(84);
+    expect(result.damage).toBe(144);
     expect(result.nextCombo).toBe(4);
     expect(result.nextFeverGauge).toBe(65);
     expect(result.feverTriggered).toBe(false);
@@ -96,6 +96,6 @@ describe('resolveCombatTurn', () => {
     expect(triggerResult.nextFeverGauge).toBe(100);
     expect(triggerResult.feverTriggered).toBe(true);
     expect(triggerResult.nextCombo).toBe(4);
-    expect(triggerResult.damage).toBe(71);
+    expect(triggerResult.damage).toBe(122);
   });
 });

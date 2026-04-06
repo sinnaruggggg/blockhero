@@ -14,6 +14,7 @@ import BackImageButton from '../components/BackImageButton';
 import {getWorldMonsterSprite} from '../assets/monsterSprites';
 import {INFINITE_HEARTS_ENABLED, LEVELS, WORLDS, formatHeartValue} from '../constants';
 import {getNextUnlockedLevel, getWorldProgressSummary} from '../game/levelProgress';
+import {getAdminStatus} from '../services/adminSync';
 import {
   GameData,
   LevelProgress,
@@ -29,17 +30,25 @@ export default function LevelsScreen({navigation}: any) {
   const [progress, setProgress] = useState<LevelProgress>({});
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [expandedWorld, setExpandedWorld] = useState<number>(1);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
-      setProgress(await loadLevelProgress());
-      setGameData(await loadGameData());
+      const [nextProgress, nextGameData, nextIsAdmin] = await Promise.all([
+        loadLevelProgress(),
+        loadGameData(),
+        getAdminStatus().catch(() => false),
+      ]);
+
+      setProgress(nextProgress);
+      setGameData(nextGameData);
+      setIsAdmin(nextIsAdmin);
     });
 
     return unsubscribe;
   }, [navigation]);
 
-  const unlockedLevel = getNextUnlockedLevel(progress);
+  const unlockedLevel = isAdmin ? LEVELS.length : getNextUnlockedLevel(progress);
 
   useEffect(() => {
     if (unlockedLevel <= 300) {

@@ -52,6 +52,7 @@ import {
 } from '../game/raidRules';
 import {getUnlockedBossRaidStages} from '../game/levelProgress';
 import {getCharacterSkillEffects} from '../game/characterSkillEffects';
+import {getAdminStatus} from '../services/adminSync';
 
 interface ActiveRaid {
   id: string;
@@ -241,6 +242,7 @@ export default function RaidLobbyScreen({navigation}: any) {
   const [activeRaids, setActiveRaids] = useState<ActiveRaid[]>([]);
   const [normalRaidProgress, setNormalRaidProgress] = useState<any>({});
   const [unlockedBossStages, setUnlockedBossStages] = useState<number[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [partyId, setPartyId] = useState<string | null>(null);
   const [partyMembers, setPartyMembers] = useState<PartyMemberLocal[]>([]);
   const [isLeader, setIsLeader] = useState(false);
@@ -344,13 +346,21 @@ export default function RaidLobbyScreen({navigation}: any) {
         }
       };
 
-      const [friendIds, partyResult, loadedFriendList, raidProgress, levelProgress] =
+      const [
+        friendIds,
+        partyResult,
+        loadedFriendList,
+        raidProgress,
+        levelProgress,
+        adminStatus,
+      ] =
         await Promise.all([
           safeLoad('friendIds', () => getFriendIds(playerId), [] as string[]),
           safeLoad('party', () => getMyParty(playerId), {data: null, error: null} as any),
           safeLoad('friends', () => getFriendList(playerId), {data: []} as any),
           safeLoad('normalRaidProgress', () => loadNormalRaidProgress(), {} as any),
           safeLoad('levelProgress', () => loadLevelProgress(), {} as any),
+          getAdminStatus().catch(() => false),
         ]);
 
       const raidFilterIds = Array.from(new Set([...(friendIds || []), playerId]));
@@ -373,7 +383,12 @@ export default function RaidLobbyScreen({navigation}: any) {
 
       setActiveRaids(filteredRaids);
       setNormalRaidProgress(raidProgress);
-      setUnlockedBossStages(getUnlockedBossRaidStages(levelProgress));
+      setIsAdmin(adminStatus);
+      setUnlockedBossStages(
+        adminStatus
+          ? RAID_BOSSES.map(boss => boss.stage)
+          : getUnlockedBossRaidStages(levelProgress),
+      );
       setFriendList(loadedFriendList.data || []);
 
       if (partyResult.data) {
@@ -567,7 +582,7 @@ export default function RaidLobbyScreen({navigation}: any) {
         return;
       }
 
-      if (!unlockedBossStages.includes(bossStage)) {
+      if (!isAdmin && !unlockedBossStages.includes(bossStage)) {
         Alert.alert(
           '보스 레이드',
           '해당 월드 30스테이지를 모두 클리어해야 도전할 수 있습니다.',
@@ -631,12 +646,20 @@ export default function RaidLobbyScreen({navigation}: any) {
         isNormalRaid: false,
       });
     },
-    [bossWindowInfo.isOpen, cleanup, navigation, partyId, partyMembers.length, unlockedBossStages],
+    [
+      bossWindowInfo.isOpen,
+      cleanup,
+      isAdmin,
+      navigation,
+      partyId,
+      partyMembers.length,
+      unlockedBossStages,
+    ],
   );
 
   const handleJoinRaid = useCallback(
     async (raid: ActiveRaid) => {
-      if (!unlockedBossStages.includes(raid.boss_stage)) {
+      if (!isAdmin && !unlockedBossStages.includes(raid.boss_stage)) {
         Alert.alert('보스 레이드', '해당 단계가 아직 잠겨 있습니다.');
         return;
       }
@@ -659,7 +682,7 @@ export default function RaidLobbyScreen({navigation}: any) {
         isNormalRaid: false,
       });
     },
-    [cleanup, navigation, unlockedBossStages],
+    [cleanup, isAdmin, navigation, unlockedBossStages],
   );
 
   const formatHp = (hp: number) => {
@@ -890,7 +913,7 @@ export default function RaidLobbyScreen({navigation}: any) {
               <Text style={styles.sectionTitle}>보스 단계</Text>
               <View style={styles.bossGrid}>
                 {RAID_BOSSES.map(boss => {
-                  const unlocked = unlockedBossStages.includes(boss.stage);
+                  const unlocked = isAdmin || unlockedBossStages.includes(boss.stage);
                   const disabled = !unlocked;
 
                   return (

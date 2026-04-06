@@ -91,7 +91,7 @@ interface BossDisplayProps {
   expandedStandings?: boolean;
   onToggleStandings?: () => void;
   damageHits?: FloatingDamageHit[];
-  onDamageHitDone?: (hitId: number) => void;
+  activeDamageHit?: FloatingDamageHit | null;
   overlay?: React.ReactNode;
   bossPose?: MonsterSpritePose;
   playerOverlay?: React.ReactNode;
@@ -132,7 +132,7 @@ export default function BossDisplay({
   expandedStandings = false,
   onToggleStandings,
   damageHits = [],
-  onDamageHitDone,
+  activeDamageHit = null,
   overlay,
   bossPose = 'idle',
   playerOverlay,
@@ -195,22 +195,27 @@ export default function BossDisplay({
             ) : (
               <Text style={styles.bossEmoji}>{bossEmoji}</Text>
             )}
-            {latestDamageHit && latestDamageHit.damage >= 10 && (
-              <HitEffect damage={latestDamageHit.damage} onDone={() => {}} />
+            {activeDamageHit && activeDamageHit.damage >= 10 && (
+              <HitEffect
+                key={`boss-hit-${activeDamageHit.id}`}
+                damage={activeDamageHit.damage}
+                onDone={() => {}}
+              />
             )}
-            {damageHits
-              .slice()
-              .reverse()
-              .map((hit, index) => (
-                <FloatingDamageLabel
-                  key={`boss-damage-${hit.id}`}
-                  damage={hit.damage}
-                  stackIndex={index}
-                  baseTop={-16}
-                  stackGap={22}
-                  onDone={() => onDamageHitDone?.(hit.id)}
-                />
-              ))}
+            <View pointerEvents="none" style={styles.damageHost}>
+              {damageHits
+                .slice()
+                .reverse()
+                .map((hit, index) => (
+                  <FloatingDamageLabel
+                    key={`boss-damage-${hit.id}`}
+                    damage={hit.damage}
+                    stackIndex={index}
+                    baseTop={8}
+                    stackGap={22}
+                  />
+                ))}
+            </View>
           </View>
           {playerOverlay ? <View style={styles.playerOverlayHost}>{playerOverlay}</View> : null}
           {overlay ? <View style={styles.overlayHost}>{overlay}</View> : null}
@@ -405,5 +410,15 @@ const styles = StyleSheet.create({
   },
   hitEffect: {
     position: 'absolute',
+  },
+  damageHost: {
+    position: 'absolute',
+    top: -18,
+    left: -26,
+    right: -26,
+    bottom: -12,
+    alignItems: 'center',
+    overflow: 'visible',
+    zIndex: 14,
   },
 });

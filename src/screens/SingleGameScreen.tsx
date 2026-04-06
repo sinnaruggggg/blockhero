@@ -12,6 +12,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {t} from '../i18n';
 import {flushPlayerStateNow} from '../services/playerState';
+import {getAdminStatus} from '../services/adminSync';
 import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
@@ -45,6 +46,7 @@ import {
 import {getLevelEnemyStats} from '../game/battleBalance';
 import {resolveCombatTurn} from '../game/combatFlow';
 import {getLevelClearRewards} from '../game/levelProgress';
+import {formatComboMultiplier} from '../data/gameBalance';
 import {
   applyCombatDamageEffectsDetailed,
   applyDamageTakenReduction,
@@ -99,9 +101,7 @@ import {useBattleNotice} from '../hooks/useBattleNotice';
 import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
 import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
 import {
-  getLatestFloatingDamageHit,
   pushFloatingDamageHit,
-  removeFloatingDamageHit,
   type FloatingDamageHit,
 } from '../game/floatingDamage';
 
@@ -349,6 +349,7 @@ export default function SingleGameScreen({route, navigation}: any) {
   } | null>(null);
   const [comboBurstValue, setComboBurstValue] = useState(0);
   const [monsterHits, setMonsterHits] = useState<FloatingDamageHit[]>([]);
+  const [monsterImpactHit, setMonsterImpactHit] = useState<FloatingDamageHit | null>(null);
   const [playerHit, setPlayerHit] = useState<{id: number; damage: number} | null>(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [monsterPose, setMonsterPose] = useState<MonsterSpritePose>('idle');
@@ -393,6 +394,7 @@ export default function SingleGameScreen({route, navigation}: any) {
   const diamondsEarnedRef = useRef(0);
   const nextPiecesRef = useRef<Piece[]>([]);
   const usedBattleItemRef = useRef(false);
+  const isAdminRef = useRef(false);
   const monsterHpAnim = useRef(new Animated.Value(1)).current;
   const playerHpAnim = useRef(new Animated.Value(1)).current;
   const levelUpAnim = useRef(new Animated.Value(0)).current;
@@ -406,7 +408,6 @@ export default function SingleGameScreen({route, navigation}: any) {
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const {message: battleNoticeMessage, showNotice: showBattleNotice, clearNotice} =
     useBattleNotice(3000);
-  const latestMonsterHit = getLatestFloatingDamageHit(monsterHits);
 
   useEffect(() => {
     let active = true;
@@ -430,11 +431,9 @@ export default function SingleGameScreen({route, navigation}: any) {
   const queueMonsterHit = useCallback((damage: number) => {
     floatingHitIdRef.current += 1;
     const hitId = floatingHitIdRef.current;
+    const nextHit = {id: hitId, damage};
     setMonsterHits(current => pushFloatingDamageHit(current, hitId, damage));
-  }, []);
-
-  const removeMonsterHit = useCallback((hitId: number) => {
-    setMonsterHits(current => removeFloatingDamageHit(current, hitId));
+    setMonsterImpactHit(nextHit);
   }, []);
 
   const getCurrentPieceOptions = useCallback(
@@ -530,6 +529,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     setLevelUpState(null);
     setComboBurstValue(0);
     setMonsterHits([]);
+    setMonsterImpactHit(null);
     setPlayerHit(null);
     setVictoryState(null);
     setDefeatState(null);
@@ -556,11 +556,12 @@ export default function SingleGameScreen({route, navigation}: any) {
     updateNextPieces(buildPiecePack(nextBoard));
 
     (async () => {
-      const [loadedGameData, skinData, charId, noticeMode] = await Promise.all([
+      const [loadedGameData, skinData, charId, noticeMode, isAdmin] = await Promise.all([
         loadGameData(),
         loadSkinData(),
         getSelectedCharacter(),
         loadSkillTriggerNoticeMode(),
+        getAdminStatus().catch(() => false),
       ]);
 
       if (!mounted) {
@@ -568,6 +569,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       }
 
       gameDataRef.current = loadedGameData;
+      isAdminRef.current = isAdmin;
       skillNoticeModeRef.current = noticeMode;
       setGameData(loadedGameData);
       setActiveSkin(skinData.activeSkinId);
@@ -957,6 +959,7 @@ export default function SingleGameScreen({route, navigation}: any) {
           world,
           levelId,
           progress[levelId]?.cleared === true,
+          {isAdmin: isAdminRef.current},
         );
         const rewardTotals = applyRewardMultipliers(
           reward.gold,
@@ -1807,12 +1810,12 @@ export default function SingleGameScreen({route, navigation}: any) {
             <Text style={styles.centerInfoText}>적 공격 {enemyStats.attack}</Text>
           </View>
           <View style={styles.centerInfoRow}>
-            <View style={styles.comboInfoBlock}>
-              <Text style={styles.centerInfoText}>
-                {combo > 0 ? `${combo} 콤보` : '콤보 없음'}
-              </Text>
-              {combo > 0 && comboRemainingMs > 0 && (
-                <Text style={styles.comboTimerText}>
+              <View style={styles.comboInfoBlock}>
+                <Text style={styles.centerInfoText}>
+                  {combo > 0 ? `${combo}콤보 · ${formatComboMultiplier(combo)}` : '콤보 없음'}
+                </Text>
+                {combo > 0 && comboRemainingMs > 0 && (
+                  <Text style={styles.comboTimerText}>
                   유지 {Math.max(0, comboRemainingMs / 1000).toFixed(2)}초
                 </Text>
               )}
@@ -1880,24 +1883,30 @@ export default function SingleGameScreen({route, navigation}: any) {
             {transform: [{translateX: monsterAvatarShakeX}]},
           ]}>
           {renderMonsterAvatar(68, -1)}
-          {latestMonsterHit && (
+          {monsterImpactHit && (
             <HitEffect
-              key={`monster-hit-${latestMonsterHit.id}`}
-              damage={latestMonsterHit.damage}
-              onDone={() => {}}
+              key={`monster-hit-${monsterImpactHit.id}`}
+              damage={monsterImpactHit.damage}
+              onDone={() =>
+                setMonsterImpactHit(current =>
+                  current?.id === monsterImpactHit.id ? null : current,
+                )
+              }
             />
           )}
-          {monsterHits
-            .slice()
-            .reverse()
-            .map((hit, index) => (
-              <FloatingDamageLabel
-                key={`monster-flash-${hit.id}`}
-                damage={hit.damage}
-                stackIndex={index}
-                onDone={() => removeMonsterHit(hit.id)}
-              />
-            ))}
+          <View pointerEvents="none" style={styles.monsterDamageHost}>
+            {monsterHits
+              .slice()
+              .reverse()
+              .map((hit, index) => (
+                <FloatingDamageLabel
+                  key={`monster-flash-${hit.id}`}
+                  damage={hit.damage}
+                  stackIndex={index}
+                  baseTop={8}
+                />
+              ))}
+          </View>
         </Animated.View>
         <Text
           numberOfLines={1}
@@ -1961,12 +1970,12 @@ export default function SingleGameScreen({route, navigation}: any) {
                 <Text style={styles.headerComboText}>
                   {combo > 0 ? '콤보 유지' : ''}
                 </Text>
-                <Text style={styles.headerTimerText}>
-                  {combo > 0 && comboRemainingMs > 0
-                    ? `${combo}콤보 · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`
-                    : ''}
-                </Text>
-              </View>
+                  <Text style={styles.headerTimerText}>
+                    {combo > 0 && comboRemainingMs > 0
+                      ? `${combo}콤보 · ${formatComboMultiplier(combo)} · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`
+                      : ''}
+                  </Text>
+                </View>
             </View>
 
               {renderBattleLane()}
@@ -2044,12 +2053,12 @@ export default function SingleGameScreen({route, navigation}: any) {
           <Text style={styles.headerComboText}>
             {combo > 0 ? '콤보 유지' : ''}
           </Text>
-          <Text style={styles.headerTimerText}>
-            {combo > 0 && comboRemainingMs > 0
-              ? `${combo}콤보 · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`
-              : ''}
-          </Text>
-        </View>
+            <Text style={styles.headerTimerText}>
+              {combo > 0 && comboRemainingMs > 0
+                ? `${combo}콤보 · ${formatComboMultiplier(combo)} · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`
+                : ''}
+            </Text>
+          </View>
       </View>
 
         {renderBattleLane()}
@@ -2206,7 +2215,11 @@ export default function SingleGameScreen({route, navigation}: any) {
                 ],
               },
             ]}>
-            <Text style={styles.comboBurstText}>{comboBurstValue}콤보</Text>
+            <Text style={styles.comboBurstText}>
+              {comboBurstValue > 0
+                ? `${comboBurstValue}콤보 ${formatComboMultiplier(comboBurstValue)}`
+                : ''}
+            </Text>
           </Animated.View>
         </View>
       )}
@@ -2495,6 +2508,16 @@ const styles = StyleSheet.create({
   },
   monsterAvatarFrame: {},
   playerAvatarFrame: {},
+  monsterDamageHost: {
+    position: 'absolute',
+    top: -18,
+    left: -22,
+    right: -22,
+    bottom: -10,
+    alignItems: 'center',
+    overflow: 'visible',
+    zIndex: 8,
+  },
   monsterEmojiCompact: {
     fontSize: 34,
   },

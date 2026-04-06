@@ -1,4 +1,5 @@
 import {FEVER_LINES_REQUIRED, FEVER_MAX} from '../constants';
+import {getClearBonusMultiplier, getComboMultiplier} from '../data/gameBalance';
 import {calculateDamage} from './engine';
 
 export type CombatMode = 'level' | 'endless' | 'raid';
@@ -38,8 +39,8 @@ export function resolveCombatTurn({
   const didClear = clearedLines > 0;
   const nextCombo = didClear ? combo + 1 : combo;
   const raidBonus = mode === 'raid' ? clearedLines : 0;
-  const comboMultiplier = Math.min(2, 1 + nextCombo * 0.1);
-  const clearMultiplier = 1 + Math.min(clearedLines, 4) * 0.15;
+  const comboMultiplier = getComboMultiplier(nextCombo);
+  const clearMultiplier = getClearBonusMultiplier(clearedLines);
   const damage = calculateDamage(
     blockCount,
     attackPower,

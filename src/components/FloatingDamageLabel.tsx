@@ -4,7 +4,6 @@ import {Animated, Text, StyleSheet} from 'react-native';
 interface FloatingDamageLabelProps {
   damage: number;
   stackIndex?: number;
-  onDone: () => void;
   baseTop?: number;
   stackGap?: number;
 }
@@ -12,25 +11,40 @@ interface FloatingDamageLabelProps {
 export default function FloatingDamageLabel({
   damage,
   stackIndex = 0,
-  onDone,
-  baseTop = -22,
-  stackGap = 24,
+  baseTop = 0,
+  stackGap = 16,
 }: FloatingDamageLabelProps) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
+  const scale = useRef(new Animated.Value(0.92)).current;
 
   useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(8);
+    scale.setValue(0.92);
+
     Animated.parallel([
-      Animated.sequence([
-        Animated.timing(translateY, {toValue: -6, duration: 220, useNativeDriver: true}),
-        Animated.timing(translateY, {toValue: -18, duration: 820, useNativeDriver: true}),
-      ]),
-      Animated.sequence([
-        Animated.delay(650),
-        Animated.timing(opacity, {toValue: 0, duration: 350, useNativeDriver: true}),
-      ]),
-    ]).start(onDone);
-  }, [onDone, opacity, translateY]);
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateY, {
+        toValue: 0,
+        damping: 14,
+        stiffness: 170,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        damping: 12,
+        stiffness: 180,
+        mass: 0.8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [damage, opacity, scale, translateY]);
 
   return (
     <Animated.View
@@ -41,7 +55,7 @@ export default function FloatingDamageLabel({
           top: baseTop - stackIndex * stackGap,
           opacity,
           zIndex: 12 - stackIndex,
-          transform: [{translateY}],
+          transform: [{translateY}, {scale}],
         },
       ]}>
       <Text style={styles.damageFlashText}>-{damage}</Text>
@@ -54,13 +68,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignSelf: 'center',
     backgroundColor: 'rgba(239,68,68,0.92)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: 8,
+    minWidth: 30,
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    shadowColor: '#111827',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 12,
   },
   damageFlashText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 9,
     fontWeight: '900',
+    lineHeight: 11,
   },
 });
