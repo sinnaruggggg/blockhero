@@ -44,11 +44,11 @@ describe('level mode progression', () => {
   it('calculates first-clear and repeat-clear rewards separately', () => {
     expect(getLevelClearRewards(4, 95, false)).toEqual({
       gold: 97,
-      xp: 210000,
+      xp: 4200,
     });
     expect(getLevelClearRewards(4, 95, true)).toEqual({
       gold: 51,
-      xp: 210000,
+      xp: 4200,
     });
   });
 });

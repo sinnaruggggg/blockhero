@@ -2,8 +2,8 @@ import {Alert, Linking, Platform} from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import {isNewerVersion} from './updateVersion';
 
-export const CURRENT_VERSION_CODE = 145;
-export const CURRENT_VERSION_NAME = '1.3.17';
+export const CURRENT_VERSION_CODE = 146;
+export const CURRENT_VERSION_NAME = '1.3.18';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const APK_MIME = 'application/vnd.android.package-archive';

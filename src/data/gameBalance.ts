@@ -6,7 +6,7 @@ import {
 export const BOARD_ROWS = 10;
 export const BOARD_COLS = 8;
 
-export const MAX_HEARTS = 10;
+export const MAX_HEARTS = 20;
 export const HEART_REGEN_MS = 5 * 60 * 1000;
 
 export const COMBO_WINDOW_MS = 10 * 1000;

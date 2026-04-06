@@ -79,14 +79,14 @@ export const FEVER_LINES_REQUIRED = 20; // lines to clear to trigger fever
 export const COMBO_TIMEOUT_MS = 5000; // 5 seconds to maintain combo
 
 // Hearts — 10 max, 1 per 5 minutes
-export const MAX_HEARTS = 10;
+export const MAX_HEARTS = 20;
 export const HEART_REGEN_MS = 5 * 60 * 1000; // 5 minutes
 export const INFINITE_HEARTS_ENABLED = true;
 export const INFINITE_HEARTS_VALUE = 999999;
 export const INFINITE_HEARTS_LABEL = '∞';
 
 export function getConfiguredMaxHearts(maxHearts: number): number {
-  return INFINITE_HEARTS_ENABLED ? INFINITE_HEARTS_VALUE : maxHearts;
+  return INFINITE_HEARTS_ENABLED ? INFINITE_HEARTS_VALUE : Math.min(MAX_HEARTS, maxHearts);
 }
 
 export function formatHeartValue(hearts: number): string {

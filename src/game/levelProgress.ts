@@ -1,8 +1,7 @@
 import {LEVELS, WORLDS} from '../constants';
 import type {LevelProgress} from '../stores/gameStore';
 
-const LEVEL_CHARACTER_XP_MULTIPLIER = 12;
-const LEVEL_CHARACTER_XP_TEST_MULTIPLIER = 100;
+const LEVEL_CHARACTER_XP_MULTIPLIER = 24;
 
 export function getNextUnlockedLevel(progress: LevelProgress): number {
   for (let levelId = 1; levelId <= LEVELS.length; levelId += 1) {
@@ -42,9 +41,6 @@ export function getLevelClearRewards(
 
   return {
     gold: repeatGold + (alreadyCleared ? 0 : firstClearBonus),
-    xp:
-      baseXp *
-      LEVEL_CHARACTER_XP_MULTIPLIER *
-      LEVEL_CHARACTER_XP_TEST_MULTIPLIER,
+    xp: baseXp * LEVEL_CHARACTER_XP_MULTIPLIER,
   };
 }

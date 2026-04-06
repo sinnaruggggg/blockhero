@@ -67,7 +67,7 @@ language sql
 stable
 as $$
   select jsonb_build_object(
-    'hearts', 10,
+    'hearts', 20,
     'lastHeartTime', public.bh_now_ms(),
     'gold', 0,
     'diamonds', 0,
@@ -281,7 +281,7 @@ begin
     v_points := public.bh_selected_character_points(p_state, 3);
   end if;
 
-  return 10 + case when v_points >= 3 then 1 else 0 end;
+  return least(20, 20 + case when v_points >= 3 then 1 else 0 end);
 end;
 $$;
 

@@ -5,6 +5,7 @@ import {
   getDynamicHeartCap,
   getDynamicItemCapPerType,
 } from '../src/game/characterSkillEffects';
+import {MAX_HEARTS} from '../src/constants';
 import type {CharacterData} from '../src/stores/gameStore';
 
 function makeCharacterData(characterId: string): CharacterData {
@@ -74,6 +75,7 @@ describe('character skill effects', () => {
     healer.personalAllocations[3] = 5;
     healer.personalAllocations[7] = 5;
     const healerEffects = getCharacterSkillEffects('healer', healer, {mode: 'level'});
+    expect(MAX_HEARTS).toBe(20);
     expect(getDynamicHeartCap(10, healerEffects)).toBe(11);
     expect(healerEffects.autoHealIntervalMs).toBe(60000);
     expect(healerEffects.autoHealPercent).toBeCloseTo(0.1, 5);
