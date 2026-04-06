@@ -32,28 +32,39 @@ export default function MissionsScreen({navigation}: any) {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
-      const loadedGameData = await loadGameData();
-      setGameData(loadedGameData);
-      setDailyStats(await loadDailyStats());
-      setMissionData(await loadMissionData());
-      setAchievementData(await loadAchievements());
+      const [
+        loadedGameData,
+        loadedDailyStats,
+        loadedMissionData,
+        loadedAchievementData,
+        endlessStats,
+        levelProgress,
+      ] = await Promise.all([
+        loadGameData(),
+        loadDailyStats(),
+        loadMissionData(),
+        loadAchievements(),
+        loadEndlessStats(),
+        loadLevelProgress(),
+      ]);
 
-      const endlessStats = await loadEndlessStats();
-      const levelProgress = await loadLevelProgress();
-      const todayStats = await loadDailyStats();
+      setGameData(loadedGameData);
+      setDailyStats(loadedDailyStats);
+      setMissionData(loadedMissionData);
+      setAchievementData(loadedAchievementData);
       const totalLevelClears = Object.values(levelProgress).filter(progress => progress.cleared).length;
 
       setAllStats({
-        dailyGames: todayStats.games,
-        dailyScore: todayStats.score,
-        dailyLines: todayStats.lines,
-        dailyMaxCombo: todayStats.maxCombo,
-        dailyLevelClears: todayStats.levelClears,
+        dailyGames: loadedDailyStats.games,
+        dailyScore: loadedDailyStats.score,
+        dailyLines: loadedDailyStats.lines,
+        dailyMaxCombo: loadedDailyStats.maxCombo,
+        dailyLevelClears: loadedDailyStats.levelClears,
         totalLevelClears,
         endlessHighScore: endlessStats.highScore,
-        totalLines: endlessStats.totalLines + todayStats.lines,
-        maxCombo: Math.max(endlessStats.maxCombo, todayStats.maxCombo),
-        totalGames: endlessStats.totalGames + todayStats.games,
+        totalLines: endlessStats.totalLines + loadedDailyStats.lines,
+        maxCombo: Math.max(endlessStats.maxCombo, loadedDailyStats.maxCombo),
+        totalGames: endlessStats.totalGames + loadedDailyStats.games,
         endlessMaxLevel: endlessStats.maxLevel,
       });
     });

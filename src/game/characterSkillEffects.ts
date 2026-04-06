@@ -48,6 +48,20 @@ export interface CharacterSkillEffects {
   itemCapacityPerTypeBonus: number;
 }
 
+export type CombatDamageEffectEvent =
+  | 'combo_bonus'
+  | 'line_clear_bonus'
+  | 'fever_bonus'
+  | 'small_piece_chain'
+  | 'raid_bonus'
+  | 'jackpot_double'
+  | 'double_attack';
+
+export interface CombatDamageEffectResult {
+  amount: number;
+  events: CombatDamageEffectEvent[];
+}
+
 const DEFAULT_EFFECTS: CharacterSkillEffects = {
   baseAttackMultiplier: 1,
   maxHpMultiplier: 1,
@@ -246,37 +260,70 @@ export function applyCombatDamageEffects(
     isRaid?: boolean;
   },
 ): number {
+  return applyCombatDamageEffectsDetailed(baseAmount, effects, context).amount;
+}
+
+export function applyCombatDamageEffectsDetailed(
+  baseAmount: number,
+  effects: CharacterSkillEffects,
+  context: {
+    combo: number;
+    didClear: boolean;
+    feverActive: boolean;
+    usedSmallPieceStreak?: boolean;
+    isRaid?: boolean;
+  },
+): CombatDamageEffectResult {
   let value = baseAmount;
+  const events: CombatDamageEffectEvent[] = [];
 
   if (context.combo > 0) {
     value *= 1 + effects.comboDamageBonus;
+    if (effects.comboDamageBonus > 0) {
+      events.push('combo_bonus');
+    }
   }
 
   if (context.didClear) {
     value *= 1 + effects.lineClearDamageBonus;
+    if (effects.lineClearDamageBonus > 0) {
+      events.push('line_clear_bonus');
+    }
   }
 
   if (context.feverActive) {
     value *= 1 + effects.feverDamageBonus;
+    if (effects.feverDamageBonus > 0) {
+      events.push('fever_bonus');
+    }
   }
 
   if (context.usedSmallPieceStreak) {
     value *= 1 + 0.2;
+    events.push('small_piece_chain');
   }
 
   if (context.isRaid) {
     value *= effects.raidDamageMultiplier;
+    if (effects.raidDamageMultiplier > 1) {
+      events.push('raid_bonus');
+    }
   }
 
   if (effects.jackpotDoubleChance > 0 && Math.random() < effects.jackpotDoubleChance) {
     value *= 2;
+    events.push('jackpot_double');
   }
 
   if (effects.doubleAttackChance > 0 && Math.random() < effects.doubleAttackChance) {
     value *= 2;
+    events.push('double_attack');
   }
 
-  return Math.max(0, Math.round(value));
+  return {
+    amount: Math.max(0, Math.round(value)),
+    events,
+  };
 }
 
 export function getDynamicHeartCap(baseHearts: number, effects: CharacterSkillEffects): number {

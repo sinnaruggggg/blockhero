@@ -11,13 +11,40 @@ import {
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import BackImageButton from '../components/BackImageButton';
 import {getAdminStatus} from '../services/adminSync';
 import {supabase} from '../services/supabase';
 import {CURRENT_VERSION_NAME} from '../services/updateService';
+import {
+  loadGameSettings,
+  saveGameSettings,
+  saveSkillTriggerNoticeMode,
+  type SkillTriggerNoticeMode,
+} from '../stores/gameSettings';
 
 const {width: screenWidth} = Dimensions.get('window');
+
+const NOTICE_MODE_OPTIONS: Array<{
+  label: string;
+  value: SkillTriggerNoticeMode;
+  description: string;
+}> = [
+  {
+    label: '끄기',
+    value: 'off',
+    description: '전투 중 스킬 발동 메시지를 표시하지 않습니다.',
+  },
+  {
+    label: '확률·조건만',
+    value: 'triggered_only',
+    description: '회피, 부활, 자동 회복, 추가 타격처럼 실제 발동 이벤트만 표시합니다.',
+  },
+  {
+    label: '모든 효과',
+    value: 'all_effects',
+    description: '조건 발동 외에도 콤보, 피버, 라인 강화 등 적용된 효과를 함께 표시합니다.',
+  },
+];
 
 export default function SettingsScreen({navigation}: any) {
   const [email, setEmail] = useState('');
@@ -26,6 +53,8 @@ export default function SettingsScreen({navigation}: any) {
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [skillNoticeMode, setSkillNoticeMode] =
+    useState<SkillTriggerNoticeMode>('triggered_only');
 
   useEffect(() => {
     (async () => {
@@ -39,30 +68,20 @@ export default function SettingsScreen({navigation}: any) {
 
       setIsAdmin(await getAdminStatus());
 
-      try {
-        const rawSettings = await AsyncStorage.getItem('gameSettings');
-        if (!rawSettings) {
-          return;
-        }
-
-        const parsed = JSON.parse(rawSettings);
-        if (parsed.bgm !== undefined) setBgmEnabled(parsed.bgm);
-        if (parsed.sfx !== undefined) setSfxEnabled(parsed.sfx);
-        if (parsed.vibration !== undefined) setVibrationEnabled(parsed.vibration);
-        if (parsed.notification !== undefined) {
-          setNotificationEnabled(parsed.notification);
-        }
-      } catch {}
+      const settings = await loadGameSettings();
+      setBgmEnabled(settings.bgm);
+      setSfxEnabled(settings.sfx);
+      setVibrationEnabled(settings.vibration);
+      setNotificationEnabled(settings.notification);
+      setSkillNoticeMode(settings.skillTriggerNoticeMode);
     })();
   }, []);
 
-  const saveSettings = async (key: string, value: boolean) => {
-    try {
-      const rawSettings = await AsyncStorage.getItem('gameSettings');
-      const parsed = rawSettings ? JSON.parse(rawSettings) : {};
-      parsed[key] = value;
-      await AsyncStorage.setItem('gameSettings', JSON.stringify(parsed));
-    } catch {}
+  const handleToggleSetting = async (
+    key: 'bgm' | 'sfx' | 'vibration' | 'notification',
+    value: boolean,
+  ) => {
+    await saveGameSettings({[key]: value});
   };
 
   const handleLogout = () => {
@@ -114,7 +133,7 @@ export default function SettingsScreen({navigation}: any) {
             <BackImageButton onPress={() => navigation.goBack()} size={42} />
           </View>
           <Text style={styles.title}>설정</Text>
-          <View style={{width: 60}} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <View style={styles.card}>
@@ -133,9 +152,9 @@ export default function SettingsScreen({navigation}: any) {
               value={bgmEnabled}
               trackColor={{false: '#ddd', true: '#a5b4fc'}}
               thumbColor={bgmEnabled ? '#6366f1' : '#999'}
-              onValueChange={value => {
+              onValueChange={async value => {
                 setBgmEnabled(value);
-                saveSettings('bgm', value);
+                await handleToggleSetting('bgm', value);
               }}
             />
           </View>
@@ -145,9 +164,9 @@ export default function SettingsScreen({navigation}: any) {
               value={sfxEnabled}
               trackColor={{false: '#ddd', true: '#a5b4fc'}}
               thumbColor={sfxEnabled ? '#6366f1' : '#999'}
-              onValueChange={value => {
+              onValueChange={async value => {
                 setSfxEnabled(value);
-                saveSettings('sfx', value);
+                await handleToggleSetting('sfx', value);
               }}
             />
           </View>
@@ -157,11 +176,51 @@ export default function SettingsScreen({navigation}: any) {
               value={vibrationEnabled}
               trackColor={{false: '#ddd', true: '#a5b4fc'}}
               thumbColor={vibrationEnabled ? '#6366f1' : '#999'}
-              onValueChange={value => {
+              onValueChange={async value => {
                 setVibrationEnabled(value);
-                saveSettings('vibration', value);
+                await handleToggleSetting('vibration', value);
               }}
             />
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>전투 알림</Text>
+          <Text style={styles.settingHelp}>
+            스킬이나 효과가 전투 중 실제로 적용될 때 표시할 메시지 범위를 선택합니다.
+          </Text>
+          <View style={styles.optionList}>
+            {NOTICE_MODE_OPTIONS.map(option => {
+              const active = option.value === skillNoticeMode;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  activeOpacity={0.86}
+                  style={[styles.noticeOption, active && styles.noticeOptionActive]}
+                  onPress={async () => {
+                    setSkillNoticeMode(option.value);
+                    await saveSkillTriggerNoticeMode(option.value);
+                  }}>
+                  <View style={styles.noticeOptionHeader}>
+                    <Text
+                      style={[
+                        styles.noticeOptionTitle,
+                        active && styles.noticeOptionTitleActive,
+                      ]}>
+                      {option.label}
+                    </Text>
+                    {active && <Text style={styles.noticeOptionBadge}>사용 중</Text>}
+                  </View>
+                  <Text
+                    style={[
+                      styles.noticeOptionDescription,
+                      active && styles.noticeOptionDescriptionActive,
+                    ]}>
+                    {option.description}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -173,9 +232,9 @@ export default function SettingsScreen({navigation}: any) {
               value={notificationEnabled}
               trackColor={{false: '#ddd', true: '#a5b4fc'}}
               thumbColor={notificationEnabled ? '#6366f1' : '#999'}
-              onValueChange={value => {
+              onValueChange={async value => {
                 setNotificationEnabled(value);
-                saveSettings('notification', value);
+                await handleToggleSetting('notification', value);
               }}
             />
           </View>
@@ -191,7 +250,7 @@ export default function SettingsScreen({navigation}: any) {
             onPress={() =>
               Alert.alert(
                 '앱 정보',
-                `앱 이름: BlockHero\n버전: ${CURRENT_VERSION_NAME}\n2026 BlockHero 팀`,
+                `앱 이름: BlockHero\n버전: ${CURRENT_VERSION_NAME}\n2026 BlockHero`,
               )
             }>
             <Text style={styles.menuText}>앱 정보</Text>
@@ -209,7 +268,9 @@ export default function SettingsScreen({navigation}: any) {
         </View>
 
         {isAdmin && (
-          <TouchableOpacity style={styles.adminBtn} onPress={() => navigation.navigate('Admin')}>
+          <TouchableOpacity
+            style={styles.adminBtn}
+            onPress={() => navigation.navigate('Admin')}>
             <Text style={styles.adminText}>관리자 모드</Text>
           </TouchableOpacity>
         )}
@@ -239,18 +300,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backBtn: {width: 60},
-  backText: {color: '#6366f1', fontSize: 16, fontWeight: '700'},
+  headerSpacer: {width: 60},
   title: {color: '#333', fontSize: 20, fontWeight: '800'},
   card: {
     backgroundColor: '#fff',
     borderRadius: 16,
     elevation: 2,
     marginBottom: 12,
+    minWidth: screenWidth - 32,
     padding: 20,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 10,
-    minWidth: screenWidth - 32,
   },
   sectionTitle: {color: '#333', fontSize: 16, fontWeight: '800', marginBottom: 12},
   infoRow: {
@@ -274,6 +335,53 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   settingLabel: {color: '#333', fontSize: 15, fontWeight: '600'},
+  settingHelp: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  optionList: {
+    gap: 10,
+  },
+  noticeOption: {
+    borderColor: '#dbe4ff',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  noticeOptionActive: {
+    backgroundColor: '#eef2ff',
+    borderColor: '#6366f1',
+  },
+  noticeOptionHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  noticeOptionTitle: {
+    color: '#1f2937',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  noticeOptionTitleActive: {
+    color: '#3730a3',
+  },
+  noticeOptionBadge: {
+    color: '#4338ca',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  noticeOptionDescription: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  noticeOptionDescriptionActive: {
+    color: '#4338ca',
+  },
   menuItem: {
     borderBottomColor: '#f1f5f9',
     borderBottomWidth: 1,

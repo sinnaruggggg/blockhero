@@ -4,8 +4,10 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
+import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
+import {flushPlayerStateNow} from '../services/playerState';
 import {useDragDrop} from '../game/useDragDrop';
 import {
   LEVEL_THRESHOLDS,
@@ -31,7 +33,7 @@ import {
 } from '../game/engine';
 import {resolveCombatTurn} from '../game/combatFlow';
 import {
-  applyCombatDamageEffects,
+  applyCombatDamageEffectsDetailed,
   getCharacterSkillEffects,
   getPieceGenerationOptions,
 } from '../game/characterSkillEffects';
@@ -60,6 +62,9 @@ import {
   getSummonGaugeGain,
   mergeSkinPieceGenerationOptions,
 } from '../game/skinSummonRuntime';
+import {useBattleNotice} from '../hooks/useBattleNotice';
+import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
+import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
 
 export default function EndlessScreen({navigation}: any) {
   const [board, setBoard] = useState<BoardType>(createBoard());
@@ -107,6 +112,9 @@ export default function EndlessScreen({navigation}: any) {
   const summonRemainingMsRef = useRef(0);
   const summonExpEarnedRef = useRef(0);
   const nextPiecesRef = useRef<Piece[]>([]);
+  const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
+  const {message: battleNoticeMessage, showNotice: showBattleNotice} =
+    useBattleNotice(3000);
 
   const milestoneAnim = useRef(new Animated.Value(0)).current;
 
@@ -123,6 +131,16 @@ export default function EndlessScreen({navigation}: any) {
     nextPiecesRef.current = piecesToPreview;
     setNextPieces(piecesToPreview);
   }, []);
+
+  const showSkillTriggerNotice = useCallback(
+    (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
+      const message = buildSkillTriggerNotice(skillNoticeModeRef.current, events);
+      if (message) {
+        showBattleNotice(message);
+      }
+    },
+    [showBattleNotice],
+  );
 
   const buildPiecePack = useCallback(
     (
@@ -165,13 +183,15 @@ export default function EndlessScreen({navigation}: any) {
     setPieces(initialPack);
     updateNextPieces(buildPiecePack('easy', initialBoard));
     (async () => {
-      const [loadedGameData, skinData, charId] = await Promise.all([
+      const [loadedGameData, skinData, charId, noticeMode] = await Promise.all([
         loadGameData(),
         loadSkinData(),
         getSelectedCharacter(),
+        loadSkillTriggerNoticeMode(),
       ]);
       setGameData(loadedGameData);
       gameDataRef.current = loadedGameData;
+      skillNoticeModeRef.current = noticeMode;
 
       setActiveSkin(skinData.activeSkinId);
       setSkinBoardBg(getSkinBoardBg());
@@ -299,6 +319,8 @@ export default function EndlessScreen({navigation}: any) {
       maxCombo: maxComboRef.current,
     });
 
+    void flushPlayerStateNow('endless_end');
+
     const isHighScore = finalScore > stats.highScore;
     Alert.alert(
       isHighScore ? '새 최고 기록!' : '게임 종료',
@@ -406,13 +428,14 @@ export default function EndlessScreen({navigation}: any) {
         resetComboTimer();
       }
 
-      const characterScore = applyCombatDamageEffects(turnResult.score, effects, {
+      const scoreResult = applyCombatDamageEffectsDetailed(turnResult.score, effects, {
         combo: turnResult.nextCombo,
         didClear: turnResult.didClear,
         feverActive: feverActiveRef.current,
         usedSmallPieceStreak,
       });
-      const skinScore = applySkinCombatDamage(characterScore, activeSkinIdRef.current, {
+      showSkillTriggerNotice(...scoreResult.events);
+      const skinScore = applySkinCombatDamage(scoreResult.amount, activeSkinIdRef.current, {
         combo: turnResult.nextCombo,
         didClear: turnResult.didClear,
       }).damage;
@@ -519,6 +542,7 @@ export default function EndlessScreen({navigation}: any) {
       pieces,
       resetComboTimer,
       score,
+      showSkillTriggerNotice,
       updateNextPieces,
     ],
   );
@@ -649,6 +673,8 @@ export default function EndlessScreen({navigation}: any) {
         ]}>
         <Text style={styles.milestoneBannerText}>{milestoneText}</Text>
       </Animated.View>
+
+      <BattleNoticeOverlay message={battleNoticeMessage} bottom={148} />
 
       <View style={styles.goldBar}>
         <Text style={styles.goldBarText}>이번 판 획득 골드: {goldEarned}</Text>

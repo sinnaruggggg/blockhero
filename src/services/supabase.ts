@@ -14,10 +14,23 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+let cachedSessionUserId: string | null | undefined = undefined;
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  cachedSessionUserId = session?.user?.id ?? null;
+});
+
 // Get current user ID
 export async function getCurrentUserId(): Promise<string | null> {
-  const {data: {user}} = await supabase.auth.getUser();
-  return user?.id ?? null;
+  if (cachedSessionUserId !== undefined) {
+    return cachedSessionUserId;
+  }
+
+  const {
+    data: {session},
+  } = await supabase.auth.getSession();
+  cachedSessionUserId = session?.user?.id ?? null;
+  return cachedSessionUserId;
 }
 
 // Get profile

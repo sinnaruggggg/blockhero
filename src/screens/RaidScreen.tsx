@@ -6,7 +6,9 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
+import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import BossDisplay from '../components/BossDisplay';
+import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillBar from '../components/SkillBar';
 import KnightSprite from '../components/KnightSprite';
@@ -18,7 +20,7 @@ import {formatAttackTimer} from '../constants/raidConfig';
 import {getRaidBossAttackStats} from '../game/battleBalance';
 import {resolveCombatTurn} from '../game/combatFlow';
 import {
-  applyCombatDamageEffects,
+  applyCombatDamageEffectsDetailed,
   applyDamageTakenReduction,
   applyRewardMultipliers,
   getCharacterSkillEffects,
@@ -38,6 +40,7 @@ import {
   gainSummonExp, loadSkinData,
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {flushPlayerStateNow} from '../services/playerState';
 import {supabase} from '../services/supabase';
 import {getRaidInstance, getRaidParticipants, dealRaidDamage, joinRaidInstance, getRaidChannel} from '../services/raidService';
 import {upsertCodexEntry} from '../services/codexService';
@@ -82,29 +85,71 @@ import {
   loadCharacterVisualTunings,
   subscribeCharacterVisualTunings,
 } from '../stores/characterVisualTuning';
+import {useBattleNotice} from '../hooks/useBattleNotice';
+import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
+import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
+import {
+  getLatestFloatingDamageHit,
+  pushFloatingDamageHit,
+  removeFloatingDamageHit,
+  type FloatingDamageHit,
+} from '../game/floatingDamage';
 
-// Damage flash effect
-function DamageFlash({damage, onDone}: {damage: number; onDone: () => void}) {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const translateY = useRef(new Animated.Value(14)).current;
+const HIT_FRAMES = [
+  require('../assets/effects/hit_00.png'),
+  require('../assets/effects/hit_01.png'),
+  require('../assets/effects/hit_02.png'),
+  require('../assets/effects/hit_03.png'),
+  require('../assets/effects/hit_04.png'),
+  require('../assets/effects/hit_05.png'),
+  require('../assets/effects/hit_06.png'),
+  require('../assets/effects/hit_07.png'),
+  require('../assets/effects/hit_08.png'),
+  require('../assets/effects/hit_09.png'),
+  require('../assets/effects/hit_10.png'),
+  require('../assets/effects/hit_11.png'),
+  require('../assets/effects/hit_12.png'),
+  require('../assets/effects/hit_13.png'),
+];
+
+function HitEffect({damage, onDone}: {damage: number; onDone: () => void}) {
+  const [frame, setFrame] = useState(0);
+  const scale = Math.min(2.5, 1 + Math.floor(damage / 10) * 0.1);
+  const size = 120 * scale;
+  const rotation = useRef(Math.floor(Math.random() * 4) * 90).current;
+  const flipX = useRef(Math.random() > 0.5).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(translateY, {toValue: -6, duration: 220, useNativeDriver: true}),
-        Animated.timing(translateY, {toValue: -18, duration: 820, useNativeDriver: true}),
-      ]),
-      Animated.sequence([
-        Animated.delay(650),
-        Animated.timing(opacity, {toValue: 0, duration: 350, useNativeDriver: true}),
-      ]),
-    ]).start(onDone);
-  }, [onDone, opacity, translateY]);
+    const interval = setInterval(() => {
+      setFrame(previous => {
+        if (previous >= HIT_FRAMES.length - 1) {
+          clearInterval(interval);
+          onDone();
+          return previous;
+        }
+
+        return previous + 1;
+      });
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, [onDone]);
 
   return (
-    <Animated.View style={[styles.damageFlash, {opacity, transform: [{translateY}]}]}>
-      <Text style={styles.damageFlashText}>-{damage}</Text>
-    </Animated.View>
+    <Image
+      source={HIT_FRAMES[frame]}
+      resizeMode="contain"
+      style={[
+        {
+          position: 'absolute',
+          width: size,
+          height: size,
+          top: -(size - 88) / 2,
+          left: -(size - 88) / 2,
+          transform: [{rotate: `${rotation}deg`}, {scaleX: flipX ? -1 : 1}],
+        },
+      ]}
+    />
   );
 }
 
@@ -174,8 +219,7 @@ export default function RaidScreen({route, navigation}: any) {
   const [bossDefeated, setBossDefeated] = useState(false);
   const [timeExpired, setTimeExpired] = useState(false);
   const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
-  const [damageEffect, setDamageEffect] = useState<number | null>(null);
-  const [showBossHit, setShowBossHit] = useState(false);
+  const [bossDamageHits, setBossDamageHits] = useState<FloatingDamageHit[]>([]);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [bossPose, setBossPose] = useState<MonsterSpritePose>('idle');
   const [round, setRound] = useState(0);
@@ -246,12 +290,17 @@ export default function RaidScreen({route, navigation}: any) {
   const summonExpEarnedRef = useRef(0);
   const skillGaugeRef = useRef(0);
   const raidSkillLevelsRef = useRef<Record<number, number>>({});
+  const floatingHitIdRef = useRef(0);
   const remoteBoardsRef = useRef<Map<string, {board: BoardType; nickname: string}>>(new Map());
   const alivePlayersRef = useRef<string[]>([]);
   const participantCountRef = useRef(0);
   const chatScrollRef = useRef<ScrollView>(null);
   const gameDataRef = useRef<GameData | null>(null);
   const playerHpAnim = useRef(new Animated.Value(1)).current;
+  const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
+  const {message: battleNoticeMessage, showNotice: showBattleNotice} =
+    useBattleNotice(3000);
+  const latestBossDamageHit = getLatestFloatingDamageHit(bossDamageHits);
 
   useEffect(() => {
     let active = true;
@@ -290,6 +339,26 @@ export default function RaidScreen({route, navigation}: any) {
       ),
     [getRaidEffects],
   );
+
+  const showSkillTriggerNotice = useCallback(
+    (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
+      const message = buildSkillTriggerNotice(skillNoticeModeRef.current, events);
+      if (message) {
+        showBattleNotice(message);
+      }
+    },
+    [showBattleNotice],
+  );
+
+  const queueBossDamageHit = useCallback((damage: number) => {
+    floatingHitIdRef.current += 1;
+    const hitId = floatingHitIdRef.current;
+    setBossDamageHits(current => pushFloatingDamageHit(current, hitId, damage));
+  }, []);
+
+  const removeBossDamageHit = useCallback((hitId: number) => {
+    setBossDamageHits(current => removeFloatingDamageHit(current, hitId));
+  }, []);
 
   const triggerBossPose = useCallback((pose: MonsterSpritePose, duration = 220) => {
     if (bossPoseTimerRef.current) {
@@ -340,17 +409,19 @@ export default function RaidScreen({route, navigation}: any) {
     setSummonOverlayVisible(false);
     setSummonReturning(false);
     setSummonSpawnIndex(0);
+    setBossDamageHits([]);
     setSkillGauge(0);
     setActiveMultiplier(1);
     setRaidSkillLevels({});
     (async () => {
       try {
-        const [playerId, nickname] = await withTimeout(
-          Promise.all([getPlayerId(), getNickname()]),
+        const [playerId, nickname, noticeMode] = await withTimeout(
+          Promise.all([getPlayerId(), getNickname(), loadSkillTriggerNoticeMode()]),
           'raid_player_profile',
         );
         playerIdRef.current = playerId;
         nicknameRef.current = nickname;
+        skillNoticeModeRef.current = noticeMode;
         gameDataRef.current = await withTimeout(loadGameData(), 'raid_game_data');
         if (mounted && gameDataRef.current) {
           const levels = getRaidSkillLevels(gameDataRef.current.items);
@@ -750,10 +821,11 @@ export default function RaidScreen({route, navigation}: any) {
       playerHpRef.current = healedHp;
       setPlayerHp(healedHp);
       animatePlayerHpBar(healedHp / maxHp);
+      showSkillTriggerNotice('auto_heal');
     }, effects.autoHealIntervalMs);
 
     return () => clearInterval(timer);
-  }, [animatePlayerHpBar, bossDefeated, gameOver, getRaidEffects, spectatorMode]);
+  }, [animatePlayerHpBar, bossDefeated, gameOver, getRaidEffects, showSkillTriggerNotice, spectatorMode]);
 
   // Enter spectator mode helper
   const enterSpectator = useCallback(() => {
@@ -801,6 +873,7 @@ export default function RaidScreen({route, navigation}: any) {
 
     const effects = getRaidEffects();
     if (shouldDodgeAttack(effects)) {
+      showSkillTriggerNotice('dodge');
       return;
     }
 
@@ -819,6 +892,7 @@ export default function RaidScreen({route, navigation}: any) {
 
     if (rawNextHp <= 0 && nextHp === 1) {
       reviveUsedRef.current = true;
+      showSkillTriggerNotice('revive');
       return;
     }
 
@@ -842,6 +916,7 @@ export default function RaidScreen({route, navigation}: any) {
     enterSpectator,
     getRaidEffects,
     maxPlayerHp,
+    showSkillTriggerNotice,
     triggerBossPose,
   ]);
 
@@ -942,14 +1017,15 @@ export default function RaidScreen({route, navigation}: any) {
         setFeverGauge(turnResult.nextFeverGauge);
       }
 
-      const baseDamage = applyCombatDamageEffects(turnResult.damage, effects, {
+      const damageResult = applyCombatDamageEffectsDetailed(turnResult.damage, effects, {
         combo: turnResult.nextCombo,
         didClear: turnResult.didClear,
         feverActive: feverActiveRef.current,
         usedSmallPieceStreak,
         isRaid: true,
       });
-      const skinDamage = applySkinCombatDamage(baseDamage, activeSkinIdRef.current, {
+      showSkillTriggerNotice(...damageResult.events);
+      const skinDamage = applySkinCombatDamage(damageResult.amount, activeSkinIdRef.current, {
         combo: turnResult.nextCombo,
         didClear: turnResult.didClear,
       }).damage;
@@ -987,10 +1063,7 @@ export default function RaidScreen({route, navigation}: any) {
       if (finalDamage > 0) {
         setPlayerAttackPulse(previous => previous + 1);
         triggerBossPose('hurt', 260);
-        setDamageEffect(finalDamage);
-        if (finalDamage >= 10) {
-          setShowBossHit(true);
-        }
+        queueBossDamageHit(finalDamage);
         if (vibrationRef.current) Vibration.vibrate(50);
       }
 
@@ -1008,6 +1081,7 @@ export default function RaidScreen({route, navigation}: any) {
         playerHpRef.current = healedHp;
         setPlayerHp(healedHp);
         animatePlayerHpBar(healedHp / maxHp);
+        showSkillTriggerNotice('place_heal');
       }
 
       setMyTotalDamage(prev => prev + finalDamage);
@@ -1137,6 +1211,7 @@ export default function RaidScreen({route, navigation}: any) {
       round,
       animatePlayerHpBar,
       getCurrentPieceOptions,
+      showSkillTriggerNotice,
       triggerBossPose,
     ],
   );
@@ -1325,6 +1400,7 @@ export default function RaidScreen({route, navigation}: any) {
     try {
       await upsertCodexEntry(playerIdRef.current, bossStage, myTotalDamage, clearTimeMs);
     } catch {}
+    void flushPlayerStateNow('raid_rewards');
     navigation.replace('Home');
   };
 
@@ -1407,7 +1483,7 @@ export default function RaidScreen({route, navigation}: any) {
               <KnightSprite
                 size={compact ? 40 : 44}
                 attackPulse={playerAttackPulse}
-                facing={-1}
+                facing={1}
               />
             </View>
           );
@@ -1605,21 +1681,28 @@ export default function RaidScreen({route, navigation}: any) {
                     fadeDuration={0}
                     style={[
                       styles.normalRaidBossSprite,
-                      {transform: [{scaleX: bossSpriteSet?.facing ?? 1}]},
+                      {transform: [{scaleX: -(bossSpriteSet?.facing ?? 1)}]},
                     ]}
                   />
                 ) : (
                   <Text style={styles.normalRaidBossEmoji}>{boss.emoji}</Text>
                 )}
-                {showBossHit && damageEffect !== null && (
-                  <DamageFlash
-                    damage={damageEffect}
-                    onDone={() => {
-                      setDamageEffect(null);
-                      setShowBossHit(false);
-                    }}
-                  />
+                {latestBossDamageHit && latestBossDamageHit.damage >= 10 && (
+                  <HitEffect damage={latestBossDamageHit.damage} onDone={() => {}} />
                 )}
+                {bossDamageHits
+                  .slice()
+                  .reverse()
+                  .map((hit, index) => (
+                    <FloatingDamageLabel
+                      key={`raid-normal-hit-${hit.id}`}
+                      damage={hit.damage}
+                      stackIndex={index}
+                      baseTop={-16}
+                      stackGap={20}
+                      onDone={() => removeBossDamageHit(hit.id)}
+                    />
+                  ))}
               </View>
               <View pointerEvents="none" style={styles.normalRaidBossOverlayHost}>
                 {renderSummonOverlay(true)}
@@ -1669,9 +1752,8 @@ export default function RaidScreen({route, navigation}: any) {
               }))}
             expandedStandings={standingsExpanded}
             onToggleStandings={() => setStandingsExpanded(prev => !prev)}
-            showHit={showBossHit}
-            hitDamage={damageEffect || 0}
-            onHitDone={() => setShowBossHit(false)}
+            damageHits={bossDamageHits}
+            onDamageHitDone={removeBossDamageHit}
             overlay={renderSummonOverlay(false)}
             bossPose={bossPose}
             playerOverlay={renderRaidPlayerSprite(false)}
@@ -1824,10 +1906,7 @@ export default function RaidScreen({route, navigation}: any) {
         </>
       )}
 
-      {/* Damage flash effect */}
-      {damageEffect !== null && !isNormalRaid && (
-        <DamageFlash damage={damageEffect} onDone={() => setDamageEffect(null)} />
-      )}
+      <BattleNoticeOverlay message={battleNoticeMessage} bottom={156} />
 
       {/* Boss defeated - reward popup */}
       {bossDefeated && rewardData && !rewardCollected && (
@@ -2005,7 +2084,7 @@ const styles = StyleSheet.create({
   },
   raidPlayerSpriteDock: {
     position: 'absolute',
-    right: 2,
+    left: 2,
     bottom: 20,
     width: 54,
     height: 68,
@@ -2015,7 +2094,7 @@ const styles = StyleSheet.create({
     zIndex: 3,
   },
   raidPlayerSpriteDockCompact: {
-    right: 0,
+    left: 0,
     bottom: 18,
     width: 46,
     height: 60,

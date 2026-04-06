@@ -34,7 +34,6 @@ import {
   getEconomyErrorCode,
   purchaseShopItem,
 } from '../services/economyService';
-import {getCurrentUserId, getProfile} from '../services/supabase';
 import {t} from '../i18n';
 import {
   loadGameData,
@@ -163,6 +162,8 @@ export default function HomeScreen({navigation}: any) {
   const [characterVisualTunings, setCharacterVisualTunings] = useState(
     getCachedCharacterVisualTunings(),
   );
+  const pendingGrantsCheckedRef = useRef(false);
+  const announcementsLoadedRef = useRef(false);
 
   const tiltX = useRef(new Animated.Value(0)).current;
   const tiltY = useRef(new Animated.Value(0)).current;
@@ -442,29 +443,37 @@ export default function HomeScreen({navigation}: any) {
       }
     });
 
-    try {
-      const userId = await getCurrentUserId();
-      if (userId) {
-        const {data: profile} = await getProfile(userId);
-      }
-    } catch {}
+    if (!pendingGrantsCheckedRef.current) {
+      pendingGrantsCheckedRef.current = true;
+      void (async () => {
+        try {
+          const result = await claimPendingGrants();
+          if (result.claimed.length > 0) {
+            const summary = result.claimed
+              .map(grant => `${grant.type} x${grant.amount}`)
+              .join(', ');
+            setGameData(result.gameData);
+            Alert.alert(t('common.notice'), `보상이 지급되었습니다.\n${summary}`);
+          }
+        } catch {
+          pendingGrantsCheckedRef.current = false;
+        }
+      })();
+    }
 
-    try {
-      const claimed = await claimPendingGrants();
-      if (claimed.length > 0) {
-        const summary = claimed.map(grant => `${grant.type} x${grant.amount}`).join(', ');
-        Alert.alert(t('common.notice'), `보상이 지급되었습니다.\n${summary}`);
-        const freshData = await loadGameData();
-        setGameData(freshData);
-      }
-    } catch {}
-
-    try {
-      const announcements = await fetchAnnouncements();
-      if (announcements.length > 0) {
-        setAnnouncement(announcements[0]);
-      }
-    } catch {}
+    if (!announcementsLoadedRef.current) {
+      announcementsLoadedRef.current = true;
+      void (async () => {
+        try {
+          const announcements = await fetchAnnouncements();
+          if (announcements.length > 0) {
+            setAnnouncement(announcements[0]);
+          }
+        } catch {
+          announcementsLoadedRef.current = false;
+        }
+      })();
+    }
   }, []);
 
   useEffect(() => {

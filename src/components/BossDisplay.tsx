@@ -8,11 +8,13 @@ import {
   Image,
 } from 'react-native';
 import {t} from '../i18n';
+import FloatingDamageLabel from './FloatingDamageLabel';
 import {
   getMonsterPoseSource,
   getRaidBossSpriteSet,
   MonsterSpritePose,
 } from '../assets/monsterSprites';
+import {getLatestFloatingDamageHit, type FloatingDamageHit} from '../game/floatingDamage';
 
 const HIT_FRAMES = [
   require('../assets/effects/hit_00.png'),
@@ -88,9 +90,8 @@ interface BossDisplayProps {
   participants?: ParticipantSlot[];
   expandedStandings?: boolean;
   onToggleStandings?: () => void;
-  showHit?: boolean;
-  hitDamage?: number;
-  onHitDone?: () => void;
+  damageHits?: FloatingDamageHit[];
+  onDamageHitDone?: (hitId: number) => void;
   overlay?: React.ReactNode;
   bossPose?: MonsterSpritePose;
   playerOverlay?: React.ReactNode;
@@ -130,9 +131,8 @@ export default function BossDisplay({
   participants = [],
   expandedStandings = false,
   onToggleStandings,
-  showHit,
-  hitDamage = 0,
-  onHitDone,
+  damageHits = [],
+  onDamageHitDone,
   overlay,
   bossPose = 'idle',
   playerOverlay,
@@ -140,6 +140,7 @@ export default function BossDisplay({
   const hpAnim = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const visibleParticipants = participants.slice(0, expandedStandings ? 30 : 10);
+  const latestDamageHit = getLatestFloatingDamageHit(damageHits);
 
   useEffect(() => {
     Animated.timing(hpAnim, {
@@ -150,7 +151,7 @@ export default function BossDisplay({
   }, [currentHp, hpAnim, maxHp]);
 
   useEffect(() => {
-    if (!showHit) {
+    if (!latestDamageHit) {
       return;
     }
 
@@ -161,7 +162,7 @@ export default function BossDisplay({
       Animated.timing(shakeAnim, {toValue: -5, duration: 40, useNativeDriver: true}),
       Animated.timing(shakeAnim, {toValue: 0, duration: 40, useNativeDriver: true}),
     ]).start();
-  }, [showHit, shakeAnim]);
+  }, [latestDamageHit, shakeAnim]);
 
   const hpPercent = Math.max(0, (currentHp / Math.max(1, maxHp)) * 100);
   const hpColor = hpPercent > 50 ? '#22c55e' : hpPercent > 25 ? '#f59e0b' : '#ef4444';
@@ -188,15 +189,28 @@ export default function BossDisplay({
                 fadeDuration={0}
                 style={[
                   styles.bossSprite,
-                  {transform: [{scaleX: bossSpriteSet?.facing ?? 1}]},
+                  {transform: [{scaleX: -(bossSpriteSet?.facing ?? 1)}]},
                 ]}
               />
             ) : (
               <Text style={styles.bossEmoji}>{bossEmoji}</Text>
             )}
-            {showHit && onHitDone && hitDamage >= 10 && (
-              <HitEffect damage={hitDamage} onDone={onHitDone} />
+            {latestDamageHit && latestDamageHit.damage >= 10 && (
+              <HitEffect damage={latestDamageHit.damage} onDone={() => {}} />
             )}
+            {damageHits
+              .slice()
+              .reverse()
+              .map((hit, index) => (
+                <FloatingDamageLabel
+                  key={`boss-damage-${hit.id}`}
+                  damage={hit.damage}
+                  stackIndex={index}
+                  baseTop={-16}
+                  stackGap={22}
+                  onDone={() => onDamageHitDone?.(hit.id)}
+                />
+              ))}
           </View>
           {playerOverlay ? <View style={styles.playerOverlayHost}>{playerOverlay}</View> : null}
           {overlay ? <View style={styles.overlayHost}>{overlay}</View> : null}

@@ -11,7 +11,10 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {t} from '../i18n';
+import {flushPlayerStateNow} from '../services/playerState';
 import BackImageButton from '../components/BackImageButton';
+import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
+import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
@@ -43,7 +46,7 @@ import {getLevelEnemyStats} from '../game/battleBalance';
 import {resolveCombatTurn} from '../game/combatFlow';
 import {getLevelClearRewards} from '../game/levelProgress';
 import {
-  applyCombatDamageEffects,
+  applyCombatDamageEffectsDetailed,
   applyDamageTakenReduction,
   applyRewardMultipliers,
   getCharacterSkillEffects,
@@ -92,6 +95,15 @@ import {
   loadCharacterVisualTunings,
   subscribeCharacterVisualTunings,
 } from '../stores/characterVisualTuning';
+import {useBattleNotice} from '../hooks/useBattleNotice';
+import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
+import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
+import {
+  getLatestFloatingDamageHit,
+  pushFloatingDamageHit,
+  removeFloatingDamageHit,
+  type FloatingDamageHit,
+} from '../game/floatingDamage';
 
 type FailureReason = 'board_full' | 'hp_zero';
 
@@ -336,7 +348,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     skillPointsGained: number;
   } | null>(null);
   const [comboBurstValue, setComboBurstValue] = useState(0);
-  const [monsterHit, setMonsterHit] = useState<{id: number; damage: number} | null>(null);
+  const [monsterHits, setMonsterHits] = useState<FloatingDamageHit[]>([]);
   const [playerHit, setPlayerHit] = useState<{id: number; damage: number} | null>(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [monsterPose, setMonsterPose] = useState<MonsterSpritePose>('idle');
@@ -346,10 +358,10 @@ export default function SingleGameScreen({route, navigation}: any) {
   const [victoryDisplayedXpCurrent, setVictoryDisplayedXpCurrent] = useState(0);
   const [victoryDisplayedXpMax, setVictoryDisplayedXpMax] = useState(1);
   const [victoryReady, setVictoryReady] = useState(false);
-  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const boardRef = useRef<View>(null);
+  const floatingHitIdRef = useRef(0);
   const gameDataRef = useRef<GameData | null>(null);
   const maxComboRef = useRef(0);
   const monsterHpRef = useRef(maxMonsterHp);
@@ -390,8 +402,11 @@ export default function SingleGameScreen({route, navigation}: any) {
   const victoryXpAnim = useRef(new Animated.Value(0)).current;
   const playerAvatarShakeX = useRef(new Animated.Value(0)).current;
   const monsterAvatarShakeX = useRef(new Animated.Value(0)).current;
-  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const levelPieceDifficulty = getLevelPieceDifficulty(activeLevel.world);
+  const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
+  const {message: battleNoticeMessage, showNotice: showBattleNotice, clearNotice} =
+    useBattleNotice(3000);
+  const latestMonsterHit = getLatestFloatingDamageHit(monsterHits);
 
   useEffect(() => {
     let active = true;
@@ -410,6 +425,16 @@ export default function SingleGameScreen({route, navigation}: any) {
       active = false;
       unsubscribe();
     };
+  }, []);
+
+  const queueMonsterHit = useCallback((damage: number) => {
+    floatingHitIdRef.current += 1;
+    const hitId = floatingHitIdRef.current;
+    setMonsterHits(current => pushFloatingDamageHit(current, hitId, damage));
+  }, []);
+
+  const removeMonsterHit = useCallback((hitId: number) => {
+    setMonsterHits(current => removeFloatingDamageHit(current, hitId));
   }, []);
 
   const getCurrentPieceOptions = useCallback(
@@ -504,7 +529,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     setComboRemainingMs(0);
     setLevelUpState(null);
     setComboBurstValue(0);
-    setMonsterHit(null);
+    setMonsterHits([]);
     setPlayerHit(null);
     setVictoryState(null);
     setDefeatState(null);
@@ -512,7 +537,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     setVictoryDisplayedXpCurrent(0);
     setVictoryDisplayedXpMax(1);
     setVictoryReady(false);
-    setNoticeMessage(null);
+    clearNotice();
     setShowExitConfirm(false);
     updateNextPieces([]);
 
@@ -531,10 +556,11 @@ export default function SingleGameScreen({route, navigation}: any) {
     updateNextPieces(buildPiecePack(nextBoard));
 
     (async () => {
-      const [loadedGameData, skinData, charId] = await Promise.all([
+      const [loadedGameData, skinData, charId, noticeMode] = await Promise.all([
         loadGameData(),
         loadSkinData(),
         getSelectedCharacter(),
+        loadSkillTriggerNoticeMode(),
       ]);
 
       if (!mounted) {
@@ -542,6 +568,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       }
 
       gameDataRef.current = loadedGameData;
+      skillNoticeModeRef.current = noticeMode;
       setGameData(loadedGameData);
       setActiveSkin(skinData.activeSkinId);
       setSkinBoardBg(getSkinBoardBg());
@@ -626,13 +653,12 @@ export default function SingleGameScreen({route, navigation}: any) {
       if (enemyAttackRef.current) {
         clearInterval(enemyAttackRef.current);
       }
-      if (noticeTimerRef.current) {
-        clearTimeout(noticeTimerRef.current);
-      }
+      clearNotice();
     };
   }, [
     activeLevel,
     buildPiecePack,
+    clearNotice,
     levelPieceDifficulty,
     maxMonsterHp,
     monsterHpAnim,
@@ -662,16 +688,15 @@ export default function SingleGameScreen({route, navigation}: any) {
     [playerHpAnim],
   );
 
-  const showTransientNotice = useCallback((message: string) => {
-    setNoticeMessage(message);
-    if (noticeTimerRef.current) {
-      clearTimeout(noticeTimerRef.current);
-    }
-    noticeTimerRef.current = setTimeout(() => {
-      setNoticeMessage(null);
-      noticeTimerRef.current = null;
-    }, 1800);
-  }, []);
+  const showSkillTriggerNotice = useCallback(
+    (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
+      const message = buildSkillTriggerNotice(skillNoticeModeRef.current, events);
+      if (message) {
+        showBattleNotice(message);
+      }
+    },
+    [showBattleNotice],
+  );
 
   const showLevelUpCelebration = useCallback(
     (fromLevel: number, toLevel: number) =>
@@ -875,10 +900,11 @@ export default function SingleGameScreen({route, navigation}: any) {
       playerHpRef.current = healedHp;
       setPlayerHp(healedHp);
       animatePlayerHpBar(healedHp / maxHp);
+      showSkillTriggerNotice('auto_heal');
     }, effects.autoHealIntervalMs);
 
     return () => clearInterval(timer);
-  }, [animatePlayerHpBar, gameOver, maxPlayerHp]);
+  }, [animatePlayerHpBar, gameOver, maxPlayerHp, showSkillTriggerNotice]);
 
   const endGame = useCallback(
     async (success: boolean, reason: FailureReason = 'board_full') => {
@@ -967,6 +993,7 @@ export default function SingleGameScreen({route, navigation}: any) {
           }
         }
 
+        void flushPlayerStateNow('single_game_victory');
         gameDataRef.current = updated;
         setGameData(updated);
         setVictoryState({
@@ -982,6 +1009,7 @@ export default function SingleGameScreen({route, navigation}: any) {
         return;
       }
 
+      void flushPlayerStateNow('single_game_defeat');
       setDefeatState({
         characterId: selectedCharacterId,
         reason,
@@ -1007,6 +1035,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     triggerMonsterPose('attack');
 
     if (shouldDodgeAttack(skillEffectsRef.current)) {
+      showSkillTriggerNotice('dodge');
       return;
     }
 
@@ -1032,6 +1061,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
     if (rawNextHp <= 0 && nextHp === 1) {
       reviveUsedRef.current = true;
+      showSkillTriggerNotice('revive');
       return;
     }
 
@@ -1044,6 +1074,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     enemyStats.attack,
     maxPlayerHp,
     playerAvatarShakeX,
+    showSkillTriggerNotice,
     triggerMonsterPose,
     triggerAvatarShake,
   ]);
@@ -1297,13 +1328,14 @@ export default function SingleGameScreen({route, navigation}: any) {
         setFeverGauge(turnResult.nextFeverGauge);
       }
 
-      const characterDamage = applyCombatDamageEffects(turnResult.damage, effects, {
+      const damageResult = applyCombatDamageEffectsDetailed(turnResult.damage, effects, {
         combo: turnResult.nextCombo,
         didClear: turnResult.didClear,
         feverActive: feverActiveRef.current,
         usedSmallPieceStreak,
       });
-      const skinDamage = applySkinCombatDamage(characterDamage, activeSkinIdRef.current, {
+      showSkillTriggerNotice(...damageResult.events);
+      const skinDamage = applySkinCombatDamage(damageResult.amount, activeSkinIdRef.current, {
         combo: turnResult.nextCombo,
         didClear: turnResult.didClear,
       }).damage;
@@ -1318,7 +1350,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       if (damageThisTurn > 0) {
         setPlayerAttackPulse(previous => previous + 1);
         triggerMonsterPose('hurt', 260);
-        setMonsterHit({id: Date.now(), damage: damageThisTurn});
+        queueMonsterHit(damageThisTurn);
         triggerAvatarShake(
           monsterAvatarShakeX,
           Math.min(14, 4 + turnResult.nextCombo * 1.5),
@@ -1424,7 +1456,9 @@ export default function SingleGameScreen({route, navigation}: any) {
       triggerComboEffects,
       isPiecePackPlaceable,
       monsterAvatarShakeX,
+      queueMonsterHit,
       triggerMonsterPose,
+      showSkillTriggerNotice,
       triggerAvatarShake,
       animatePlayerHpBar,
       animateMonsterHpBar,
@@ -1473,7 +1507,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
       if (item === 'refresh') {
         if (gameData.items.refresh <= 0) {
-          showTransientNotice(t('item.noRefresh'));
+          showBattleNotice(t('item.noRefresh'));
           return;
         }
 
@@ -1518,13 +1552,13 @@ export default function SingleGameScreen({route, navigation}: any) {
       }
 
       if ((gameData.items[item as keyof typeof gameData.items] ?? 0) <= 0) {
-        showTransientNotice(t('item.noItems'));
+        showBattleNotice(t('item.noItems'));
         return;
       }
 
       setSelectedItem(item);
     },
-    [board, buildPiecePack, gameData, selectedItem, showTransientNotice],
+    [board, buildPiecePack, gameData, selectedItem, showBattleNotice],
   );
 
   const handleBoardTapForItem = useCallback(
@@ -1661,6 +1695,7 @@ export default function SingleGameScreen({route, navigation}: any) {
             style={{
               width: size * 0.96,
               height: size * 1.18,
+              transform: [{scaleX: facing}],
             }}
           />
         </View>
@@ -1670,7 +1705,11 @@ export default function SingleGameScreen({route, navigation}: any) {
       <View style={battleTransform}>
         <View
           style={[styles.characterFallbackBadge, {width: size * 0.82, height: size * 0.82}]}>
-          <Text style={[styles.characterFallbackEmoji, {fontSize: size * 0.44}]}>
+          <Text
+            style={[
+              styles.characterFallbackEmoji,
+              {fontSize: size * 0.44, transform: [{scaleX: facing}]},
+            ]}>
             {visual.emoji}
           </Text>
         </View>
@@ -1682,10 +1721,10 @@ export default function SingleGameScreen({route, navigation}: any) {
       selectedCharacterId,
       size,
       playerAttackPulse,
-      -1,
+      1,
     );
   };
-  const renderMonsterAvatar = (size: number) => {
+  const renderMonsterAvatar = (size: number, facingMultiplier: 1 | -1 = 1) => {
     if (monsterSprite) {
       return (
         <Image
@@ -1695,17 +1734,197 @@ export default function SingleGameScreen({route, navigation}: any) {
           style={{
             width: size,
             height: size,
-            transform: [{scaleX: monsterSpriteSet?.facing ?? 1}],
+            transform: [{scaleX: (monsterSpriteSet?.facing ?? 1) * facingMultiplier}],
           }}
         />
       );
     }
     return (
-      <Text style={[styles.monsterEmojiCompact, {fontSize: size * 0.68}]}>
+      <Text
+        style={[
+          styles.monsterEmojiCompact,
+          {fontSize: size * 0.68, transform: [{scaleX: facingMultiplier}]},
+        ]}>
         {monster.monsterEmoji}
       </Text>
     );
   };
+
+  const renderBattleLane = () => (
+    <View style={styles.battleLane}>
+      <View style={styles.battleUnit}>
+        <Animated.View
+          style={[
+            styles.unitAvatarFrame,
+            styles.playerAvatarFrame,
+            {transform: [{translateX: playerAvatarShakeX}]},
+          ]}>
+          <View style={styles.playerAvatarSpriteWrap}>{renderPlayerAvatar(62)}</View>
+          {playerHit && (
+            <>
+              <HitEffect
+                key={`player-hit-${playerHit.id}`}
+                damage={playerHit.damage}
+                onDone={() => {}}
+              />
+              <DamageFlash
+                key={`player-flash-${playerHit.id}`}
+                damage={playerHit.damage}
+                onDone={() =>
+                  setPlayerHit(current => (current?.id === playerHit.id ? null : current))
+                }
+              />
+            </>
+          )}
+        </Animated.View>
+        <Text numberOfLines={1} style={styles.unitName}>
+          {playerVisual.name}
+        </Text>
+        <View style={styles.compactHpTrack}>
+          <Animated.View
+            style={[
+              styles.compactHpFill,
+              {
+                backgroundColor: playerHpColor,
+                width: playerHpAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+          />
+        </View>
+        <Text style={styles.compactHpText}>
+          {playerHp.toLocaleString()} / {maxPlayerHp.toLocaleString()}
+        </Text>
+      </View>
+
+      <View style={styles.battleCenter}>
+        <View style={styles.centerInfoCard}>
+          <View style={styles.centerInfoRow}>
+            <Text style={styles.centerInfoText}>공격 {attackPower}</Text>
+            <Text style={styles.centerInfoText}>적 공격 {enemyStats.attack}</Text>
+          </View>
+          <View style={styles.centerInfoRow}>
+            <View style={styles.comboInfoBlock}>
+              <Text style={styles.centerInfoText}>
+                {combo > 0 ? `${combo} 콤보` : '콤보 없음'}
+              </Text>
+              {combo > 0 && comboRemainingMs > 0 && (
+                <Text style={styles.comboTimerText}>
+                  유지 {Math.max(0, comboRemainingMs / 1000).toFixed(2)}초
+                </Text>
+              )}
+            </View>
+            <Text
+              style={[
+                styles.centerInfoText,
+                feverActive && styles.centerInfoTextActive,
+              ]}>
+              {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
+            </Text>
+          </View>
+
+          {activeSkinIdRef.current > 0 && summonGaugeRequired > 0 && (
+            <View style={styles.summonInlineCard}>
+              <View style={styles.summonInlineHeader}>
+                <Text style={styles.summonInlineTitle}>소환수</Text>
+                <Text style={styles.summonInlineMeta}>
+                  공격 {summonAttack} / {Math.ceil(summonRemainingMs / 1000)}초
+                </Text>
+              </View>
+              <View style={styles.summonInlineTrack}>
+                <View
+                  style={[
+                    styles.summonInlineFill,
+                    {
+                      width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <View style={styles.summonInlineFooter}>
+                <Text style={styles.summonInlineMeta}>
+                  {summonGauge}/{summonGaugeRequired}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleToggleSummon}
+                  disabled={
+                    (summonGauge < summonGaugeRequired && !summonActive) ||
+                    summonRemainingMs <= 0
+                  }
+                  style={[
+                    styles.summonInlineBtn,
+                    summonActive && styles.summonInlineBtnActive,
+                    (summonRemainingMs <= 0 ||
+                      (summonGauge < summonGaugeRequired && !summonActive)) &&
+                      styles.summonInlineBtnDisabled,
+                  ]}>
+                  <Text style={styles.summonInlineBtnText}>
+                    {summonActive ? '회수' : '소환'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.battleUnit}>
+        <Animated.View
+          style={[
+            styles.unitAvatarFrame,
+            styles.monsterAvatarFrame,
+            {borderColor: monster.monsterColor},
+            {transform: [{translateX: monsterAvatarShakeX}]},
+          ]}>
+          {renderMonsterAvatar(68, -1)}
+          {latestMonsterHit && (
+            <HitEffect
+              key={`monster-hit-${latestMonsterHit.id}`}
+              damage={latestMonsterHit.damage}
+              onDone={() => {}}
+            />
+          )}
+          {monsterHits
+            .slice()
+            .reverse()
+            .map((hit, index) => (
+              <FloatingDamageLabel
+                key={`monster-flash-${hit.id}`}
+                damage={hit.damage}
+                stackIndex={index}
+                onDone={() => removeMonsterHit(hit.id)}
+              />
+            ))}
+        </Animated.View>
+        <Text
+          numberOfLines={1}
+          style={[styles.unitName, {color: monster.monsterColor}]}>
+          {monster.monsterName}
+        </Text>
+        <View style={styles.compactHpTrack}>
+          <Animated.View
+            style={[
+              styles.compactHpFill,
+              {
+                backgroundColor: monsterHpColor,
+                width: monsterHpAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+          />
+        </View>
+        <Text style={styles.compactHpText}>
+          {monsterHp.toLocaleString()} / {maxMonsterHp.toLocaleString()}
+        </Text>
+      </View>
+    </View>
+  );
 
   if (!levelData) {
     return (
@@ -1750,179 +1969,7 @@ export default function SingleGameScreen({route, navigation}: any) {
               </View>
             </View>
 
-              <View style={styles.battleLane}>
-              <View style={styles.battleUnit}>
-                <Animated.View
-                  style={[
-                    styles.unitAvatarFrame,
-                    styles.monsterAvatarFrame,
-                    {borderColor: monster.monsterColor},
-                    {transform: [{translateX: monsterAvatarShakeX}]},
-                  ]}>
-                  {renderMonsterAvatar(68)}
-                  {monsterHit && (
-                    <>
-                      <HitEffect
-                        key={`monster-hit-${monsterHit.id}`}
-                        damage={monsterHit.damage}
-                        onDone={() => {}}
-                      />
-                      <DamageFlash
-                        key={`monster-flash-${monsterHit.id}`}
-                        damage={monsterHit.damage}
-                        onDone={() => setMonsterHit(current =>
-                          current?.id === monsterHit.id ? null : current,
-                        )}
-                      />
-                    </>
-                  )}
-                </Animated.View>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.unitName, {color: monster.monsterColor}]}>
-                  {monster.monsterName}
-                </Text>
-                <View style={styles.compactHpTrack}>
-                  <Animated.View
-                    style={[
-                      styles.compactHpFill,
-                      {
-                        backgroundColor: monsterHpColor,
-                        width: monsterHpAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                          extrapolate: 'clamp',
-                        }),
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.compactHpText}>
-                  {monsterHp.toLocaleString()} / {maxMonsterHp.toLocaleString()}
-                </Text>
-              </View>
-
-              <View style={styles.battleCenter}>
-                <View style={styles.centerInfoCard}>
-                  <View style={styles.centerInfoRow}>
-                    <Text style={styles.centerInfoText}>공격 {attackPower}</Text>
-                    <Text style={styles.centerInfoText}>적 공격 {enemyStats.attack}</Text>
-                  </View>
-                  <View style={styles.centerInfoRow}>
-                    <View style={styles.comboInfoBlock}>
-                      <Text style={styles.centerInfoText}>
-                        {combo > 0 ? `${combo} 콤보` : '콤보 없음'}
-                      </Text>
-                      {combo > 0 && comboRemainingMs > 0 && (
-                        <Text style={styles.comboTimerText}>
-                          유지 {Math.max(0, comboRemainingMs / 1000).toFixed(2)}초
-                        </Text>
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.centerInfoText,
-                        feverActive && styles.centerInfoTextActive,
-                      ]}>
-                      {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
-                    </Text>
-                  </View>
-
-                  {activeSkinIdRef.current > 0 && summonGaugeRequired > 0 && (
-                    <View style={styles.summonInlineCard}>
-                      <View style={styles.summonInlineHeader}>
-                        <Text style={styles.summonInlineTitle}>소환수</Text>
-                        <Text style={styles.summonInlineMeta}>
-                          공격 {summonAttack} / {Math.ceil(summonRemainingMs / 1000)}초
-                        </Text>
-                      </View>
-                      <View style={styles.summonInlineTrack}>
-                        <View
-                          style={[
-                            styles.summonInlineFill,
-                            {
-                              width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <View style={styles.summonInlineFooter}>
-                        <Text style={styles.summonInlineMeta}>
-                          {summonGauge}/{summonGaugeRequired}
-                        </Text>
-                        <TouchableOpacity
-                          onPress={handleToggleSummon}
-                          disabled={
-                            (summonGauge < summonGaugeRequired && !summonActive) ||
-                            summonRemainingMs <= 0
-                          }
-                          style={[
-                            styles.summonInlineBtn,
-                            summonActive && styles.summonInlineBtnActive,
-                            (summonRemainingMs <= 0 ||
-                              (summonGauge < summonGaugeRequired && !summonActive)) &&
-                              styles.summonInlineBtnDisabled,
-                          ]}>
-                          <Text style={styles.summonInlineBtnText}>
-                            {summonActive ? '회수' : '소환'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.battleUnit}>
-                <Animated.View
-                  style={[
-                    styles.unitAvatarFrame,
-                    styles.playerAvatarFrame,
-                    {transform: [{translateX: playerAvatarShakeX}]},
-                  ]}>
-                  <View style={styles.playerAvatarSpriteWrap}>
-                    {renderPlayerAvatar(62)}
-                  </View>
-                  {playerHit && (
-                    <>
-                      <HitEffect
-                        key={`player-hit-${playerHit.id}`}
-                        damage={playerHit.damage}
-                        onDone={() => {}}
-                      />
-                      <DamageFlash
-                        key={`player-flash-${playerHit.id}`}
-                        damage={playerHit.damage}
-                        onDone={() => setPlayerHit(current =>
-                          current?.id === playerHit.id ? null : current,
-                        )}
-                      />
-                    </>
-                  )}
-                </Animated.View>
-                <Text numberOfLines={1} style={styles.unitName}>
-                  {playerVisual.name}
-                </Text>
-                <View style={styles.compactHpTrack}>
-                  <Animated.View
-                    style={[
-                      styles.compactHpFill,
-                      {
-                        backgroundColor: playerHpColor,
-                        width: playerHpAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                          extrapolate: 'clamp',
-                        }),
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.compactHpText}>
-                  {playerHp.toLocaleString()} / {maxPlayerHp.toLocaleString()}
-                </Text>
-              </View>
-            </View>
+              {renderBattleLane()}
 
               <View
                 style={styles.boardContainer}
@@ -2005,179 +2052,7 @@ export default function SingleGameScreen({route, navigation}: any) {
         </View>
       </View>
 
-        <View style={styles.battleLane}>
-        <View style={styles.battleUnit}>
-          <Animated.View
-            style={[
-              styles.unitAvatarFrame,
-              styles.monsterAvatarFrame,
-              {borderColor: monster.monsterColor},
-              {transform: [{translateX: monsterAvatarShakeX}]},
-            ]}>
-            {renderMonsterAvatar(68)}
-            {monsterHit && (
-              <>
-                <HitEffect
-                  key={`monster-hit-${monsterHit.id}`}
-                  damage={monsterHit.damage}
-                  onDone={() => {}}
-                />
-                <DamageFlash
-                  key={`monster-flash-${monsterHit.id}`}
-                  damage={monsterHit.damage}
-                  onDone={() => setMonsterHit(current =>
-                    current?.id === monsterHit.id ? null : current,
-                  )}
-                />
-              </>
-            )}
-          </Animated.View>
-          <Text
-            numberOfLines={1}
-            style={[styles.unitName, {color: monster.monsterColor}]}>
-            {monster.monsterName}
-          </Text>
-          <View style={styles.compactHpTrack}>
-            <Animated.View
-              style={[
-                styles.compactHpFill,
-                {
-                  backgroundColor: monsterHpColor,
-                  width: monsterHpAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                    extrapolate: 'clamp',
-                  }),
-                },
-              ]}
-            />
-          </View>
-          <Text style={styles.compactHpText}>
-            {monsterHp.toLocaleString()} / {maxMonsterHp.toLocaleString()}
-          </Text>
-        </View>
-
-        <View style={styles.battleCenter}>
-          <View style={styles.centerInfoCard}>
-            <View style={styles.centerInfoRow}>
-              <Text style={styles.centerInfoText}>공격 {attackPower}</Text>
-              <Text style={styles.centerInfoText}>적 공격 {enemyStats.attack}</Text>
-            </View>
-            <View style={styles.centerInfoRow}>
-              <View style={styles.comboInfoBlock}>
-                <Text style={styles.centerInfoText}>
-                  {combo > 0 ? `${combo} 콤보` : '콤보 없음'}
-                </Text>
-                {combo > 0 && comboRemainingMs > 0 && (
-                  <Text style={styles.comboTimerText}>
-                    유지 {Math.max(0, comboRemainingMs / 1000).toFixed(2)}초
-                  </Text>
-                )}
-              </View>
-              <Text
-                style={[
-                  styles.centerInfoText,
-                  feverActive && styles.centerInfoTextActive,
-                ]}>
-                {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
-              </Text>
-            </View>
-
-            {activeSkinIdRef.current > 0 && summonGaugeRequired > 0 && (
-              <View style={styles.summonInlineCard}>
-                <View style={styles.summonInlineHeader}>
-                  <Text style={styles.summonInlineTitle}>소환수</Text>
-                  <Text style={styles.summonInlineMeta}>
-                    공격 {summonAttack} / {Math.ceil(summonRemainingMs / 1000)}초
-                  </Text>
-                </View>
-                <View style={styles.summonInlineTrack}>
-                  <View
-                    style={[
-                      styles.summonInlineFill,
-                      {
-                        width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
-                      },
-                    ]}
-                  />
-                </View>
-                <View style={styles.summonInlineFooter}>
-                  <Text style={styles.summonInlineMeta}>
-                    {summonGauge}/{summonGaugeRequired}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleToggleSummon}
-                    disabled={
-                      (summonGauge < summonGaugeRequired && !summonActive) ||
-                      summonRemainingMs <= 0
-                    }
-                    style={[
-                      styles.summonInlineBtn,
-                      summonActive && styles.summonInlineBtnActive,
-                      (summonRemainingMs <= 0 ||
-                        (summonGauge < summonGaugeRequired && !summonActive)) &&
-                        styles.summonInlineBtnDisabled,
-                    ]}>
-                    <Text style={styles.summonInlineBtnText}>
-                      {summonActive ? '회수' : '소환'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.battleUnit}>
-          <Animated.View
-            style={[
-              styles.unitAvatarFrame,
-              styles.playerAvatarFrame,
-              {transform: [{translateX: playerAvatarShakeX}]},
-            ]}>
-            <View style={styles.playerAvatarSpriteWrap}>
-              {renderPlayerAvatar(62)}
-            </View>
-            {playerHit && (
-              <>
-                <HitEffect
-                  key={`player-hit-${playerHit.id}`}
-                  damage={playerHit.damage}
-                  onDone={() => {}}
-                />
-                <DamageFlash
-                  key={`player-flash-${playerHit.id}`}
-                  damage={playerHit.damage}
-                  onDone={() => setPlayerHit(current =>
-                    current?.id === playerHit.id ? null : current,
-                  )}
-                />
-              </>
-            )}
-          </Animated.View>
-          <Text numberOfLines={1} style={styles.unitName}>
-            {playerVisual.name}
-          </Text>
-          <View style={styles.compactHpTrack}>
-            <Animated.View
-              style={[
-                styles.compactHpFill,
-                {
-                  backgroundColor: playerHpColor,
-                  width: playerHpAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                    extrapolate: 'clamp',
-                  }),
-                },
-              ]}
-            />
-          </View>
-          <Text style={styles.compactHpText}>
-            {playerHp.toLocaleString()} / {maxPlayerHp.toLocaleString()}
-          </Text>
-        </View>
-      </View>
+        {renderBattleLane()}
 
         <View
           style={styles.boardContainer}
@@ -2234,13 +2109,7 @@ export default function SingleGameScreen({route, navigation}: any) {
         </View>
       )}
 
-      {noticeMessage && (
-        <View pointerEvents="none" style={styles.noticeOverlay}>
-          <View style={styles.noticeChip}>
-            <Text style={styles.noticeText}>{noticeMessage}</Text>
-          </View>
-        </View>
-      )}
+      <BattleNoticeOverlay message={battleNoticeMessage} />
 
       {showExitConfirm && (
         <View style={styles.exitOverlay}>

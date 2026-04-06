@@ -9,12 +9,14 @@ import {
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {supabase} from '../services/supabase';
+import {flushPlayerStateNow} from '../services/playerState';
+import {supabase, getCurrentUserId} from '../services/supabase';
 import {
   checkForUpdate,
   downloadAndInstall,
   showUpdateDialog,
 } from '../services/updateService';
+import {preloadGameStoreState} from '../stores/gameStore';
 import AdminScreen from '../screens/AdminScreen';
 import BattleScreen from '../screens/BattleScreen';
 import BossCodexScreen from '../screens/BossCodexScreen';
@@ -41,12 +43,16 @@ const Stack = createNativeStackNavigator();
 type AppState = 'intro' | 'login' | 'app';
 
 const SESSION_ID = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const UPDATE_CHECK_DELAY_MS = 1200;
 
 export default function AppNavigator() {
   const [appState, setAppState] = useState<AppState>('intro');
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const introExitedRef = useRef(false);
   const sessionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const updateCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastUpdateCheckAtRef = useRef(0);
 
   const registerSession = useCallback(async (userId: string) => {
     await supabase.from('user_presence').upsert(
@@ -62,18 +68,15 @@ export default function AppNavigator() {
 
   const checkSession = useCallback(async () => {
     try {
-      const {
-        data: {user},
-      } = await supabase.auth.getUser();
-
-      if (!user) {
+      const userId = await getCurrentUserId();
+      if (!userId) {
         return;
       }
 
       const {data} = await supabase
         .from('user_presence')
         .select('session_id')
-        .eq('player_id', user.id)
+        .eq('player_id', userId)
         .single();
 
       if (data?.session_id && data.session_id !== SESSION_ID) {
@@ -91,37 +94,66 @@ export default function AppNavigator() {
     } catch {}
   }, []);
 
+  const scheduleUpdateCheck = useCallback(() => {
+    const now = Date.now();
+    if (now - lastUpdateCheckAtRef.current < UPDATE_CHECK_INTERVAL_MS) {
+      return;
+    }
+
+    if (updateCheckTimeoutRef.current) {
+      clearTimeout(updateCheckTimeoutRef.current);
+    }
+
+    updateCheckTimeoutRef.current = setTimeout(() => {
+      updateCheckTimeoutRef.current = null;
+      lastUpdateCheckAtRef.current = Date.now();
+
+      void (async () => {
+        try {
+          const update = await checkForUpdate();
+          if (!update) {
+            return;
+          }
+
+          showUpdateDialog(update, nextUpdate => {
+            setDownloadProgress(0);
+            downloadAndInstall(
+              nextUpdate,
+              progress => setDownloadProgress(progress),
+              () => setDownloadProgress(null),
+              message => {
+                setDownloadProgress(null);
+                Alert.alert('업데이트 실패', message);
+              },
+            );
+          });
+        } catch {}
+      })();
+    }, UPDATE_CHECK_DELAY_MS);
+  }, []);
+
   const checkAuth = useCallback(async () => {
     const {
       data: {session},
     } = await supabase.auth.getSession();
 
     if (session?.user) {
-      await registerSession(session.user.id);
+      void registerSession(session.user.id);
     }
 
     setAppState(session ? 'app' : 'login');
 
-    try {
-      const update = await checkForUpdate();
-      if (!update) {
-        return;
+    if (!session?.user) {
+      if (updateCheckTimeoutRef.current) {
+        clearTimeout(updateCheckTimeoutRef.current);
+        updateCheckTimeoutRef.current = null;
       }
+      return;
+    }
 
-      showUpdateDialog(update, nextUpdate => {
-        setDownloadProgress(0);
-        downloadAndInstall(
-          nextUpdate,
-          progress => setDownloadProgress(progress),
-          () => setDownloadProgress(null),
-          message => {
-            setDownloadProgress(null);
-            Alert.alert('업데이트 실패', message);
-          },
-        );
-      });
-    } catch {}
-  }, [registerSession]);
+    void preloadGameStoreState();
+    scheduleUpdateCheck();
+  }, [registerSession, scheduleUpdateCheck]);
 
   useEffect(() => {
     const {
@@ -132,19 +164,25 @@ export default function AppNavigator() {
       }
 
       if (session?.user) {
-        await registerSession(session.user.id);
+        void registerSession(session.user.id);
         setAppState('app');
+        void preloadGameStoreState();
+        scheduleUpdateCheck();
       } else {
         if (sessionCheckRef.current) {
           clearInterval(sessionCheckRef.current);
           sessionCheckRef.current = null;
+        }
+        if (updateCheckTimeoutRef.current) {
+          clearTimeout(updateCheckTimeoutRef.current);
+          updateCheckTimeoutRef.current = null;
         }
         setAppState('login');
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [registerSession]);
+  }, [registerSession, scheduleUpdateCheck]);
 
   useEffect(() => {
     if (appState !== 'app') {
@@ -168,6 +206,13 @@ export default function AppNavigator() {
 
   useEffect(() => {
     const subscription = RNAppState.addEventListener('change', nextState => {
+      if (
+        introExitedRef.current &&
+        (nextState === 'background' || nextState === 'inactive')
+      ) {
+        void flushPlayerStateNow('app_background');
+      }
+
       if (nextState === 'active' && introExitedRef.current) {
         checkAuth();
       }
@@ -175,6 +220,14 @@ export default function AppNavigator() {
 
     return () => subscription.remove();
   }, [checkAuth]);
+
+  useEffect(() => {
+    return () => {
+      if (updateCheckTimeoutRef.current) {
+        clearTimeout(updateCheckTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleIntroPress = useCallback(() => {
     if (introExitedRef.current) {

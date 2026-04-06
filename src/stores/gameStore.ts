@@ -13,6 +13,9 @@ import {getCurrentUserId} from '../services/supabase';
 import {
   fetchPlayerState,
   loadOwnProfile,
+  peekPlayerStateCache,
+  schedulePlayerStateFlush,
+  stagePlayerStatePatch,
   type PlayerStateRow,
   updateOwnProfile,
   upsertPlayerState,
@@ -257,18 +260,35 @@ async function ensurePlayerStateRow() {
   }
 }
 
+export async function preloadGameStoreState() {
+  return ensurePlayerStateRow();
+}
+
+function readStateColumnFromRow<T>(
+  row: PlayerStateRow | null,
+  column: PlayerStateColumn,
+  defaultValue: T,
+): T {
+  if (row && hasStateValue(row[column])) {
+    return cloneValue(row[column] as T);
+  }
+
+  return cloneValue(defaultValue);
+}
+
 async function loadStateColumn<T>(
   column: PlayerStateColumn,
   localKey: string,
   defaultValue: T,
 ): Promise<T> {
+  const cachedRow = peekPlayerStateCache();
+  if (cachedRow) {
+    return readStateColumnFromRow(cachedRow, column, defaultValue);
+  }
+
   const row = await ensurePlayerStateRow();
   if (row) {
-    if (hasStateValue(row[column])) {
-      return cloneValue(row[column] as T);
-    }
-
-    return cloneValue(defaultValue);
+    return readStateColumnFromRow(row, column, defaultValue);
   }
 
   return loadLocalJson(localKey, defaultValue);
@@ -280,8 +300,19 @@ async function saveStateColumn<T>(
   value: T,
 ): Promise<void> {
   try {
-    const saved = await upsertPlayerState({[column]: value} as Partial<Omit<PlayerStateRow, 'user_id'>>);
-    if (saved) {
+    const userId = await getCurrentUserId();
+    if (userId) {
+      if (!peekPlayerStateCache()) {
+        const row = await ensurePlayerStateRow();
+        if (!row) {
+          throw new Error('missing_player_state');
+        }
+      }
+
+      stagePlayerStatePatch({
+        [column]: cloneValue(value),
+      } as Partial<Omit<PlayerStateRow, 'user_id'>>);
+      schedulePlayerStateFlush(`save_${column}`);
       return;
     }
   } catch {}
@@ -318,7 +349,7 @@ async function load<T>(key: string, defaultValue: T): Promise<T> {
       return loadStateColumn('active_title', key, defaultValue);
     default:
       if (key.startsWith('charData_')) {
-        const row = await ensurePlayerStateRow();
+        const row = peekPlayerStateCache() ?? (await ensurePlayerStateRow());
         const characterId = key.slice('charData_'.length);
         const characterDataMap = hasStateValue(row?.character_data)
           ? (row?.character_data as Record<string, CharacterData>)
@@ -377,7 +408,7 @@ async function save(key: string, value: any): Promise<void> {
       return;
     default:
       if (key.startsWith('charData_')) {
-        const row = await ensurePlayerStateRow();
+        const row = peekPlayerStateCache() ?? (await ensurePlayerStateRow());
         const characterId = key.slice('charData_'.length);
         const current = hasStateValue(row?.character_data)
           ? {...(row?.character_data as Record<string, CharacterData>)}
@@ -386,8 +417,10 @@ async function save(key: string, value: any): Promise<void> {
         current[characterId] = cloneValue(value);
 
         try {
-          const saved = await upsertPlayerState({character_data: current});
-          if (saved) {
+          const userId = await getCurrentUserId();
+          if (userId) {
+            stagePlayerStatePatch({character_data: current});
+            schedulePlayerStateFlush(`save_${characterId}_character_data`);
             return;
           }
         } catch {}
@@ -901,9 +934,7 @@ export async function loadActiveTitle(): Promise<string | null> {
   try {
     const profile = await loadOwnProfile();
     if (profile && 'title' in profile) {
-      const title = (profile as {title?: string | null}).title ?? null;
-      await save('activeTitle', title);
-      return title;
+      return (profile as {title?: string | null}).title ?? null;
     }
   } catch {}
 

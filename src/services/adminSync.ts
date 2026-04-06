@@ -1,4 +1,5 @@
 import {claimPendingResourceGrants} from './economyService';
+import type {GameData} from '../stores/gameStore';
 import {supabase} from './supabase';
 
 const ADMIN_EMAIL = 'sinnaruggggg@gmail.com';
@@ -45,7 +46,9 @@ export async function fetchAnnouncements(): Promise<{id: number; title: string; 
 }
 
 // Check and claim pending resource grants
-export async function claimPendingGrants(): Promise<{type: string; amount: number; reason: string | null}[]> {
-  const result = await claimPendingResourceGrants();
-  return result.claimed;
+export async function claimPendingGrants(): Promise<{
+  gameData: GameData;
+  claimed: {type: string; amount: number; reason: string | null}[];
+}> {
+  return claimPendingResourceGrants();
 }
