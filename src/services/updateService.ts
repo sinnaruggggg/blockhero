@@ -2,8 +2,8 @@ import {Alert, Linking, Platform} from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import {isNewerVersion} from './updateVersion';
 
-export const CURRENT_VERSION_CODE = 150;
-export const CURRENT_VERSION_NAME = '1.3.22';
+export const CURRENT_VERSION_CODE = 151;
+export const CURRENT_VERSION_NAME = '1.3.23';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const APK_MIME = 'application/vnd.android.package-archive';
@@ -26,7 +26,13 @@ export async function checkForUpdate(): Promise<{
   try {
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      {headers: {Accept: 'application/vnd.github.v3+json'}},
+      {
+        headers: {
+          Accept: 'application/vnd.github.v3+json',
+          'Cache-Control': 'no-cache',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      },
     );
 
     if (!response.ok) {

@@ -142,17 +142,13 @@ export default function AppNavigator() {
     }
 
     setAppState(session ? 'app' : 'login');
+    scheduleUpdateCheck();
 
     if (!session?.user) {
-      if (updateCheckTimeoutRef.current) {
-        clearTimeout(updateCheckTimeoutRef.current);
-        updateCheckTimeoutRef.current = null;
-      }
       return;
     }
 
     void preloadGameStoreState();
-    scheduleUpdateCheck();
   }, [registerSession, scheduleUpdateCheck]);
 
   useEffect(() => {
@@ -173,11 +169,8 @@ export default function AppNavigator() {
           clearInterval(sessionCheckRef.current);
           sessionCheckRef.current = null;
         }
-        if (updateCheckTimeoutRef.current) {
-          clearTimeout(updateCheckTimeoutRef.current);
-          updateCheckTimeoutRef.current = null;
-        }
         setAppState('login');
+        scheduleUpdateCheck();
       }
     });
 
