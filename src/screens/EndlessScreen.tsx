@@ -7,6 +7,7 @@ import ItemBar from '../components/ItemBar';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
+import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import {flushPlayerStateNow} from '../services/playerState';
 import {useDragDrop} from '../game/useDragDrop';
 import {
@@ -65,6 +66,10 @@ import {
 import {useBattleNotice} from '../hooks/useBattleNotice';
 import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
 import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
+import {
+  buildPiecePlacementEffectCells,
+  type PiecePlacementEffectCell,
+} from '../game/piecePlacementEffect';
 
 export default function EndlessScreen({navigation}: any) {
   const [board, setBoard] = useState<BoardType>(createBoard());
@@ -90,8 +95,13 @@ export default function EndlessScreen({navigation}: any) {
   const [summonActive, setSummonActive] = useState(false);
   const [summonRemainingMs, setSummonRemainingMs] = useState(0);
   const [nextPieces, setNextPieces] = useState<Piece[]>([]);
+  const [placementEffect, setPlacementEffect] = useState<{
+    id: number;
+    cells: PiecePlacementEffectCell[];
+  } | null>(null);
 
   const boardRef = useRef<View>(null);
+  const placementEffectIdRef = useRef(0);
   const maxComboRef = useRef(0);
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feverActiveRef = useRef(false);
@@ -131,6 +141,30 @@ export default function EndlessScreen({navigation}: any) {
     nextPiecesRef.current = piecesToPreview;
     setNextPieces(piecesToPreview);
   }, []);
+
+  const showPlacementEffect = useCallback(
+    (piece: Piece, row: number, col: number) => {
+      if (!boardLayout) {
+        return;
+      }
+      const compactLayout =
+        activeSkinIdRef.current > 0 ||
+        (skillEffectsRef.current.previewCountBonus > 0 && nextPiecesRef.current.length > 0);
+      const cells = buildPiecePlacementEffectCells(
+        boardLayout,
+        piece,
+        row,
+        col,
+        compactLayout,
+      );
+      if (cells.length === 0) {
+        return;
+      }
+      placementEffectIdRef.current += 1;
+      setPlacementEffect({id: placementEffectIdRef.current, cells});
+    },
+    [boardLayout],
+  );
 
   const showSkillTriggerNotice = useCallback(
     (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
@@ -173,6 +207,7 @@ export default function EndlessScreen({navigation}: any) {
     summonActiveRef.current = false;
     summonRemainingMsRef.current = 0;
     summonExpEarnedRef.current = 0;
+    setPlacementEffect(null);
     setSummonGauge(0);
     setSummonGaugeRequired(0);
     setSummonAttack(0);
@@ -381,6 +416,7 @@ export default function EndlessScreen({navigation}: any) {
       }
 
       let newBoard = placePiece(board, piece, row, col);
+      showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
 
       let totalLines = 0;
@@ -542,6 +578,7 @@ export default function EndlessScreen({navigation}: any) {
       pieces,
       resetComboTimer,
       score,
+      showPlacementEffect,
       showSkillTriggerNotice,
       updateNextPieces,
     ],
@@ -673,6 +710,17 @@ export default function EndlessScreen({navigation}: any) {
         ]}>
         <Text style={styles.milestoneBannerText}>{milestoneText}</Text>
       </Animated.View>
+
+      {placementEffect && (
+        <PiecePlacementEffect
+          cells={placementEffect.cells}
+          onDone={() =>
+            setPlacementEffect(current =>
+              current?.id === placementEffect.id ? null : current,
+            )
+          }
+        />
+      )}
 
       <BattleNoticeOverlay message={battleNoticeMessage} bottom={148} />
 

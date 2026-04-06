@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import MageSprite from '../components/MageSprite';
 import BackImageButton from '../components/BackImageButton';
+import LobbyChatPanel from '../components/LobbyChatPanel';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {t} from '../i18n';
 import {getNickname, getPlayerId} from '../stores/gameStore';
+import {useLobbyChat} from '../hooks/useLobbyChat';
 import {
   supabase,
   generateRoomCode,
@@ -149,11 +151,21 @@ export default function LobbyScreen({navigation}: any) {
   const [inputCode, setInputCode] = useState('');
   const [waiting, setWaiting] = useState(false);
   const [ready, setReady] = useState(false);
+  const [chatPlayerId, setChatPlayerId] = useState('');
+  const [chatNickname, setChatNickname] = useState('');
+  const [chatSessionKey, setChatSessionKey] = useState(0);
 
   const playerIdRef = useRef('');
   const nicknameRef = useRef('');
   const channelRef = useRef<any>(null);
   const matchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lobbyChat = useLobbyChat({
+    mode: 'battle',
+    userId: chatPlayerId,
+    nickname: chatNickname,
+    enabled: ready && !!chatPlayerId && !!chatNickname,
+    sessionKey: chatSessionKey,
+  });
 
   const cleanup = useCallback(() => {
     if (channelRef.current) {
@@ -178,6 +190,9 @@ export default function LobbyScreen({navigation}: any) {
       const [playerId, nickname] = await Promise.all([getPlayerId(), getNickname()]);
       playerIdRef.current = playerId;
       nicknameRef.current = nickname;
+      setChatPlayerId(playerId);
+      setChatNickname(nickname);
+      setChatSessionKey(current => current + 1);
 
       if (playerId) {
         await cleanupBattleState(playerId);
@@ -617,6 +632,35 @@ export default function LobbyScreen({navigation}: any) {
             </TouchableOpacity>
           </View>
         )}
+
+        {ready && chatPlayerId ? (
+          <LobbyChatPanel
+            title="대전 모집 채팅"
+            accentColor="#f59e0b"
+            isOpen={lobbyChat.isOpen}
+            connected={lobbyChat.connected}
+            currentChannelId={lobbyChat.currentChannelId}
+            currentOccupancy={lobbyChat.currentOccupancy}
+            capacity={lobbyChat.capacity}
+            channelOptions={lobbyChat.channelOptions}
+            draft={lobbyChat.draft}
+            messages={lobbyChat.messages}
+            onToggle={lobbyChat.toggleOpen}
+            onChangeDraft={lobbyChat.setDraft}
+            onSend={lobbyChat.sendMessage}
+            onSwitchChannel={(channelId: number) => {
+              lobbyChat.switchChannel(channelId).catch(error => {
+                console.warn('LobbyScreen switchChannel error:', error);
+              });
+            }}
+            onRandomizeChannel={() => {
+              lobbyChat.joinRandomChannel().catch(error => {
+                console.warn('LobbyScreen joinRandomChannel error:', error);
+              });
+            }}
+            bottom={mode === 'menu' ? 98 : 26}
+          />
+        ) : null}
       </SafeAreaView>
     </View>
   );

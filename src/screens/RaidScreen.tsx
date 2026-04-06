@@ -9,6 +9,7 @@ import PieceSelector from '../components/PieceSelector';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import BossDisplay from '../components/BossDisplay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
+import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillBar from '../components/SkillBar';
 import KnightSprite from '../components/KnightSprite';
@@ -93,6 +94,10 @@ import {
   pushFloatingDamageHit,
   type FloatingDamageHit,
 } from '../game/floatingDamage';
+import {
+  buildPiecePlacementEffectCells,
+  type PiecePlacementEffectCell,
+} from '../game/piecePlacementEffect';
 
 const HIT_FRAMES = [
   require('../assets/effects/hit_00.png'),
@@ -220,6 +225,10 @@ export default function RaidScreen({route, navigation}: any) {
   const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
   const [bossDamageHits, setBossDamageHits] = useState<FloatingDamageHit[]>([]);
   const [bossImpactHit, setBossImpactHit] = useState<FloatingDamageHit | null>(null);
+  const [placementEffect, setPlacementEffect] = useState<{
+    id: number;
+    cells: PiecePlacementEffectCell[];
+  } | null>(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [bossPose, setBossPose] = useState<MonsterSpritePose>('idle');
   const [round, setRound] = useState(0);
@@ -291,6 +300,7 @@ export default function RaidScreen({route, navigation}: any) {
   const skillGaugeRef = useRef(0);
   const raidSkillLevelsRef = useRef<Record<number, number>>({});
   const floatingHitIdRef = useRef(0);
+  const placementEffectIdRef = useRef(0);
   const remoteBoardsRef = useRef<Map<string, {board: BoardType; nickname: string}>>(new Map());
   const alivePlayersRef = useRef<string[]>([]);
   const participantCountRef = useRef(0);
@@ -357,6 +367,21 @@ export default function RaidScreen({route, navigation}: any) {
     setBossImpactHit(nextHit);
   }, []);
 
+  const showPlacementEffect = useCallback(
+    (piece: Piece, row: number, col: number) => {
+      if (!boardLayout) {
+        return;
+      }
+      const cells = buildPiecePlacementEffectCells(boardLayout, piece, row, col, true);
+      if (cells.length === 0) {
+        return;
+      }
+      placementEffectIdRef.current += 1;
+      setPlacementEffect({id: placementEffectIdRef.current, cells});
+    },
+    [boardLayout],
+  );
+
   const triggerBossPose = useCallback((pose: MonsterSpritePose, duration = 220) => {
     if (bossPoseTimerRef.current) {
       clearTimeout(bossPoseTimerRef.current);
@@ -408,6 +433,7 @@ export default function RaidScreen({route, navigation}: any) {
     setSummonSpawnIndex(0);
     setBossDamageHits([]);
     setBossImpactHit(null);
+    setPlacementEffect(null);
     setSkillGauge(0);
     setActiveMultiplier(1);
     setRaidSkillLevels({});
@@ -950,6 +976,7 @@ export default function RaidScreen({route, navigation}: any) {
       if (!piece) return;
 
       let newBoard = placePiece(board, piece, row, col);
+      showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
       const effects = getRaidEffects();
       const wasSmallPiece = blockCount <= 2;
@@ -1207,6 +1234,7 @@ export default function RaidScreen({route, navigation}: any) {
       pieces,
       resetComboTimer,
       round,
+      showPlacementEffect,
       animatePlayerHpBar,
       getCurrentPieceOptions,
       showSkillTriggerNotice,
@@ -1911,6 +1939,17 @@ export default function RaidScreen({route, navigation}: any) {
             compact
           />
         </>
+      )}
+
+      {placementEffect && (
+        <PiecePlacementEffect
+          cells={placementEffect.cells}
+          onDone={() =>
+            setPlacementEffect(current =>
+              current?.id === placementEffect.id ? null : current,
+            )
+          }
+        />
       )}
 
       <BattleNoticeOverlay message={battleNoticeMessage} bottom={156} />

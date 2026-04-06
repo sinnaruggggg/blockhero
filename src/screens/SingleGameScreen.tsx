@@ -16,6 +16,7 @@ import {getAdminStatus} from '../services/adminSync';
 import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
+import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
@@ -104,6 +105,10 @@ import {
   pushFloatingDamageHit,
   type FloatingDamageHit,
 } from '../game/floatingDamage';
+import {
+  buildPiecePlacementEffectCells,
+  type PiecePlacementEffectCell,
+} from '../game/piecePlacementEffect';
 
 type FailureReason = 'board_full' | 'hp_zero';
 
@@ -350,6 +355,10 @@ export default function SingleGameScreen({route, navigation}: any) {
   const [comboBurstValue, setComboBurstValue] = useState(0);
   const [monsterHits, setMonsterHits] = useState<FloatingDamageHit[]>([]);
   const [monsterImpactHit, setMonsterImpactHit] = useState<FloatingDamageHit | null>(null);
+  const [placementEffect, setPlacementEffect] = useState<{
+    id: number;
+    cells: PiecePlacementEffectCell[];
+  } | null>(null);
   const [playerHit, setPlayerHit] = useState<{id: number; damage: number} | null>(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [monsterPose, setMonsterPose] = useState<MonsterSpritePose>('idle');
@@ -363,6 +372,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   const boardRef = useRef<View>(null);
   const floatingHitIdRef = useRef(0);
+  const placementEffectIdRef = useRef(0);
   const gameDataRef = useRef<GameData | null>(null);
   const maxComboRef = useRef(0);
   const monsterHpRef = useRef(maxMonsterHp);
@@ -486,6 +496,21 @@ export default function SingleGameScreen({route, navigation}: any) {
     [],
   );
 
+  const showPlacementEffect = useCallback(
+    (piece: Piece, row: number, col: number) => {
+      if (!boardLayout) {
+        return;
+      }
+      const cells = buildPiecePlacementEffectCells(boardLayout, piece, row, col);
+      if (cells.length === 0) {
+        return;
+      }
+      placementEffectIdRef.current += 1;
+      setPlacementEffect({id: placementEffectIdRef.current, cells});
+    },
+    [boardLayout],
+  );
+
   useEffect(() => {
     let mounted = true;
     resetPieceGenerationHistory();
@@ -515,6 +540,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     setMonsterHp(maxMonsterHp);
     setPlayerHp(200);
     setMaxPlayerHp(200);
+    setAttackPower(10);
     setCombo(0);
     setGameOver(false);
     setSelectedItem(null);
@@ -530,6 +556,7 @@ export default function SingleGameScreen({route, navigation}: any) {
     setComboBurstValue(0);
     setMonsterHits([]);
     setMonsterImpactHit(null);
+    setPlacementEffect(null);
     setPlayerHit(null);
     setVictoryState(null);
     setDefeatState(null);
@@ -551,88 +578,99 @@ export default function SingleGameScreen({route, navigation}: any) {
       nextBoard = addObstacles(nextBoard, activeLevel.obstacles);
     }
     setBoard(nextBoard);
-    const initialPack = buildPiecePack(nextBoard);
-    setPieces(initialPack);
-    updateNextPieces(buildPiecePack(nextBoard));
 
     (async () => {
-      const [loadedGameData, skinData, charId, noticeMode, isAdmin] = await Promise.all([
-        loadGameData(),
-        loadSkinData(),
-        getSelectedCharacter(),
-        loadSkillTriggerNoticeMode(),
-        getAdminStatus().catch(() => false),
-      ]);
+      try {
+        const [loadedGameData, skinData, charId, noticeMode, isAdmin] = await Promise.all([
+          loadGameData(),
+          loadSkinData(),
+          getSelectedCharacter(),
+          loadSkillTriggerNoticeMode(),
+          getAdminStatus().catch(() => false),
+        ]);
 
-      if (!mounted) {
-        return;
-      }
+        if (!mounted) {
+          return;
+        }
 
-      gameDataRef.current = loadedGameData;
-      isAdminRef.current = isAdmin;
-      skillNoticeModeRef.current = noticeMode;
-      setGameData(loadedGameData);
-      setActiveSkin(skinData.activeSkinId);
-      setSkinBoardBg(getSkinBoardBg());
+        gameDataRef.current = loadedGameData;
+        isAdminRef.current = isAdmin;
+        skillNoticeModeRef.current = noticeMode;
+        setGameData(loadedGameData);
+        setActiveSkin(skinData.activeSkinId);
+        setSkinBoardBg(getSkinBoardBg());
 
-      const skinLoadout = getActiveSkinLoadout(skinData);
-      activeSkinIdRef.current = skinLoadout.skinId;
-      summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
-      summonAttackRef.current = skinLoadout.summonAttack;
-      summonRemainingMsRef.current = skinLoadout.summonDurationMs;
-      setSummonGaugeRequired(skinLoadout.summonGaugeRequired);
-      setSummonAttack(skinLoadout.summonAttack);
-      setSummonRemainingMs(skinLoadout.summonDurationMs);
+        const skinLoadout = getActiveSkinLoadout(skinData);
+        activeSkinIdRef.current = skinLoadout.skinId;
+        summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
+        summonAttackRef.current = skinLoadout.summonAttack;
+        summonRemainingMsRef.current = skinLoadout.summonDurationMs;
+        setSummonGaugeRequired(skinLoadout.summonGaugeRequired);
+        setSummonAttack(skinLoadout.summonAttack);
+        setSummonRemainingMs(skinLoadout.summonDurationMs);
 
-      if (!charId) {
-        setSelectedCharacterId('knight');
-        const refreshedPack = buildPiecePack(nextBoard);
-        setPieces(refreshedPack);
-        updateNextPieces(buildPiecePack(nextBoard));
-        return;
-      }
+        let pieceOptions = mergeSkinPieceGenerationOptions(
+          getPieceGenerationOptions(skillEffectsRef.current),
+          activeSkinIdRef.current,
+        );
 
-      setSelectedCharacterId(charId);
+        if (!charId) {
+          setSelectedCharacterId('knight');
+        } else {
+          setSelectedCharacterId(charId);
 
-      const charData = await loadCharacterData(charId);
-      if (!mounted) {
-        return;
-      }
+          const charData = await loadCharacterData(charId);
+          if (!mounted) {
+            return;
+          }
 
-      const effects = getCharacterSkillEffects(charId, charData, {mode: 'level'});
-      skillEffectsRef.current = effects;
-      const resolvedAttack = Math.round(
-        getCharacterAtk(charId, charData.level) *
-          effects.baseAttackMultiplier *
-          skinLoadout.effects.attackBonusMultiplier,
-      );
-      const resolvedHp = Math.round(
-        getCharacterHp(charId, charData.level) * effects.maxHpMultiplier,
-      );
-      setAttackPower(resolvedAttack);
-      setPlayerHp(resolvedHp);
-      setMaxPlayerHp(resolvedHp);
-      playerHpRef.current = resolvedHp;
-      playerHpAnim.setValue(1);
-      const pieceOptions = mergeSkinPieceGenerationOptions(
-        getPieceGenerationOptions(effects),
-        activeSkinIdRef.current,
-      );
-      const refreshedPack = generatePlaceablePieces(
-        nextBoard,
-        levelPieceDifficulty,
-        getSkinColors(),
-        pieceOptions,
-      );
-      setPieces(refreshedPack);
-      updateNextPieces(
-        generatePlaceablePieces(
+          const effects = getCharacterSkillEffects(charId, charData, {mode: 'level'});
+          skillEffectsRef.current = effects;
+          const resolvedAttack = Math.round(
+            getCharacterAtk(charId, charData.level) *
+              effects.baseAttackMultiplier *
+              skinLoadout.effects.attackBonusMultiplier,
+          );
+          const resolvedHp = Math.round(
+            getCharacterHp(charId, charData.level) * effects.maxHpMultiplier,
+          );
+          setAttackPower(resolvedAttack);
+          setPlayerHp(resolvedHp);
+          setMaxPlayerHp(resolvedHp);
+          playerHpRef.current = resolvedHp;
+          playerHpAnim.setValue(1);
+          pieceOptions = mergeSkinPieceGenerationOptions(
+            getPieceGenerationOptions(effects),
+            activeSkinIdRef.current,
+          );
+        }
+
+        const initialPack = generatePlaceablePieces(
           nextBoard,
           levelPieceDifficulty,
           getSkinColors(),
           pieceOptions,
-        ),
-      );
+        );
+        const previewPack = generatePlaceablePieces(
+          nextBoard,
+          levelPieceDifficulty,
+          getSkinColors(),
+          pieceOptions,
+        );
+        if (!mounted) {
+          return;
+        }
+        setPieces(initialPack);
+        updateNextPieces(previewPack);
+      } catch (error) {
+        console.warn('SingleGameScreen init error:', error);
+        if (!mounted) {
+          return;
+        }
+        const fallbackPack = buildPiecePack(nextBoard);
+        setPieces(fallbackPack);
+        updateNextPieces(buildPiecePack(nextBoard));
+      }
     })();
 
     setTimeout(() => {
@@ -1272,6 +1310,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       }
 
       let newBoard = placePiece(board, piece, row, col);
+      showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
       let totalLines = 0;
       let totalGemsFound = 0;
@@ -1460,6 +1499,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       isPiecePackPlaceable,
       monsterAvatarShakeX,
       queueMonsterHit,
+      showPlacementEffect,
       triggerMonsterPose,
       showSkillTriggerNotice,
       triggerAvatarShake,
@@ -2116,6 +2156,17 @@ export default function SingleGameScreen({route, navigation}: any) {
         )}
       </Animated.View>
         </View>
+      )}
+
+      {placementEffect && (
+        <PiecePlacementEffect
+          cells={placementEffect.cells}
+          onDone={() =>
+            setPlacementEffect(current =>
+              current?.id === placementEffect.id ? null : current,
+            )
+          }
+        />
       )}
 
       <BattleNoticeOverlay message={battleNoticeMessage} />

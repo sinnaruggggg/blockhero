@@ -1,0 +1,293 @@
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Alert} from 'react-native';
+import {supabase} from '../services/supabase';
+import {
+  buildLobbyChatChannelInfos,
+  buildLobbyChatChannelOptions,
+  getLobbyChatOccupancy,
+  pickRandomLobbyChatChannel,
+  type LobbyChatChannelInfo,
+} from '../game/lobbyChatChannels';
+
+export interface LobbyChatMessage {
+  id: string;
+  nickname: string;
+  text: string;
+  self?: boolean;
+}
+
+interface UseLobbyChatOptions {
+  mode: 'battle' | 'raid';
+  userId: string;
+  nickname: string;
+  enabled: boolean;
+  sessionKey: number;
+  capacity?: number;
+}
+
+const DEFAULT_CAPACITY = 30;
+
+function appendLobbyChatMessage(
+  current: LobbyChatMessage[],
+  next: LobbyChatMessage,
+  limit = 60,
+) {
+  if (current.some(message => message.id === next.id)) {
+    return current;
+  }
+
+  const nextMessages = [...current, next];
+  return nextMessages.slice(-limit);
+}
+
+export function useLobbyChat({
+  mode,
+  userId,
+  nickname,
+  enabled,
+  sessionKey,
+  capacity = DEFAULT_CAPACITY,
+}: UseLobbyChatOptions) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [messages, setMessages] = useState<LobbyChatMessage[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [currentChannelId, setCurrentChannelId] = useState<number | null>(null);
+  const [channelInfos, setChannelInfos] = useState<LobbyChatChannelInfo[]>([]);
+
+  const directoryChannelRef = useRef<any>(null);
+  const chatChannelRef = useRef<any>(null);
+  const currentChannelIdRef = useRef<number | null>(null);
+  const lifecycleTokenRef = useRef(0);
+
+  const cleanupChatChannel = useCallback(() => {
+    if (chatChannelRef.current) {
+      void supabase.removeChannel(chatChannelRef.current);
+      chatChannelRef.current = null;
+    }
+  }, []);
+
+  const cleanupAllChannels = useCallback(() => {
+    cleanupChatChannel();
+    if (directoryChannelRef.current) {
+      void supabase.removeChannel(directoryChannelRef.current);
+      directoryChannelRef.current = null;
+    }
+  }, [cleanupChatChannel]);
+
+  const refreshChannelInfos = useCallback(() => {
+    const nextInfos = buildLobbyChatChannelInfos(
+      directoryChannelRef.current?.presenceState?.() ?? {},
+    );
+    setChannelInfos(nextInfos);
+    return nextInfos;
+  }, []);
+
+  const connectChatChannel = useCallback(
+    async (targetChannelId: number, token: number) => {
+      cleanupChatChannel();
+
+      setMessages([]);
+      currentChannelIdRef.current = targetChannelId;
+      setCurrentChannelId(targetChannelId);
+
+      const chatChannel = supabase
+        .channel(`lobby-chat:${mode}:${targetChannelId}`)
+        .on('broadcast', {event: 'message'}, ({payload}: any) => {
+          const incomingId = typeof payload?.id === 'string' ? payload.id : null;
+          const incomingNickname =
+            typeof payload?.nickname === 'string' ? payload.nickname : '알 수 없음';
+          const incomingText = typeof payload?.text === 'string' ? payload.text : '';
+          if (!incomingId || !incomingText) {
+            return;
+          }
+
+          setMessages(current =>
+            appendLobbyChatMessage(current, {
+              id: incomingId,
+              nickname: incomingNickname,
+              text: incomingText,
+              self: payload?.userId === userId,
+            }),
+          );
+        });
+
+      chatChannelRef.current = chatChannel;
+      await new Promise<void>(resolve => {
+        chatChannel.subscribe(async status => {
+          if (token !== lifecycleTokenRef.current) {
+            void supabase.removeChannel(chatChannel);
+            resolve();
+            return;
+          }
+
+          if (status !== 'SUBSCRIBED') {
+            if (
+              status === 'CHANNEL_ERROR' ||
+              status === 'TIMED_OUT' ||
+              status === 'CLOSED'
+            ) {
+              setConnected(false);
+              resolve();
+            }
+            return;
+          }
+
+          if (directoryChannelRef.current?.track) {
+            await directoryChannelRef.current.track({
+              userId,
+              nickname,
+              channelId: targetChannelId,
+              updatedAt: Date.now(),
+            });
+            refreshChannelInfos();
+          }
+          resolve();
+        });
+      });
+    },
+    [cleanupChatChannel, mode, nickname, refreshChannelInfos, userId],
+  );
+
+  const switchChannel = useCallback(
+    async (targetChannelId: number) => {
+      if (!enabled || !directoryChannelRef.current || targetChannelId < 1) {
+        return false;
+      }
+
+      const nextInfos = refreshChannelInfos();
+      const targetOccupancy = getLobbyChatOccupancy(nextInfos, targetChannelId);
+      const isCurrentChannel = currentChannelIdRef.current === targetChannelId;
+      if (!isCurrentChannel && targetOccupancy >= capacity) {
+        Alert.alert('채널 이동 불가', `채널 ${targetChannelId}번은 정원(${capacity}명)입니다.`);
+        return false;
+      }
+
+      lifecycleTokenRef.current += 1;
+      await connectChatChannel(targetChannelId, lifecycleTokenRef.current);
+      return true;
+    },
+    [capacity, connectChatChannel, enabled, refreshChannelInfos],
+  );
+
+  const joinRandomChannel = useCallback(async () => {
+    if (!directoryChannelRef.current) {
+      return;
+    }
+    const nextInfos = refreshChannelInfos();
+    const targetChannelId = pickRandomLobbyChatChannel(nextInfos, capacity);
+    await switchChannel(targetChannelId);
+  }, [capacity, refreshChannelInfos, switchChannel]);
+
+  useEffect(() => {
+    cleanupAllChannels();
+    setConnected(false);
+    setMessages([]);
+    setDraft('');
+    setCurrentChannelId(null);
+    currentChannelIdRef.current = null;
+
+    if (!enabled || !userId || !nickname) {
+      return;
+    }
+
+    let active = true;
+    lifecycleTokenRef.current += 1;
+    const token = lifecycleTokenRef.current;
+
+    const directoryChannel = supabase
+      .channel(`lobby-directory:${mode}`, {
+        config: {presence: {key: userId}},
+      })
+      .on('presence', {event: 'sync'}, () => {
+        if (!active) {
+          return;
+        }
+        refreshChannelInfos();
+      });
+
+    directoryChannelRef.current = directoryChannel;
+
+    directoryChannel.subscribe(async status => {
+      if (!active || token !== lifecycleTokenRef.current) {
+        return;
+      }
+
+      if (status === 'SUBSCRIBED') {
+        setConnected(true);
+        await joinRandomChannel();
+        return;
+      }
+
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        setConnected(false);
+      }
+    });
+
+    return () => {
+      active = false;
+      cleanupAllChannels();
+    };
+  }, [
+    cleanupAllChannels,
+    enabled,
+    joinRandomChannel,
+    mode,
+    nickname,
+    refreshChannelInfos,
+    sessionKey,
+    userId,
+  ]);
+
+  const toggleOpen = useCallback(() => {
+    setIsOpen(current => !current);
+  }, []);
+
+  const sendMessage = useCallback(async () => {
+    const text = draft.trim();
+    if (!text || !chatChannelRef.current) {
+      return;
+    }
+
+    const message: LobbyChatMessage = {
+      id: `${userId}-${Date.now()}`,
+      nickname,
+      text,
+      self: true,
+    };
+    setMessages(current => appendLobbyChatMessage(current, message));
+    setDraft('');
+
+    await chatChannelRef.current.send({
+      type: 'broadcast',
+      event: 'message',
+      payload: {
+        id: message.id,
+        userId,
+        nickname,
+        text,
+      },
+    });
+  }, [draft, nickname, userId]);
+
+  const channelOptions = useMemo(
+    () => buildLobbyChatChannelOptions(channelInfos, currentChannelId),
+    [channelInfos, currentChannelId],
+  );
+
+  return {
+    isOpen,
+    toggleOpen,
+    draft,
+    setDraft,
+    messages,
+    connected,
+    currentChannelId,
+    currentOccupancy: getLobbyChatOccupancy(channelInfos, currentChannelId),
+    capacity,
+    channelOptions,
+    switchChannel,
+    joinRandomChannel,
+    sendMessage,
+  };
+}

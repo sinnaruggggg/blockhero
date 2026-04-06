@@ -46,6 +46,7 @@ import {
 } from '../services/partyService';
 import PartyPanel from '../components/PartyPanel';
 import FriendInviteModal from '../components/FriendInviteModal';
+import LobbyChatPanel from '../components/LobbyChatPanel';
 import {
   formatBossRaidCountdownLabel,
   getBossRaidWindowInfo,
@@ -53,6 +54,7 @@ import {
 import {getUnlockedBossRaidStages} from '../game/levelProgress';
 import {getCharacterSkillEffects} from '../game/characterSkillEffects';
 import {getAdminStatus} from '../services/adminSync';
+import {useLobbyChat} from '../hooks/useLobbyChat';
 
 interface ActiveRaid {
   id: string;
@@ -250,12 +252,22 @@ export default function RaidLobbyScreen({navigation}: any) {
   const [friendList, setFriendList] = useState<
     {id: string; nickname: string; isOnline: boolean}[]
   >([]);
+  const [chatPlayerId, setChatPlayerId] = useState('');
+  const [chatNickname, setChatNickname] = useState('');
+  const [chatSessionKey, setChatSessionKey] = useState(0);
 
   const playerIdRef = useRef('');
   const nicknameRef = useRef('');
   const partyChannelRef = useRef<any>(null);
   const mountedRef = useRef(true);
   const loadRequestRef = useRef(0);
+  const lobbyChat = useLobbyChat({
+    mode: 'raid',
+    userId: chatPlayerId,
+    nickname: chatNickname,
+    enabled: !loading && !!chatPlayerId && !!chatNickname,
+    sessionKey: chatSessionKey,
+  });
 
   const bossWindowInfo = getBossRaidWindowInfo(Date.now());
 
@@ -322,6 +334,9 @@ export default function RaidLobbyScreen({navigation}: any) {
       }
       playerIdRef.current = playerId;
       nicknameRef.current = nickname;
+      setChatPlayerId(playerId);
+      setChatNickname(nickname);
+      setChatSessionKey(current => current + 1);
 
       const loadIssues: LoadIssue[] = [];
       const safeLoad = async <T,>(
@@ -991,6 +1006,35 @@ export default function RaidLobbyScreen({navigation}: any) {
         onInvite={handleInviteFriend}
         onClose={() => setShowInviteModal(false)}
       />
+
+      {!loading && chatPlayerId ? (
+        <LobbyChatPanel
+          title="레이드 모집 채팅"
+          accentColor={raidMode === 'boss' ? '#ef4444' : '#22c55e'}
+          isOpen={lobbyChat.isOpen}
+          connected={lobbyChat.connected}
+          currentChannelId={lobbyChat.currentChannelId}
+          currentOccupancy={lobbyChat.currentOccupancy}
+          capacity={lobbyChat.capacity}
+          channelOptions={lobbyChat.channelOptions}
+          draft={lobbyChat.draft}
+          messages={lobbyChat.messages}
+          onToggle={lobbyChat.toggleOpen}
+          onChangeDraft={lobbyChat.setDraft}
+          onSend={lobbyChat.sendMessage}
+          onSwitchChannel={(channelId: number) => {
+            lobbyChat.switchChannel(channelId).catch(error => {
+              console.warn('RaidLobbyScreen switchChannel error:', error);
+            });
+          }}
+          onRandomizeChannel={() => {
+            lobbyChat.joinRandomChannel().catch(error => {
+              console.warn('RaidLobbyScreen joinRandomChannel error:', error);
+            });
+          }}
+          bottom={26}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

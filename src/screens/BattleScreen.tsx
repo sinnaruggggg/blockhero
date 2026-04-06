@@ -4,6 +4,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
+import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import {useDragDrop} from '../game/useDragDrop';
 import {ATTACKS} from '../constants';
 import {
@@ -15,6 +16,10 @@ import {getPlayerId, getNickname} from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {supabase} from '../services/supabase';
 import {t} from '../i18n';
+import {
+  buildPiecePlacementEffectCells,
+  type PiecePlacementEffectCell,
+} from '../game/piecePlacementEffect';
 
 // Neon spark particle effect - sparks scatter fast from placed block area
 function PlaceEffect({x, y, color, onDone}: {x: number; y: number; color: string; onDone: () => void}) {
@@ -232,8 +237,14 @@ export default function BattleScreen({route, navigation}: any) {
   const boardRef = useRef<View>(null);
 
   // Effects state
-  const [placeEffect, setPlaceEffect] = useState<{x: number; y: number; color: string} | null>(null);
+  const [placementEffect, setPlacementEffect] = useState<{
+    id: number;
+    cells: PiecePlacementEffectCell[];
+  } | null>(null);
   const [missileEffect, setMissileEffect] = useState<number | null>(null); // number = missile count
+  const [rematchAccepted, setRematchAccepted] = useState(false);
+  const [opponentRematchAccepted, setOpponentRematchAccepted] = useState(false);
+  const [rematchStarting, setRematchStarting] = useState(false);
   const {shakeAnim, triggerShake} = useShake();
 
   // Reconnection state
@@ -250,6 +261,12 @@ export default function BattleScreen({route, navigation}: any) {
   const roundRef = useRef(0);
   const gameOverRef = useRef(false);
   const opponentDisconnectedRef = useRef(false);
+  const placementEffectIdRef = useRef(0);
+  const rematchAcceptedRef = useRef(false);
+  const opponentRematchAcceptedRef = useRef(false);
+  const rematchStartingRef = useRef(false);
+  const resetBattleStateRef = useRef<((nextSeed: number) => Promise<void>) | null>(null);
+  const startRematchRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -288,8 +305,12 @@ export default function BattleScreen({route, navigation}: any) {
               if (row.board) setOpponentBoard(row.board);
               if (row.nickname) setOpponentName(row.nickname);
               if (row.game_over && !gameOverRef.current) {
+                rematchAcceptedRef.current = false;
+                opponentRematchAcceptedRef.current = false;
                 setResult('win');
                 setGameOver(true);
+                setRematchAccepted(false);
+                setOpponentRematchAccepted(false);
                 gameOverRef.current = true;
               }
             }
@@ -307,9 +328,13 @@ export default function BattleScreen({route, navigation}: any) {
                     const active = currentPieces.filter(p => p !== null) as Piece[];
                     if (active.length > 0 && !canPlaceAnyPiece(newBoard, active)) {
                       if (!gameOverRef.current) {
+                        rematchAcceptedRef.current = false;
+                        opponentRematchAcceptedRef.current = false;
                         gameOverRef.current = true;
                         setGameOver(true);
                         setResult('lose');
+                        setRematchAccepted(false);
+                        setOpponentRematchAccepted(false);
                         supabase
                           .from('players')
                           .update({game_over: true})
@@ -334,6 +359,43 @@ export default function BattleScreen({route, navigation}: any) {
                 setOpponentDisconnected(false);
               }
             }
+          })
+          .on('broadcast', {event: 'rematch_response'}, ({payload}: any) => {
+            if (!mounted || !payload || payload.playerId === playerIdRef.current) {
+              return;
+            }
+
+            if (payload.accepted) {
+              opponentRematchAcceptedRef.current = true;
+              setOpponentRematchAccepted(true);
+              if (isHost && rematchAcceptedRef.current) {
+                const pendingStart = startRematchRef.current?.();
+                pendingStart?.catch(error => {
+                  console.warn('BattleScreen host startRematch error:', error);
+                });
+              }
+              return;
+            }
+
+            Alert.alert('재도전 종료', '상대가 재도전을 원하지 않아 대전 로비로 돌아갑니다.', [
+              {
+                text: '확인',
+                onPress: () => navigation.replace('Lobby'),
+              },
+            ]);
+          })
+          .on('broadcast', {event: 'rematch_start'}, ({payload}: any) => {
+            if (!mounted) {
+              return;
+            }
+            const nextSeed = typeof payload?.seed === 'number' ? payload.seed : null;
+            if (nextSeed == null) {
+              return;
+            }
+            const pendingReset = resetBattleStateRef.current?.(nextSeed);
+            pendingReset?.catch(error => {
+              console.warn('BattleScreen resetBattleState error:', error);
+            });
           });
 
         await channel.subscribe();
@@ -402,11 +464,111 @@ export default function BattleScreen({route, navigation}: any) {
       .then();
   }, [roomCode]);
 
+  const showPlacementEffect = useCallback(
+    (piece: Piece, row: number, col: number) => {
+      if (!boardLayout) {
+        return;
+      }
+      const cells = buildPiecePlacementEffectCells(boardLayout, piece, row, col, true);
+      if (cells.length === 0) {
+        return;
+      }
+      placementEffectIdRef.current += 1;
+      setPlacementEffect({id: placementEffectIdRef.current, cells});
+    },
+    [boardLayout],
+  );
+
+  const resetBattleState = useCallback(
+    async (nextSeed: number) => {
+      const freshBoard = createBoard();
+      seedRef.current = nextSeed;
+      roundRef.current = 1;
+      gameOverRef.current = false;
+      opponentDisconnectedRef.current = false;
+      rematchAcceptedRef.current = false;
+      opponentRematchAcceptedRef.current = false;
+      rematchStartingRef.current = false;
+      opponentLastSeen.current = Date.now();
+
+      if (reconnectTimer.current) {
+        clearInterval(reconnectTimer.current);
+        reconnectTimer.current = null;
+      }
+
+      setBoard(freshBoard);
+      setOpponentBoard(createBoard());
+      setPieces(generateSeededPieces(nextSeed, 0));
+      setScore(0);
+      setAttackPoints(0);
+      setRound(1);
+      setGameOver(false);
+      setResult(null);
+      setPlacementEffect(null);
+      setMissileEffect(null);
+      setOpponentDisconnected(false);
+      setReconnectCountdown(60);
+      setRematchAccepted(false);
+      setOpponentRematchAccepted(false);
+      setRematchStarting(false);
+
+      const {error} = await supabase
+        .from('players')
+        .update({board: freshBoard, game_over: false})
+        .eq('room_code', roomCode)
+        .eq('player_id', playerIdRef.current);
+      if (error) {
+        throw error;
+      }
+    },
+    [roomCode],
+  );
+
+  const startRematch = useCallback(async () => {
+    if (!isHost || rematchStartingRef.current) {
+      return;
+    }
+
+    try {
+      rematchStartingRef.current = true;
+      setRematchStarting(true);
+      const nextSeed = Math.floor(Math.random() * 1000000);
+      const {error} = await supabase.from('rooms').update({seed: nextSeed}).eq('code', roomCode);
+      if (error) {
+        throw error;
+      }
+      await resetBattleState(nextSeed);
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'rematch_start',
+        payload: {seed: nextSeed},
+      });
+    } catch (error) {
+      console.warn('BattleScreen startRematch error:', error);
+      Alert.alert('재도전 실패', '새 대전을 시작하지 못했습니다. 대전 로비로 돌아갑니다.', [
+        {
+          text: '확인',
+          onPress: () => navigation.replace('Lobby'),
+        },
+      ]);
+    } finally {
+      rematchStartingRef.current = false;
+      setRematchStarting(false);
+    }
+  }, [isHost, navigation, resetBattleState, roomCode]);
+
+  resetBattleStateRef.current = resetBattleState;
+  startRematchRef.current = startRematch;
+
   const handleGameOver = useCallback(() => {
     if (gameOverRef.current) return;
+    rematchAcceptedRef.current = false;
+    opponentRematchAcceptedRef.current = false;
     gameOverRef.current = true;
     setGameOver(true);
     setResult('lose');
+    setRematchAccepted(false);
+    setOpponentRematchAccepted(false);
     supabase
       .from('players')
       .update({game_over: true})
@@ -422,18 +584,8 @@ export default function BattleScreen({route, navigation}: any) {
       if (!piece) return;
 
       let newBoard = placePiece(board, piece, row, col);
+      showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
-
-      // Neon spark particle effect at placed piece center
-      if (boardLayout) {
-        const scale = 0.85;
-        const cs = 42.25 * scale;
-        const gap = 2 * scale;
-        const bp = 8 * scale;
-        const px = boardLayout.x + bp + col * (cs + gap) + cs / 2;
-        const py = boardLayout.y + bp + row * (cs + gap) + cs / 2;
-        setPlaceEffect({x: px, y: py, color: piece.color});
-      }
 
       let totalLines = 0;
       let combo = 0;
@@ -474,7 +626,7 @@ export default function BattleScreen({route, navigation}: any) {
         if (!canPlaceAnyPiece(newBoard, active)) handleGameOver();
       }, 200);
     },
-    [board, pieces, boardLayout, syncBoardToDB, handleGameOver],
+    [board, pieces, showPlacementEffect, syncBoardToDB, handleGameOver],
   );
 
   const dragDrop = useDragDrop(board, pieces, boardLayout, handlePlace, true, 1);
@@ -580,11 +732,14 @@ export default function BattleScreen({route, navigation}: any) {
         onDragCancel={dragDrop.onDragCancel}
       />
 
-      {/* Place particle effect */}
-      {placeEffect && (
-        <PlaceEffect
-          x={placeEffect.x} y={placeEffect.y} color={placeEffect.color}
-          onDone={() => setPlaceEffect(null)}
+      {placementEffect && (
+        <PiecePlacementEffect
+          cells={placementEffect.cells}
+          onDone={() =>
+            setPlacementEffect(current =>
+              current?.id === placementEffect.id ? null : current,
+            )
+          }
         />
       )}
 
@@ -607,9 +762,50 @@ export default function BattleScreen({route, navigation}: any) {
           <Text style={styles.resultText}>
             {result === 'win' ? t('battle.win') : t('battle.lose')}
           </Text>
-          <TouchableOpacity style={styles.exitBtn}
-            onPress={() => navigation.replace('Home')}>
-            <Text style={styles.exitBtnText}>{t('common.goHome')}</Text>
+          <Text style={styles.rematchInfoText}>
+            {opponentDisconnected
+              ? '상대 연결이 끊겨 재도전을 진행할 수 없습니다.'
+              : rematchStarting
+                ? '새 대전을 준비 중입니다.'
+                : rematchAccepted
+                  ? opponentRematchAccepted
+                    ? '상대 수락 확인 중입니다.'
+                    : '상대의 재도전 응답을 기다리는 중입니다.'
+                  : opponentRematchAccepted
+                    ? '상대가 재도전을 원합니다.'
+                    : '같은 상대와 다시 대결할 수 있습니다.'}
+          </Text>
+          {!opponentDisconnected && !rematchAccepted && !rematchStarting && (
+            <TouchableOpacity
+              style={[styles.exitBtn, styles.rematchBtn]}
+              onPress={() => {
+                rematchAcceptedRef.current = true;
+                setRematchAccepted(true);
+                channelRef.current?.send({
+                  type: 'broadcast',
+                  event: 'rematch_response',
+                  payload: {playerId: playerIdRef.current, accepted: true},
+                });
+                if (isHost && opponentRematchAcceptedRef.current) {
+                  startRematch().catch(error => {
+                    console.warn('BattleScreen local startRematch error:', error);
+                  });
+                }
+              }}>
+              <Text style={styles.exitBtnText}>재도전</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.exitBtn}
+            onPress={() => {
+              channelRef.current?.send({
+                type: 'broadcast',
+                event: 'rematch_response',
+                payload: {playerId: playerIdRef.current, accepted: false},
+              });
+              navigation.replace('Lobby');
+            }}>
+            <Text style={styles.exitBtnText}>대전 로비로</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -654,9 +850,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   resultText: {color: '#fff', fontSize: 36, fontWeight: '900'},
+  rematchInfoText: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 14,
+    marginHorizontal: 28,
+    lineHeight: 20,
+  },
   exitBtn: {
     marginTop: 24, backgroundColor: '#6366f1', paddingHorizontal: 32,
     paddingVertical: 14, borderRadius: 12,
+  },
+  rematchBtn: {
+    backgroundColor: '#16a34a',
   },
   exitBtnText: {color: '#fff', fontSize: 18, fontWeight: '800'},
   waitingText: {color: '#e2e8f0', fontSize: 18, fontWeight: '600'},
