@@ -8,11 +8,17 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {launchImageLibrary} from 'react-native-image-picker';
 import BackImageButton from '../components/BackImageButton';
 import {getAdminStatus} from '../services/adminSync';
 import {supabase} from '../services/supabase';
+import {
+  buildAnnouncementContent,
+  parseAnnouncementContent,
+} from '../game/announcementContent';
 
 type Tab = 'dashboard' | 'users' | 'grants' | 'announcements' | 'battles';
 
@@ -38,6 +44,7 @@ interface Announcement {
   id: number;
   title: string;
   content: string;
+  imageUrl: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -84,8 +91,12 @@ export default function AdminScreen({navigation}: any) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
+  const [annImageUrl, setAnnImageUrl] = useState('');
   const [annLoading, setAnnLoading] = useState(false);
   const [showAnnForm, setShowAnnForm] = useState(false);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<number | null>(
+    null,
+  );
 
   // Battles
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -135,7 +146,19 @@ export default function AdminScreen({navigation}: any) {
       .from('announcements')
       .select('*')
       .order('created_at', {ascending: false});
-    setAnnouncements(data ?? []);
+    setAnnouncements(
+      (data ?? []).map((row: any) => {
+        const parsed = parseAnnouncementContent(row.content, row.image_url);
+        return {
+          id: row.id,
+          title: row.title,
+          content: parsed.content,
+          imageUrl: parsed.imageUrl,
+          is_active: row.is_active,
+          created_at: row.created_at,
+        };
+      }),
+    );
   }, []);
 
   const loadBattles = useCallback(async () => {
@@ -278,6 +301,22 @@ export default function AdminScreen({navigation}: any) {
     );
   };
 
+  const resetAnnouncementForm = useCallback(() => {
+    setEditingAnnouncementId(null);
+    setAnnTitle('');
+    setAnnContent('');
+    setAnnImageUrl('');
+    setShowAnnForm(false);
+  }, []);
+
+  const startEditAnnouncement = useCallback((announcement: Announcement) => {
+    setEditingAnnouncementId(announcement.id);
+    setAnnTitle(announcement.title);
+    setAnnContent(announcement.content);
+    setAnnImageUrl(announcement.imageUrl ?? '');
+    setShowAnnForm(true);
+  }, []);
+
   const handleSaveAnnouncement = async () => {
     if (!annTitle.trim() || !annContent.trim()) {
       Alert.alert('오류', '제목과 내용을 입력하세요.');
@@ -285,20 +324,54 @@ export default function AdminScreen({navigation}: any) {
     }
     setAnnLoading(true);
     try {
-      const {error} = await supabase.from('announcements').insert({
+      const payload = {
         title: annTitle.trim(),
-        content: annContent.trim(),
+        content: buildAnnouncementContent(annContent, annImageUrl),
         is_active: true,
-      });
+      };
+      const {error} = editingAnnouncementId
+        ? await supabase
+            .from('announcements')
+            .update(payload)
+            .eq('id', editingAnnouncementId)
+        : await supabase.from('announcements').insert(payload);
       if (error) throw error;
-      setAnnTitle('');
-      setAnnContent('');
-      setShowAnnForm(false);
+      resetAnnouncementForm();
       loadAnnouncements();
     } catch (e: any) {
       Alert.alert('오류', e.message);
     } finally {
       setAnnLoading(false);
+    }
+  };
+
+  const handlePickAnnouncementImage = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        includeBase64: true,
+        selectionLimit: 1,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        quality: 0.7,
+      });
+
+      if (result.didCancel) {
+        return;
+      }
+
+      if (result.errorMessage) {
+        throw new Error(result.errorMessage);
+      }
+
+      const asset = result.assets?.[0];
+      if (!asset?.base64 || !asset.type) {
+        throw new Error('이미지 데이터를 불러오지 못했습니다.');
+      }
+
+      setAnnImageUrl(`data:${asset.type};base64,${asset.base64}`);
+    } catch (error: any) {
+      Alert.alert('이미지 첨부 실패', error?.message ?? '이미지를 선택하지 못했습니다.');
     }
   };
 
@@ -560,13 +633,25 @@ export default function AdminScreen({navigation}: any) {
         {/* ANNOUNCEMENTS */}
         {tab === 'announcements' && (
           <View>
-            <TouchableOpacity style={styles.newAnnBtn} onPress={() => setShowAnnForm(!showAnnForm)}>
-              <Text style={styles.newAnnBtnText}>{showAnnForm ? '취소' : '+ 새 공지'}</Text>
+            <TouchableOpacity
+              style={styles.newAnnBtn}
+              onPress={() => {
+                if (showAnnForm) {
+                  resetAnnouncementForm();
+                } else {
+                  setShowAnnForm(true);
+                }
+              }}>
+              <Text style={styles.newAnnBtnText}>
+                {showAnnForm ? '취소' : '+ 새 공지'}
+              </Text>
             </TouchableOpacity>
 
             {showAnnForm && (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>새 공지사항</Text>
+                <Text style={styles.cardTitle}>
+                  {editingAnnouncementId ? '공지 수정' : '공지 작성'}
+                </Text>
                 <TextInput
                   style={styles.input}
                   placeholder="제목"
@@ -582,12 +667,63 @@ export default function AdminScreen({navigation}: any) {
                   onChangeText={setAnnContent}
                   multiline
                 />
-                <TouchableOpacity
-                  style={[styles.grantBtn, annLoading && {opacity: 0.5}]}
-                  onPress={handleSaveAnnouncement}
-                  disabled={annLoading}>
-                  {annLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.grantBtnText}>저장</Text>}
-                </TouchableOpacity>
+                <TextInput
+                  style={styles.input}
+                  placeholder="이미지 URL 입력 또는 갤러리 첨부"
+                  placeholderTextColor="#888"
+                  value={annImageUrl.startsWith('data:') ? '' : annImageUrl}
+                  onChangeText={setAnnImageUrl}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <View style={styles.annActions}>
+                  <TouchableOpacity
+                    style={styles.annActionBtn}
+                    onPress={handlePickAnnouncementImage}
+                    disabled={annLoading}>
+                    <Text style={styles.annActionText}>갤러리에서 첨부</Text>
+                  </TouchableOpacity>
+                  {annImageUrl.trim().length > 0 ? (
+                    <TouchableOpacity
+                      style={[styles.annActionBtn, styles.annDeleteBtn]}
+                      onPress={() => setAnnImageUrl('')}
+                      disabled={annLoading}>
+                      <Text style={styles.annActionText}>이미지 제거</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                {annImageUrl.trim().length > 0 ? (
+                  <Image
+                    source={{uri: annImageUrl.trim()}}
+                    style={styles.announcementPreview}
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <View style={styles.annActions}>
+                  <TouchableOpacity
+                    style={[styles.annActionBtn, styles.annDeleteBtn]}
+                    onPress={resetAnnouncementForm}
+                    disabled={annLoading}>
+                    <Text style={styles.annActionText}>취소</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.annActionBtn,
+                      styles.newAnnBtn,
+                      {marginBottom: 0},
+                      annLoading && {opacity: 0.5},
+                    ]}
+                    onPress={handleSaveAnnouncement}
+                    disabled={annLoading}>
+                    {annLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.newAnnBtnText}>
+                        {editingAnnouncementId ? '공지 수정 저장' : '공지 등록'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
@@ -599,13 +735,29 @@ export default function AdminScreen({navigation}: any) {
                     <Text style={styles.annBadgeText}>{a.is_active ? '활성' : '비활성'}</Text>
                   </View>
                 </View>
+                {a.imageUrl ? (
+                  <Image
+                    source={{uri: a.imageUrl}}
+                    style={styles.annImage}
+                    resizeMode="cover"
+                  />
+                ) : null}
                 <Text style={styles.annContent}>{a.content}</Text>
                 <Text style={styles.annDate}>{formatDate(a.created_at)}</Text>
                 <View style={styles.annActions}>
-                  <TouchableOpacity style={styles.annActionBtn} onPress={() => toggleAnnouncement(a.id, a.is_active)}>
+                  <TouchableOpacity
+                    style={styles.annActionBtn}
+                    onPress={() => startEditAnnouncement(a)}>
+                    <Text style={styles.annActionText}>수정</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.annActionBtn}
+                    onPress={() => toggleAnnouncement(a.id, a.is_active)}>
                     <Text style={styles.annActionText}>{a.is_active ? '비활성화' : '활성화'}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.annActionBtn, styles.annDeleteBtn]} onPress={() => deleteAnnouncement(a.id)}>
+                  <TouchableOpacity
+                    style={[styles.annActionBtn, styles.annDeleteBtn]}
+                    onPress={() => deleteAnnouncement(a.id)}>
                     <Text style={[styles.annActionText, {color: '#f87171'}]}>삭제</Text>
                   </TouchableOpacity>
                 </View>
@@ -829,6 +981,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   newAnnBtnText: {color: '#fff', fontWeight: '700'},
+  announcementPreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: 10,
+    marginBottom: 12,
+    backgroundColor: '#0f172a',
+  },
   annCard: {
     backgroundColor: '#1e1b4b',
     borderRadius: 12,
@@ -841,6 +1000,13 @@ const styles = StyleSheet.create({
   annActive: {backgroundColor: '#14532d'},
   annInactive: {backgroundColor: '#374151'},
   annBadgeText: {color: '#fff', fontSize: 11, fontWeight: '700'},
+  annImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: '#0f172a',
+  },
   annContent: {color: '#a5b4fc', fontSize: 13, marginBottom: 6},
   annDate: {color: '#4b5563', fontSize: 11, marginBottom: 8},
   annActions: {flexDirection: 'row', gap: 8},

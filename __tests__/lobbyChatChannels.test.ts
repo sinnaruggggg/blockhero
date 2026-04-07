@@ -44,13 +44,28 @@ describe('lobbyChatChannels', () => {
     ).toBe(3);
   });
 
-  it('includes the current and next channel in selector options', () => {
+  it('shows only active channels plus the current channel when missing', () => {
     expect(
       buildLobbyChatChannelOptions([{id: 1, count: 4}], 3, 6),
     ).toEqual([
       {id: 1, count: 4},
       {id: 3, count: 0},
-      {id: 4, count: 0},
+    ]);
+  });
+
+  it('does not create an extra empty channel option', () => {
+    expect(
+      buildLobbyChatChannelOptions(
+        [
+          {id: 1, count: 12},
+          {id: 2, count: 5},
+        ],
+        2,
+        6,
+      ),
+    ).toEqual([
+      {id: 1, count: 12},
+      {id: 2, count: 5},
     ]);
   });
 

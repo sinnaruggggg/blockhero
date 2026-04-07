@@ -1,5 +1,7 @@
 import React, {useEffect, useRef} from 'react';
 import {
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
@@ -52,14 +54,28 @@ export default function LobbyChatPanel({
   bottom = 22,
 }: LobbyChatPanelProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const shouldAutoScrollRef = useRef(true);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    shouldAutoScrollRef.current = distanceFromBottom <= 28;
+  };
 
   useEffect(() => {
     if (isOpen) {
+      shouldAutoScrollRef.current = true;
+    }
+  }, [currentChannelId, isOpen]);
+
+  useEffect(() => {
+    if (isOpen && shouldAutoScrollRef.current) {
       requestAnimationFrame(() => {
         scrollRef.current?.scrollToEnd({animated: true});
       });
     }
-  }, [isOpen, messages]);
+  }, [currentChannelId, isOpen, messages]);
 
   return (
     <View pointerEvents="box-none" style={[styles.host, {bottom}]}>
@@ -113,7 +129,16 @@ export default function LobbyChatPanel({
           <ScrollView
             ref={scrollRef}
             style={styles.messages}
-            contentContainerStyle={styles.messagesContent}>
+            contentContainerStyle={styles.messagesContent}
+            keyboardShouldPersistTaps="handled"
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onContentSizeChange={() => {
+              if (!isOpen || !shouldAutoScrollRef.current) {
+                return;
+              }
+              scrollRef.current?.scrollToEnd({animated: true});
+            }}>
             {messages.length === 0 ? (
               <Text style={styles.emptyText}>
                 {connected ? '실시간 모집 채팅이 비어 있습니다.' : '채팅 채널에 연결 중입니다.'}

@@ -152,7 +152,9 @@ export default function HomeScreen({navigation}: any) {
   const [announcement, setAnnouncement] = useState<{
     title: string;
     content: string;
+    imageUrl?: string | null;
   } | null>(null);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [selectedChar, setSelectedCharState] = useState<string | null>(null);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [charData, setCharData] = useState<CharacterData | null>(null);
@@ -606,8 +608,7 @@ export default function HomeScreen({navigation}: any) {
           <TouchableOpacity
             style={styles.announceBanner}
             onPress={() => {
-              Alert.alert(announcement.title, announcement.content);
-              setAnnouncement(null);
+              setShowAnnouncementModal(true);
             }}>
             <Text style={styles.announceText}>공지 · {announcement.title}</Text>
           </TouchableOpacity>
@@ -768,6 +769,40 @@ export default function HomeScreen({navigation}: any) {
             <OutlinedText style={styles.navLabel}>도감</OutlinedText>
           </TouchableOpacity>
         </View>
+
+        <Modal
+          visible={showAnnouncementModal && !!announcement}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAnnouncementModal(false)}>
+          <View style={styles.announcementModalOverlay}>
+            <View style={styles.announcementModalCard}>
+              <ScrollView
+                style={styles.announcementModalScroll}
+                showsVerticalScrollIndicator={false}>
+                <Text style={styles.announcementModalEyebrow}>NOTICE</Text>
+                <Text style={styles.announcementModalTitle}>
+                  {announcement?.title}
+                </Text>
+                {announcement?.imageUrl ? (
+                  <Image
+                    source={{uri: announcement.imageUrl}}
+                    style={styles.announcementModalImage}
+                    resizeMode="cover"
+                  />
+                ) : null}
+                <Text style={styles.announcementModalContent}>
+                  {announcement?.content}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.announcementModalClose}
+                onPress={() => setShowAnnouncementModal(false)}>
+                <Text style={styles.announcementModalCloseText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         <Modal visible={showCharSelect} transparent animationType="fade">
           <View style={styles.charSelectOverlay}>
@@ -1155,6 +1190,75 @@ const styles = StyleSheet.create({
     color: '#6366f1',
     fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  announcementModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(17, 12, 7, 0.62)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+  },
+  announcementModalCard: {
+    width: W * 0.9,
+    maxHeight: H * 0.72,
+    backgroundColor: '#f4e2c0',
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: '#9a6139',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    shadowColor: '#2b1608',
+    shadowOffset: {width: 0, height: 14},
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  announcementModalScroll: {
+    flexGrow: 0,
+  },
+  announcementModalEyebrow: {
+    color: '#8a5b2e',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  announcementModalTitle: {
+    color: '#4f2c10',
+    fontSize: 24,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  announcementModalImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 16,
+    backgroundColor: '#d8c39d',
+    marginBottom: 14,
+  },
+  announcementModalContent: {
+    color: '#5d3a1f',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'left',
+    marginBottom: 14,
+  },
+  announcementModalClose: {
+    alignSelf: 'center',
+    minWidth: 128,
+    borderRadius: 999,
+    backgroundColor: '#8f5732',
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+  },
+  announcementModalCloseText: {
+    color: '#fff7ea',
+    fontSize: 15,
+    fontWeight: '800',
     textAlign: 'center',
   },
   charSelectOverlay: {

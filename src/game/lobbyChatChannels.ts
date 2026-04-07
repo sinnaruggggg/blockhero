@@ -95,16 +95,12 @@ export function buildLobbyChatChannelOptions(
     merged.set(currentChannelId, {id: currentChannelId, count: 0});
   }
 
-  const nextChannelId = Math.max(
-    1,
-    channelInfos.reduce((max, info) => Math.max(max, info.id), currentChannelId ?? 0) + 1,
-  );
-  if (!merged.has(nextChannelId)) {
-    merged.set(nextChannelId, {id: nextChannelId, count: 0});
-  }
-
   const sorted = Array.from(merged.values()).sort((left, right) => left.id - right.id);
   const resolvedLimit = Math.max(1, limit);
+  if (sorted.length === 0) {
+    return [];
+  }
+
   if (sorted.length <= resolvedLimit || currentChannelId == null) {
     return sorted.slice(0, resolvedLimit);
   }

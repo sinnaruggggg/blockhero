@@ -8,6 +8,12 @@ import {
   pickRandomLobbyChatChannel,
   type LobbyChatChannelInfo,
 } from '../game/lobbyChatChannels';
+import {
+  fetchLobbyChatMessages,
+  getLobbyChatChannelKey,
+  insertLobbyChatMessage,
+  type LobbyChatMode,
+} from '../services/lobbyChatService';
 
 export interface LobbyChatMessage {
   id: string;
@@ -17,7 +23,7 @@ export interface LobbyChatMessage {
 }
 
 interface UseLobbyChatOptions {
-  mode: 'battle' | 'raid';
+  mode: LobbyChatMode;
   userId: string;
   nickname: string;
   enabled: boolean;
@@ -26,11 +32,39 @@ interface UseLobbyChatOptions {
 }
 
 const DEFAULT_CAPACITY = 30;
+const MESSAGE_LIMIT = 100;
+const lobbyChatHistoryCache = new Map<string, LobbyChatMessage[]>();
+
+function getLobbyChatHistoryKey(mode: LobbyChatMode, channelId: number) {
+  return `${mode}:${channelId}`;
+}
+
+function readLobbyChatHistory(
+  mode: LobbyChatMode,
+  channelId: number | null | undefined,
+): LobbyChatMessage[] {
+  if (!channelId) {
+    return [];
+  }
+
+  return lobbyChatHistoryCache.get(getLobbyChatHistoryKey(mode, channelId)) ?? [];
+}
+
+function writeLobbyChatHistory(
+  mode: LobbyChatMode,
+  channelId: number,
+  messages: LobbyChatMessage[],
+) {
+  lobbyChatHistoryCache.set(
+    getLobbyChatHistoryKey(mode, channelId),
+    messages.slice(-MESSAGE_LIMIT),
+  );
+}
 
 function appendLobbyChatMessage(
   current: LobbyChatMessage[],
   next: LobbyChatMessage,
-  limit = 60,
+  limit = MESSAGE_LIMIT,
 ) {
   if (current.some(message => message.id === next.id)) {
     return current;
@@ -87,30 +121,47 @@ export function useLobbyChat({
     async (targetChannelId: number, token: number) => {
       cleanupChatChannel();
 
-      setMessages([]);
+      setMessages(readLobbyChatHistory(mode, targetChannelId));
       currentChannelIdRef.current = targetChannelId;
       setCurrentChannelId(targetChannelId);
 
+      const channelKey = getLobbyChatChannelKey(mode, targetChannelId);
       const chatChannel = supabase
-        .channel(`lobby-chat:${mode}:${targetChannelId}`)
-        .on('broadcast', {event: 'message'}, ({payload}: any) => {
-          const incomingId = typeof payload?.id === 'string' ? payload.id : null;
-          const incomingNickname =
-            typeof payload?.nickname === 'string' ? payload.nickname : '알 수 없음';
-          const incomingText = typeof payload?.text === 'string' ? payload.text : '';
-          if (!incomingId || !incomingText) {
-            return;
-          }
+        .channel(`lobby-chat-db:${mode}:${targetChannelId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'lobby_chat_messages',
+            filter: `channel_key=eq.${channelKey}`,
+          },
+          ({payload}: any) => {
+            const incomingId =
+              typeof payload?.new?.id === 'string' ? payload.new.id : null;
+            const incomingNickname =
+              typeof payload?.new?.nickname === 'string'
+                ? payload.new.nickname
+                : 'Unknown';
+            const incomingText =
+              typeof payload?.new?.text === 'string' ? payload.new.text : '';
 
-          setMessages(current =>
-            appendLobbyChatMessage(current, {
-              id: incomingId,
-              nickname: incomingNickname,
-              text: incomingText,
-              self: payload?.userId === userId,
-            }),
-          );
-        });
+            if (!incomingId || !incomingText) {
+              return;
+            }
+
+            setMessages(current => {
+              const nextMessages = appendLobbyChatMessage(current, {
+                id: incomingId,
+                nickname: incomingNickname,
+                text: incomingText,
+                self: payload?.new?.user_id === userId,
+              });
+              writeLobbyChatHistory(mode, targetChannelId, nextMessages);
+              return nextMessages;
+            });
+          },
+        );
 
       chatChannelRef.current = chatChannel;
       await new Promise<void>(resolve => {
@@ -142,6 +193,24 @@ export function useLobbyChat({
             });
             refreshChannelInfos();
           }
+
+          const {data: history} = await fetchLobbyChatMessages(
+            mode,
+            targetChannelId,
+            MESSAGE_LIMIT,
+          );
+
+          if (token === lifecycleTokenRef.current) {
+            const hydratedMessages = history.map(message => ({
+              id: message.id,
+              nickname: message.nickname,
+              text: message.text,
+              self: message.userId === userId,
+            }));
+            writeLobbyChatHistory(mode, targetChannelId, hydratedMessages);
+            setMessages(hydratedMessages);
+          }
+
           resolve();
         });
       });
@@ -159,7 +228,10 @@ export function useLobbyChat({
       const targetOccupancy = getLobbyChatOccupancy(nextInfos, targetChannelId);
       const isCurrentChannel = currentChannelIdRef.current === targetChannelId;
       if (!isCurrentChannel && targetOccupancy >= capacity) {
-        Alert.alert('채널 이동 불가', `채널 ${targetChannelId}번은 정원(${capacity}명)입니다.`);
+        Alert.alert(
+          '채널 이동 불가',
+          `채널 ${targetChannelId}번은 정원(${capacity}명)입니다.`,
+        );
         return false;
       }
 
@@ -174,6 +246,7 @@ export function useLobbyChat({
     if (!directoryChannelRef.current) {
       return;
     }
+
     const nextInfos = refreshChannelInfos();
     const targetChannelId = pickRandomLobbyChatChannel(nextInfos, capacity);
     await switchChannel(targetChannelId);
@@ -245,7 +318,8 @@ export function useLobbyChat({
 
   const sendMessage = useCallback(async () => {
     const text = draft.trim();
-    if (!text || !chatChannelRef.current) {
+    const activeChannelId = currentChannelIdRef.current;
+    if (!text || !chatChannelRef.current || !activeChannelId) {
       return;
     }
 
@@ -255,20 +329,26 @@ export function useLobbyChat({
       text,
       self: true,
     };
-    setMessages(current => appendLobbyChatMessage(current, message));
+    setMessages(current => {
+      const nextMessages = appendLobbyChatMessage(current, message);
+      writeLobbyChatHistory(mode, activeChannelId, nextMessages);
+      return nextMessages;
+    });
     setDraft('');
 
-    await chatChannelRef.current.send({
-      type: 'broadcast',
-      event: 'message',
-      payload: {
-        id: message.id,
-        userId,
-        nickname,
-        text,
-      },
+    const {error} = await insertLobbyChatMessage({
+      id: message.id,
+      mode,
+      channelId: activeChannelId,
+      userId,
+      nickname,
+      text,
     });
-  }, [draft, nickname, userId]);
+
+    if (error) {
+      Alert.alert('채팅 전송 실패', error.message);
+    }
+  }, [draft, mode, nickname, userId]);
 
   const channelOptions = useMemo(
     () => buildLobbyChatChannelOptions(channelInfos, currentChannelId),
