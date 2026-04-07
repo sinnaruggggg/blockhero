@@ -11,7 +11,6 @@ import {
   Image,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {launchImageLibrary} from 'react-native-image-picker';
 import BackImageButton from '../components/BackImageButton';
 import {getAdminStatus} from '../services/adminSync';
 import {supabase} from '../services/supabase';
@@ -347,6 +346,9 @@ export default function AdminScreen({navigation}: any) {
 
   const handlePickAnnouncementImage = async () => {
     try {
+      const {launchImageLibrary} = require('react-native-image-picker') as {
+        launchImageLibrary: (options: Record<string, unknown>) => Promise<any>;
+      };
       const result = await launchImageLibrary({
         mediaType: 'photo',
         includeBase64: true,
