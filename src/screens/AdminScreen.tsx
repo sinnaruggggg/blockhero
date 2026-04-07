@@ -64,7 +64,82 @@ const GRANT_TYPES = [
   {value: 'bomb', label: '💣 폭탄'},
 ];
 
-export default function AdminScreen({navigation}: any) {
+type AdminScreenProps = {
+  navigation: any;
+};
+
+type AdminScreenBoundaryState = {
+  fatalMessage: string | null;
+};
+
+function AdminScreenFallback({
+  navigation,
+  message,
+}: {
+  navigation: any;
+  message: string;
+}) {
+  return (
+    <SafeAreaView style={styles.loadingContainer}>
+      <View style={styles.fallbackCard}>
+        <Text style={styles.fallbackTitle}>관리자 화면을 열 수 없습니다.</Text>
+        <Text style={styles.fallbackMessage}>{message}</Text>
+        <TouchableOpacity
+          style={styles.fallbackButton}
+          onPress={() => navigation.goBack()}>
+          <Text style={styles.fallbackButtonText}>돌아가기</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+class AdminScreenErrorBoundary extends React.Component<
+  AdminScreenProps,
+  AdminScreenBoundaryState
+> {
+  state: AdminScreenBoundaryState = {
+    fatalMessage: null,
+  };
+
+  static getDerivedStateFromError(error: unknown): AdminScreenBoundaryState {
+    return {
+      fatalMessage:
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.',
+    };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('AdminScreen render crash:', error);
+  }
+
+  render() {
+    if (this.state.fatalMessage) {
+      return (
+        <AdminScreenFallback
+          navigation={this.props.navigation}
+          message={this.state.fatalMessage}
+        />
+      );
+    }
+
+    return (
+      <AdminScreenContent
+        navigation={this.props.navigation}
+        onFatalError={(fatalMessage: string) => this.setState({fatalMessage})}
+      />
+    );
+  }
+}
+
+function AdminScreenContent({
+  navigation,
+  onFatalError,
+}: AdminScreenProps & {
+  onFatalError: (message: string) => void;
+}) {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [accessChecked, setAccessChecked] = useState(false);
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
@@ -101,7 +176,17 @@ export default function AdminScreen({navigation}: any) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [queueList, setQueueList] = useState<any[]>([]);
 
+  const handleLoaderException = useCallback((label: string, error: unknown) => {
+    console.warn(`AdminScreen ${label} crash:`, error);
+    const message =
+      error instanceof Error
+        ? error.message
+        : '알 수 없는 오류가 발생했습니다.';
+    Alert.alert('오류', message);
+  }, []);
+
   const loadDashboard = useCallback(async () => {
+    try {
     const {data, error} = await supabase.rpc('get_admin_stats');
     if (error) {
       Alert.alert('오류', 'DB 권한 문제입니다.\nSupabase에서 is_admin = true 설정을 확인하세요.\n\n' + error.message);
@@ -114,7 +199,12 @@ export default function AdminScreen({navigation}: any) {
       activeRooms: Number(s?.active_rooms ?? 0),
       queueSize: Number(s?.queue_size ?? 0),
     });
-  }, []);
+      return true;
+    } catch (error) {
+      handleLoaderException('loadDashboard', error);
+      return false;
+    }
+  }, [handleLoaderException]);
 
   const loadUsers = useCallback(async () => {
     const {data, error} = await supabase.rpc('get_admin_users');
@@ -173,13 +263,14 @@ export default function AdminScreen({navigation}: any) {
     let active = true;
 
     (async () => {
-      const isAdmin = await getAdminStatus();
+      try {
+        const isAdmin = await getAdminStatus();
       if (!active) {
         return;
       }
 
-      setHasAdminAccess(isAdmin);
-      setAccessChecked(true);
+        setHasAdminAccess(isAdmin);
+        setAccessChecked(true);
 
       if (!isAdmin) {
         Alert.alert('접근 제한', '관리자만 접근할 수 있습니다.', [
@@ -188,13 +279,27 @@ export default function AdminScreen({navigation}: any) {
         return;
       }
 
-      loadDashboard();
+        const loaded = await loadDashboard();
+        if (!active || loaded) {
+          return;
+        }
+
+        onFatalError('관리자 대시보드를 불러오지 못했습니다.');
+      } catch (error) {
+        console.warn('AdminScreen bootstrap crash:', error);
+        if (!active) {
+          return;
+        }
+
+        setAccessChecked(true);
+        onFatalError('관리자 화면 초기화 중 오류가 발생했습니다.');
+      }
     })();
 
     return () => {
       active = false;
     };
-  }, [loadDashboard, navigation]);
+  }, [loadDashboard, navigation, onFatalError]);
 
   useEffect(() => {
     if (!hasAdminAccess) {
@@ -202,16 +307,44 @@ export default function AdminScreen({navigation}: any) {
     }
 
     if (tab === 'users') {
-      loadUsers();
+      void loadUsers().catch(error => handleLoaderException('loadUsers', error));
     } else if (tab === 'grants') {
-      loadUsers();
-      loadGrantHistory();
+      void loadUsers().catch(error => handleLoaderException('loadUsers', error));
+      void loadGrantHistory().catch(error =>
+        handleLoaderException('loadGrantHistory', error),
+      );
     } else if (tab === 'announcements') {
-      loadAnnouncements();
+      void loadAnnouncements().catch(error =>
+        handleLoaderException('loadAnnouncements', error),
+      );
     } else if (tab === 'battles') {
-      loadBattles();
+      void loadBattles().catch(error => handleLoaderException('loadBattles', error));
     }
-  }, [hasAdminAccess, tab, loadUsers, loadGrantHistory, loadAnnouncements, loadBattles]);
+  }, [
+    hasAdminAccess,
+    tab,
+    loadUsers,
+    loadGrantHistory,
+    loadAnnouncements,
+    loadBattles,
+    handleLoaderException,
+  ]);
+
+  const resetAnnouncementForm = useCallback(() => {
+    setEditingAnnouncementId(null);
+    setAnnTitle('');
+    setAnnContent('');
+    setAnnImageUrl('');
+    setShowAnnForm(false);
+  }, []);
+
+  const startEditAnnouncement = useCallback((announcement: Announcement) => {
+    setEditingAnnouncementId(announcement.id);
+    setAnnTitle(announcement.title);
+    setAnnContent(announcement.content);
+    setAnnImageUrl(announcement.imageUrl ?? '');
+    setShowAnnForm(true);
+  }, []);
 
   const filteredUsers = users.filter(u =>
     u.nickname?.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -299,22 +432,6 @@ export default function AdminScreen({navigation}: any) {
       ],
     );
   };
-
-  const resetAnnouncementForm = useCallback(() => {
-    setEditingAnnouncementId(null);
-    setAnnTitle('');
-    setAnnContent('');
-    setAnnImageUrl('');
-    setShowAnnForm(false);
-  }, []);
-
-  const startEditAnnouncement = useCallback((announcement: Announcement) => {
-    setEditingAnnouncementId(announcement.id);
-    setAnnTitle(announcement.title);
-    setAnnContent(announcement.content);
-    setAnnImageUrl(announcement.imageUrl ?? '');
-    setShowAnnForm(true);
-  }, []);
 
   const handleSaveAnnouncement = async () => {
     if (!annTitle.trim() || !annContent.trim()) {
@@ -818,6 +935,10 @@ export default function AdminScreen({navigation}: any) {
   );
 }
 
+export default function AdminScreen(props: AdminScreenProps) {
+  return <AdminScreenErrorBoundary {...props} />;
+}
+
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#0f0a2e'},
   loadingContainer: {
@@ -825,6 +946,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f0a2e',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  fallbackCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#1b1444',
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    borderWidth: 1,
+    borderColor: '#312e81',
+  },
+  fallbackTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  fallbackMessage: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
+  fallbackButton: {
+    marginTop: 18,
+    alignSelf: 'center',
+    backgroundColor: '#4f46e5',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  fallbackButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
   },
   header: {
     flexDirection: 'row',
