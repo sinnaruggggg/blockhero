@@ -43,6 +43,7 @@ import {
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {flushPlayerStateNow} from '../services/playerState';
+import {submitRaidLeaderboard} from '../services/rankingService';
 import {supabase} from '../services/supabase';
 import {getRaidInstance, getRaidParticipants, dealRaidDamage, joinRaidInstance, getRaidChannel} from '../services/raidService';
 import {upsertCodexEntry} from '../services/codexService';
@@ -1426,6 +1427,13 @@ export default function RaidScreen({route, navigation}: any) {
     try {
       await upsertCodexEntry(playerIdRef.current, bossStage, myTotalDamage, clearTimeMs);
     } catch {}
+    void submitRaidLeaderboard({
+      bossStage,
+      totalDamage: myTotalDamage,
+      rank: rewardData.rank,
+      bossDefeated: true,
+      clearTimeMs: clearTimeMs ?? 0,
+    });
     void flushPlayerStateNow('raid_rewards');
     navigation.replace('Home');
   };

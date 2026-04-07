@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import GameDialogHost from '../components/GameDialogHost';
 import {flushPlayerStateNow} from '../services/playerState';
+import {installGameAlertBridge} from '../services/gameDialogService';
 import {supabase, getCurrentUserId} from '../services/supabase';
 import {
   checkForUpdate,
@@ -32,6 +34,7 @@ import MissionsScreen from '../screens/MissionsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import RaidLobbyScreen from '../screens/RaidLobbyScreen';
 import RaidScreen from '../screens/RaidScreen';
+import RankingScreen from '../screens/RankingScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ShopScreen from '../screens/ShopScreen';
 import SingleGameScreen from '../screens/SingleGameScreen';
@@ -45,6 +48,8 @@ type AppState = 'intro' | 'login' | 'app';
 const SESSION_ID = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = 1200;
+
+installGameAlertBridge();
 
 export default function AppNavigator() {
   const [appState, setAppState] = useState<AppState>('intro');
@@ -235,6 +240,7 @@ export default function AppNavigator() {
     return (
       <>
         <IntroScreen onPress={handleIntroPress} />
+        <GameDialogHost />
         <UpdateProgressOverlay downloadProgress={downloadProgress} />
       </>
     );
@@ -244,6 +250,7 @@ export default function AppNavigator() {
     return (
       <>
         <LoginScreen onLoginSuccess={() => setAppState('app')} />
+        <GameDialogHost />
         <UpdateProgressOverlay downloadProgress={downloadProgress} />
       </>
     );
@@ -261,6 +268,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Missions" component={MissionsScreen} />
           <Stack.Screen name="Levels" component={LevelsScreen} />
+          <Stack.Screen name="Ranking" component={RankingScreen} />
           <Stack.Screen name="KnightSpriteTuner" component={KnightSpriteTunerScreen} />
           <Stack.Screen name="SingleGame" component={SingleGameScreen} />
           <Stack.Screen name="Endless" component={EndlessScreen} />
@@ -278,6 +286,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Admin" component={AdminScreen} />
         </Stack.Navigator>
       </NavigationContainer>
+      <GameDialogHost />
       <UpdateProgressOverlay downloadProgress={downloadProgress} />
     </>
   );
@@ -312,13 +321,20 @@ const styles = StyleSheet.create({
   },
   modal: {
     width: 280,
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: '#fff4df',
+    borderRadius: 24,
     paddingHorizontal: 18,
     paddingVertical: 20,
+    borderWidth: 2,
+    borderColor: '#8a5e35',
+    shadowColor: '#160d06',
+    shadowOpacity: 0.32,
+    shadowRadius: 16,
+    shadowOffset: {width: 0, height: 8},
+    elevation: 10,
   },
   title: {
-    color: '#111827',
+    color: '#5f3a1e',
     fontSize: 16,
     fontWeight: '800',
     textAlign: 'center',
@@ -326,17 +342,17 @@ const styles = StyleSheet.create({
   },
   barBg: {
     height: 10,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#d8c1a1',
     borderRadius: 999,
     overflow: 'hidden',
   },
   barFill: {
     height: 10,
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7f5a32',
     borderRadius: 999,
   },
   percent: {
-    color: '#4b5563',
+    color: '#73451e',
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',

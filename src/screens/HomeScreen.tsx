@@ -686,7 +686,9 @@ export default function HomeScreen({navigation}: any) {
               <Text style={styles.modeLabel}>보상</Text>
             </TouchableOpacity>
             <View style={styles.characterSpace} />
-            <TouchableOpacity style={styles.modeBtnWrapper}>
+            <TouchableOpacity
+              style={styles.modeBtnWrapper}
+              onPress={() => navigation.navigate('Ranking')}>
               <Image source={IMG_RANKING} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>랭킹</Text>
             </TouchableOpacity>

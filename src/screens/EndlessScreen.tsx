@@ -9,6 +9,7 @@ import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import {flushPlayerStateNow} from '../services/playerState';
+import {submitEndlessLeaderboard} from '../services/rankingService';
 import {useDragDrop} from '../game/useDragDrop';
 import {
   LEVEL_THRESHOLDS,
@@ -112,6 +113,7 @@ export default function EndlessScreen({navigation}: any) {
   const nextMilestoneRef = useRef(0);
   const goldEarnedRef = useRef(0);
   const gameDataRef = useRef<GameData | null>(null);
+  const startedAtRef = useRef(Date.now());
   const skillEffectsRef = useRef(getCharacterSkillEffects(null, null));
   const smallPieceStreakRef = useRef(0);
   const activeSkinIdRef = useRef(0);
@@ -197,6 +199,7 @@ export default function EndlessScreen({navigation}: any) {
   );
 
   useEffect(() => {
+    startedAtRef.current = Date.now();
     resetPieceGenerationHistory();
     const initialBoard = createBoard();
     setBoard(initialBoard);
@@ -352,6 +355,14 @@ export default function EndlessScreen({navigation}: any) {
       score: finalScore,
       lines: finalLines,
       maxCombo: maxComboRef.current,
+    });
+
+    void submitEndlessLeaderboard({
+      finalScore,
+      maxLevel: currentLevel,
+      maxCombo: maxComboRef.current,
+      playTimeMs: startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0,
+      totalLines: finalLines,
     });
 
     void flushPlayerStateNow('endless_end');

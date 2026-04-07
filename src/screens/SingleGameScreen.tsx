@@ -13,6 +13,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {t} from '../i18n';
 import {flushPlayerStateNow} from '../services/playerState';
 import {getAdminStatus} from '../services/adminSync';
+import {submitLevelLeaderboard} from '../services/rankingService';
 import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
@@ -414,6 +415,7 @@ export default function SingleGameScreen({route, navigation}: any) {
   const victoryXpAnim = useRef(new Animated.Value(0)).current;
   const playerAvatarShakeX = useRef(new Animated.Value(0)).current;
   const monsterAvatarShakeX = useRef(new Animated.Value(0)).current;
+  const startedAtRef = useRef(Date.now());
   const levelPieceDifficulty = getLevelPieceDifficulty(activeLevel.world);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const {message: battleNoticeMessage, showNotice: showBattleNotice, clearNotice} =
@@ -513,6 +515,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   useEffect(() => {
     let mounted = true;
+    startedAtRef.current = Date.now();
     resetPieceGenerationHistory();
     gameOverRef.current = false;
     monsterHpRef.current = maxMonsterHp;
@@ -1033,6 +1036,15 @@ export default function SingleGameScreen({route, navigation}: any) {
             await showLevelUpCelebration(charData.level, updatedCharData.level);
           }
         }
+
+        void submitLevelLeaderboard({
+          levelId,
+          stars,
+          totalDamage: totalDamageRef.current,
+          maxCombo: maxComboRef.current,
+          clearTimeMs:
+            startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0,
+        });
 
         void flushPlayerStateNow('single_game_victory');
         gameDataRef.current = updated;

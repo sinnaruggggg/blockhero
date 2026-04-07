@@ -1,9 +1,10 @@
-import {Alert, Linking, Platform} from 'react-native';
+import {Linking, Platform} from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import {isNewerVersion} from './updateVersion';
+import {openGameDialog} from './gameDialogService';
 
-export const CURRENT_VERSION_CODE = 157;
-export const CURRENT_VERSION_NAME = '1.3.29';
+export const CURRENT_VERSION_CODE = 158;
+export const CURRENT_VERSION_NAME = '1.3.30';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const APK_MIME = 'application/vnd.android.package-archive';
@@ -94,10 +95,15 @@ export function showUpdateDialog(
   update: UpdateInfo,
   onStartDownload: (update: UpdateInfo) => void,
 ) {
-  Alert.alert('업데이트', formatUpdateDialogMessage(update), [
-    {text: '나중에', style: 'cancel'},
-    {text: '업데이트', onPress: () => onStartDownload(update)},
-  ]);
+  openGameDialog({
+    title: '업데이트',
+    message: formatUpdateDialogMessage(update),
+    variant: 'notice',
+    buttons: [
+      {text: '나중에', style: 'cancel'},
+      {text: '업데이트', onPress: () => onStartDownload(update)},
+    ],
+  });
 }
 
 export async function downloadAndInstall(

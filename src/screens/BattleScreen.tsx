@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {View, Text, StyleSheet, Alert, TouchableOpacity, Animated, Vibration, Dimensions} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
+import {submitBattleLeaderboard} from '../services/rankingService';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
@@ -265,11 +266,15 @@ export default function BattleScreen({route, navigation}: any) {
   const rematchAcceptedRef = useRef(false);
   const opponentRematchAcceptedRef = useRef(false);
   const rematchStartingRef = useRef(false);
+  const isRematchRoundRef = useRef(false);
+  const battleResultSubmittedRef = useRef(false);
   const resetBattleStateRef = useRef<((nextSeed: number) => Promise<void>) | null>(null);
   const startRematchRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    isRematchRoundRef.current = false;
+    battleResultSubmittedRef.current = false;
     (async () => {
       try {
         playerIdRef.current = await getPlayerId();
@@ -485,6 +490,8 @@ export default function BattleScreen({route, navigation}: any) {
       seedRef.current = nextSeed;
       roundRef.current = 1;
       gameOverRef.current = false;
+      battleResultSubmittedRef.current = false;
+      isRematchRoundRef.current = true;
       opponentDisconnectedRef.current = false;
       rematchAcceptedRef.current = false;
       opponentRematchAcceptedRef.current = false;
@@ -576,6 +583,18 @@ export default function BattleScreen({route, navigation}: any) {
       .eq('player_id', playerIdRef.current)
       .then();
   }, [roomCode]);
+
+  useEffect(() => {
+    if (!gameOver || !result || battleResultSubmittedRef.current) {
+      return;
+    }
+
+    battleResultSubmittedRef.current = true;
+    void submitBattleLeaderboard({
+      won: result === 'win',
+      rematchWin: isRematchRoundRef.current && result === 'win',
+    });
+  }, [gameOver, result]);
 
   const handlePlace = useCallback(
     (pieceIndex: number, row: number, col: number) => {

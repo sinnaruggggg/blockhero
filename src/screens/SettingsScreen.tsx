@@ -1,18 +1,17 @@
 import React, {useEffect, useState} from 'react';
 import {
   Alert,
-  Dimensions,
   Linking,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import BackImageButton from '../components/BackImageButton';
+import GamePanel from '../components/GamePanel';
+import MenuScreenFrame from '../components/MenuScreenFrame';
 import {getAdminStatus} from '../services/adminSync';
+import {openGameDialog, showGameConfirm} from '../services/gameDialogService';
 import {supabase} from '../services/supabase';
 import {CURRENT_VERSION_NAME} from '../services/updateService';
 import {
@@ -22,8 +21,6 @@ import {
   type SkillTriggerNoticeMode,
 } from '../stores/gameSettings';
 
-const {width: screenWidth} = Dimensions.get('window');
-
 const NOTICE_MODE_OPTIONS: Array<{
   label: string;
   value: SkillTriggerNoticeMode;
@@ -32,19 +29,41 @@ const NOTICE_MODE_OPTIONS: Array<{
   {
     label: '끄기',
     value: 'off',
-    description: '전투 중 스킬 발동 메시지를 표시하지 않습니다.',
+    description: '전투 중 스킬과 효과 알림을 표시하지 않습니다.',
   },
   {
     label: '확률·조건만',
     value: 'triggered_only',
-    description: '회피, 부활, 자동 회복, 추가 타격처럼 실제 발동 이벤트만 표시합니다.',
+    description: '회피, 부활, 자동 회복, 추가타처럼 실제 발동한 이벤트만 보여줍니다.',
   },
   {
     label: '모든 효과',
     value: 'all_effects',
-    description: '조건 발동 외에도 콤보, 피버, 라인 강화 등 적용된 효과를 함께 표시합니다.',
+    description: '기본 발동 외에도 콤보, 피버, 강화 적용 순간까지 같이 보여줍니다.',
   },
 ];
+
+function ToggleRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <View style={styles.toggleRow}>
+      <Text style={styles.toggleLabel}>{label}</Text>
+      <Switch
+        value={value}
+        trackColor={{false: '#d1bea4', true: '#c59c55'}}
+        thumbColor={value ? '#6e4926' : '#8a7b67'}
+        onValueChange={onChange}
+      />
+    </View>
+  );
+}
 
 export default function SettingsScreen({navigation}: any) {
   const [email, setEmail] = useState('');
@@ -84,338 +103,335 @@ export default function SettingsScreen({navigation}: any) {
     await saveGameSettings({[key]: value});
   };
 
-  const handleLogout = () => {
-    Alert.alert('로그아웃', '정말 로그아웃하시겠습니까?', [
-      {text: '취소', style: 'cancel'},
-      {
-        text: '로그아웃',
-        style: 'destructive',
-        onPress: () => supabase.auth.signOut(),
-      },
-    ]);
+  const handleLogout = async () => {
+    const confirmed = await showGameConfirm({
+      title: '로그아웃',
+      message: '정말 로그아웃하시겠습니까?',
+      confirmText: '로그아웃',
+    });
+    if (confirmed) {
+      await supabase.auth.signOut();
+    }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      '계정 삭제',
-      '정말 계정을 삭제하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.',
-      [
-        {text: '취소', style: 'cancel'},
-        {
-          text: '삭제',
-          style: 'destructive',
-          onPress: async () => {
-            Alert.alert('알림', '계정 삭제 요청이 접수되었습니다.');
-            await supabase.auth.signOut();
-          },
-        },
-      ],
-    );
+  const handleDeleteAccount = async () => {
+    const confirmed = await showGameConfirm({
+      title: '계정 삭제',
+      message: '정말 계정을 삭제하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.',
+      confirmText: '삭제',
+      variant: 'error',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    openGameDialog({title: '알림', message: '계정 삭제 요청이 접수되었습니다.'});
+    await supabase.auth.signOut();
   };
 
-  const handleClearCache = () => {
-    Alert.alert('캐시 삭제', '로컬 캐시를 삭제하시겠습니까?', [
-      {text: '취소', style: 'cancel'},
-      {
-        text: '삭제',
-        onPress: async () => {
-          Alert.alert('알림', '캐시가 삭제되었습니다.');
-        },
-      },
-    ]);
+  const handleClearCache = async () => {
+    const confirmed = await showGameConfirm({
+      title: '캐시 삭제',
+      message: '로컬 캐시를 삭제하시겠습니까?',
+      confirmText: '삭제',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    openGameDialog({title: '알림', message: '캐시가 삭제되었습니다.'});
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <View style={styles.backBtn}>
-            <BackImageButton onPress={() => navigation.goBack()} size={42} />
-          </View>
-          <Text style={styles.title}>설정</Text>
-          <View style={styles.headerSpacer} />
+    <MenuScreenFrame
+      title="설정"
+      subtitle="사운드, 알림, 계정과 지원 메뉴를 한 번에 관리합니다."
+      onBack={() => navigation.goBack()}>
+      <GamePanel>
+        <Text style={styles.sectionTitle}>계정 정보</Text>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoLabel}>로그인 계정</Text>
+          <Text style={styles.infoValue}>{email || '불러오는 중...'}</Text>
         </View>
+      </GamePanel>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>계정 정보</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>로그인 계정</Text>
-            <Text style={styles.infoValue}>{email || '불러오는 중...'}</Text>
-          </View>
-        </View>
+      <GamePanel>
+        <Text style={styles.sectionTitle}>사운드와 입력</Text>
+        <ToggleRow
+          label="배경 음악"
+          value={bgmEnabled}
+          onChange={async value => {
+            setBgmEnabled(value);
+            await handleToggleSetting('bgm', value);
+          }}
+        />
+        <ToggleRow
+          label="효과음"
+          value={sfxEnabled}
+          onChange={async value => {
+            setSfxEnabled(value);
+            await handleToggleSetting('sfx', value);
+          }}
+        />
+        <ToggleRow
+          label="진동"
+          value={vibrationEnabled}
+          onChange={async value => {
+            setVibrationEnabled(value);
+            await handleToggleSetting('vibration', value);
+          }}
+        />
+      </GamePanel>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>사운드 및 진동</Text>
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>배경음악</Text>
-            <Switch
-              value={bgmEnabled}
-              trackColor={{false: '#ddd', true: '#a5b4fc'}}
-              thumbColor={bgmEnabled ? '#6366f1' : '#999'}
-              onValueChange={async value => {
-                setBgmEnabled(value);
-                await handleToggleSetting('bgm', value);
-              }}
-            />
-          </View>
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>효과음</Text>
-            <Switch
-              value={sfxEnabled}
-              trackColor={{false: '#ddd', true: '#a5b4fc'}}
-              thumbColor={sfxEnabled ? '#6366f1' : '#999'}
-              onValueChange={async value => {
-                setSfxEnabled(value);
-                await handleToggleSetting('sfx', value);
-              }}
-            />
-          </View>
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>진동</Text>
-            <Switch
-              value={vibrationEnabled}
-              trackColor={{false: '#ddd', true: '#a5b4fc'}}
-              thumbColor={vibrationEnabled ? '#6366f1' : '#999'}
-              onValueChange={async value => {
-                setVibrationEnabled(value);
-                await handleToggleSetting('vibration', value);
-              }}
-            />
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>전투 알림</Text>
-          <Text style={styles.settingHelp}>
-            스킬이나 효과가 전투 중 실제로 적용될 때 표시할 메시지 범위를 선택합니다.
-          </Text>
-          <View style={styles.optionList}>
-            {NOTICE_MODE_OPTIONS.map(option => {
-              const active = option.value === skillNoticeMode;
-              return (
-                <TouchableOpacity
-                  key={option.value}
-                  activeOpacity={0.86}
-                  style={[styles.noticeOption, active && styles.noticeOptionActive]}
-                  onPress={async () => {
-                    setSkillNoticeMode(option.value);
-                    await saveSkillTriggerNoticeMode(option.value);
-                  }}>
-                  <View style={styles.noticeOptionHeader}>
-                    <Text
-                      style={[
-                        styles.noticeOptionTitle,
-                        active && styles.noticeOptionTitleActive,
-                      ]}>
-                      {option.label}
-                    </Text>
-                    {active && <Text style={styles.noticeOptionBadge}>사용 중</Text>}
-                  </View>
-                  <Text
-                    style={[
-                      styles.noticeOptionDescription,
-                      active && styles.noticeOptionDescriptionActive,
-                    ]}>
-                    {option.description}
+      <GamePanel>
+        <Text style={styles.sectionTitle}>전투 알림</Text>
+        <Text style={styles.sectionHint}>
+          스킬과 전투 효과 알림 범위를 선택합니다.
+        </Text>
+        <View style={styles.optionList}>
+          {NOTICE_MODE_OPTIONS.map(option => {
+            const active = option.value === skillNoticeMode;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                activeOpacity={0.9}
+                style={[styles.optionCard, active && styles.optionCardActive]}
+                onPress={async () => {
+                  setSkillNoticeMode(option.value);
+                  await saveSkillTriggerNoticeMode(option.value);
+                }}>
+                <View style={styles.optionHeader}>
+                  <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>
+                    {option.label}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  {active ? <Text style={styles.optionBadge}>사용 중</Text> : null}
+                </View>
+                <Text
+                  style={[
+                    styles.optionDescription,
+                    active && styles.optionDescriptionActive,
+                  ]}>
+                  {option.description}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+      </GamePanel>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>알림</Text>
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>푸시 알림</Text>
-            <Switch
-              value={notificationEnabled}
-              trackColor={{false: '#ddd', true: '#a5b4fc'}}
-              thumbColor={notificationEnabled ? '#6366f1' : '#999'}
-              onValueChange={async value => {
-                setNotificationEnabled(value);
-                await handleToggleSetting('notification', value);
-              }}
-            />
-          </View>
-        </View>
+      <GamePanel>
+        <Text style={styles.sectionTitle}>일반 알림</Text>
+        <ToggleRow
+          label="푸시 알림"
+          value={notificationEnabled}
+          onChange={async value => {
+            setNotificationEnabled(value);
+            await handleToggleSetting('notification', value);
+          }}
+        />
+      </GamePanel>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>지원</Text>
-          <TouchableOpacity style={styles.menuItem} onPress={handleClearCache}>
-            <Text style={styles.menuText}>캐시 삭제</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() =>
-              Alert.alert(
-                '앱 정보',
-                `앱 이름: BlockHero\n버전: ${CURRENT_VERSION_NAME}\n2026 BlockHero`,
-              )
-            }>
-            <Text style={styles.menuText}>앱 정보</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Linking.openURL('https://blockhero.game/privacy')}>
-            <Text style={styles.menuText}>개인정보 처리방침</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Linking.openURL('https://blockhero.game/terms')}>
-            <Text style={styles.menuText}>이용약관</Text>
-          </TouchableOpacity>
-        </View>
+      <GamePanel>
+        <Text style={styles.sectionTitle}>지원</Text>
+        <TouchableOpacity style={styles.menuItem} onPress={handleClearCache}>
+          <Text style={styles.menuText}>캐시 삭제</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() =>
+            Alert.alert(
+              '앱 정보',
+              `버전: ${CURRENT_VERSION_NAME}\n제작: BlockHero\nCopyright 2026`,
+            )
+          }>
+          <Text style={styles.menuText}>앱 정보</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => Linking.openURL('https://blockhero.game/privacy')}>
+          <Text style={styles.menuText}>개인정보 처리방침</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.menuItem, styles.menuItemLast]}
+          onPress={() => Linking.openURL('https://blockhero.game/terms')}>
+          <Text style={styles.menuText}>이용약관</Text>
+        </TouchableOpacity>
+      </GamePanel>
 
-        {isAdmin && (
-          <TouchableOpacity
-            style={styles.adminBtn}
-            onPress={() => navigation.navigate('Admin')}>
-            <Text style={styles.adminText}>관리자 모드</Text>
-          </TouchableOpacity>
-        )}
+      {isAdmin ? (
+        <TouchableOpacity
+          style={styles.adminButton}
+          onPress={() => navigation.navigate('Admin')}>
+          <Text style={styles.adminButtonText}>관리자 모드</Text>
+        </TouchableOpacity>
+      ) : null}
 
-        <View style={styles.card}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Text style={styles.logoutText}>로그아웃</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteAccount}>
-            <Text style={styles.deleteText}>계정 삭제</Text>
-          </TouchableOpacity>
-        </View>
+      <GamePanel>
+        <TouchableOpacity style={styles.actionButton} onPress={handleLogout}>
+          <Text style={styles.actionButtonText}>로그아웃</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={handleDeleteAccount}>
+          <Text style={styles.deleteButtonText}>계정 삭제</Text>
+        </TouchableOpacity>
+      </GamePanel>
 
-        <Text style={styles.version}>버전 {CURRENT_VERSION_NAME}</Text>
-      </ScrollView>
-    </SafeAreaView>
+      <Text style={styles.versionText}>버전 {CURRENT_VERSION_NAME}</Text>
+    </MenuScreenFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {backgroundColor: '#f0edf5', flex: 1},
-  scroll: {padding: 16, paddingBottom: 40},
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+  sectionTitle: {
+    color: '#4f3118',
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 10,
   },
-  backBtn: {width: 60},
-  headerSpacer: {width: 60},
-  title: {color: '#333', fontSize: 20, fontWeight: '800'},
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    elevation: 2,
+  sectionHint: {
+    color: '#876346',
+    fontSize: 13,
+    lineHeight: 19,
     marginBottom: 12,
-    minWidth: screenWidth - 32,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
   },
-  sectionTitle: {color: '#333', fontSize: 16, fontWeight: '800', marginBottom: 12},
-  infoRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
+  infoCard: {
+    backgroundColor: '#f9ecd6',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d2b089',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
-  infoLabel: {color: '#666', fontSize: 14},
-  infoValue: {
-    color: '#333',
-    flexShrink: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  settingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  settingLabel: {color: '#333', fontSize: 15, fontWeight: '600'},
-  settingHelp: {
-    color: '#64748b',
+  infoLabel: {
+    color: '#886447',
     fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 12,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  infoValue: {
+    color: '#4b2f18',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8ecd6',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d2b089',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  toggleLabel: {
+    color: '#4f3118',
+    fontSize: 15,
+    fontWeight: '800',
   },
   optionList: {
     gap: 10,
   },
-  noticeOption: {
-    borderColor: '#dbe4ff',
-    borderRadius: 14,
-    borderWidth: 1,
+  optionCard: {
+    backgroundColor: '#fff9ef',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#d5b48f',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
   },
-  noticeOptionActive: {
-    backgroundColor: '#eef2ff',
-    borderColor: '#6366f1',
+  optionCardActive: {
+    backgroundColor: '#f5e6cb',
+    borderColor: '#7f5a32',
   },
-  noticeOptionHeader: {
-    alignItems: 'center',
+  optionHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  noticeOptionTitle: {
-    color: '#1f2937',
-    fontSize: 14,
-    fontWeight: '800',
+  optionTitle: {
+    color: '#4f3118',
+    fontSize: 15,
+    fontWeight: '900',
   },
-  noticeOptionTitleActive: {
-    color: '#3730a3',
+  optionTitleActive: {
+    color: '#6d4622',
   },
-  noticeOptionBadge: {
-    color: '#4338ca',
+  optionBadge: {
+    color: '#7f5a32',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  noticeOptionDescription: {
-    color: '#64748b',
-    fontSize: 12,
-    lineHeight: 17,
+  optionDescription: {
+    color: '#876346',
+    fontSize: 13,
+    lineHeight: 18,
   },
-  noticeOptionDescriptionActive: {
-    color: '#4338ca',
+  optionDescriptionActive: {
+    color: '#6d4929',
   },
   menuItem: {
-    borderBottomColor: '#f1f5f9',
     borderBottomWidth: 1,
+    borderBottomColor: 'rgba(129, 95, 55, 0.18)',
     paddingVertical: 14,
   },
-  menuText: {color: '#333', fontSize: 15, fontWeight: '600'},
-  adminBtn: {
-    alignItems: 'center',
-    backgroundColor: '#4338ca',
-    borderRadius: 12,
-    marginBottom: 12,
-    marginHorizontal: 4,
-    paddingVertical: 14,
+  menuItemLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 4,
   },
-  adminText: {color: '#fff', fontSize: 15, fontWeight: '800'},
-  logoutBtn: {
+  menuText: {
+    color: '#4f3118',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  adminButton: {
+    backgroundColor: '#7f5a32',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#4f3118',
     alignItems: 'center',
-    backgroundColor: '#eef2ff',
-    borderRadius: 10,
+    justifyContent: 'center',
+    minHeight: 54,
+    marginBottom: 14,
+  },
+  adminButtonText: {
+    color: '#fff6e8',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  actionButton: {
+    backgroundColor: '#f5e6cf',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#b48a60',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
     marginBottom: 10,
-    paddingVertical: 14,
   },
-  logoutText: {color: '#4338ca', fontSize: 15, fontWeight: '800'},
-  deleteBtn: {
-    alignItems: 'center',
-    backgroundColor: '#fee2e2',
-    borderRadius: 10,
-    paddingVertical: 14,
+  actionButtonText: {
+    color: '#6b4522',
+    fontSize: 15,
+    fontWeight: '900',
   },
-  deleteText: {color: '#dc2626', fontSize: 15, fontWeight: '800'},
-  version: {
-    color: '#94a3b8',
+  deleteButton: {
+    backgroundColor: '#f3ddd4',
+    borderColor: '#b86b58',
+    marginBottom: 0,
+  },
+  deleteButtonText: {
+    color: '#8b3326',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  versionText: {
+    color: '#ead6b6',
     fontSize: 12,
-    marginTop: 8,
+    fontWeight: '700',
     textAlign: 'center',
+    marginTop: 6,
   },
 });

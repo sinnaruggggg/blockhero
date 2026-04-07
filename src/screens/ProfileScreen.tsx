@@ -1,15 +1,15 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import BackImageButton from '../components/BackImageButton';
+import GamePanel from '../components/GamePanel';
+import MenuScreenFrame from '../components/MenuScreenFrame';
+import {openGameDialog} from '../services/gameDialogService';
 import {supabase, getCurrentUserId, getProfile} from '../services/supabase';
 import {
   GameData,
@@ -32,7 +32,15 @@ import {
 const CHARACTER_OPTIONS = CHARACTER_CLASSES.map(character => ({
   id: character.id,
   name: character.name,
+  emoji: character.emoji,
 }));
+
+const ITEM_SUMMARY = [
+  {key: 'hammer', emoji: '🔨', label: '망치'},
+  {key: 'refresh', emoji: '🔄', label: '새로고침'},
+  {key: 'bomb', emoji: '💣', label: '폭탄'},
+  {key: 'addTurns', emoji: '➕', label: '턴 추가'},
+] as const;
 
 export default function ProfileScreen({navigation}: any) {
   const [gameData, setGameData] = useState<GameData | null>(null);
@@ -51,6 +59,13 @@ export default function ProfileScreen({navigation}: any) {
     levelsCleared: 0,
     maxCombo: 0,
   });
+
+  const selectedCharacterMeta = useMemo(
+    () =>
+      CHARACTER_OPTIONS.find(character => character.id === selectedCharacter) ??
+      CHARACTER_OPTIONS[0],
+    [selectedCharacter],
+  );
 
   const loadAll = useCallback(async () => {
     const [loadedGameData, savedNickname, endlessStats, levelProgress, charId] =
@@ -105,26 +120,29 @@ export default function ProfileScreen({navigation}: any) {
     loadAll();
   }, [loadAll]);
 
-  const checkNickname = async (value: string) => {
-    if (value.trim().length < 2) {
-      setNameAvailable(null);
-      return;
-    }
+  const checkNickname = useCallback(
+    async (value: string) => {
+      if (value.trim().length < 2) {
+        setNameAvailable(null);
+        return;
+      }
 
-    setChecking(true);
-    const {data} = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('nickname', value.trim())
-      .neq('id', userId || '')
-      .limit(1);
-    setNameAvailable(!data || data.length === 0);
-    setChecking(false);
-  };
+      setChecking(true);
+      const {data} = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('nickname', value.trim())
+        .neq('id', userId || '')
+        .limit(1);
+      setNameAvailable(!data || data.length === 0);
+      setChecking(false);
+    },
+    [userId],
+  );
 
-  const handleSaveName = async () => {
+  const handleSaveName = useCallback(async () => {
     if (nameInput.trim().length < 2) {
-      Alert.alert('알림', '닉네임은 2자 이상이어야 합니다.');
+      openGameDialog({title: '알림', message: '닉네임은 2자 이상이어야 합니다.'});
       return;
     }
 
@@ -142,38 +160,38 @@ export default function ProfileScreen({navigation}: any) {
         setNicknameState(result.nickname);
         setNameChanged(result.nicknameChanged);
         setEditingName(false);
-        Alert.alert('?뚮┝', '?됰꽕?꾩씠 蹂寃쎈릺?덉뒿?덈떎.');
+        openGameDialog({title: '알림', message: '닉네임이 변경되었습니다.'});
         return;
       } catch (error) {
         const code = getEconomyErrorCode(error);
         if (code === 'not_enough_diamonds_for_nickname') {
-          Alert.alert('?뚮┝', '?ㅼ씠?꾧? 遺議깊빀?덈떎. (200 ?ㅼ씠???꾩슂)');
+          openGameDialog({title: '알림', message: '다이아가 부족합니다. (200 다이아 필요)'});
           return;
         }
         if (code === 'nickname_taken') {
-          Alert.alert('?뚮┝', '?대? ?ъ슜 以묒씤 ?됰꽕?꾩엯?덈떎.');
+          openGameDialog({title: '알림', message: '이미 사용 중인 닉네임입니다.'});
           return;
         }
 
-        Alert.alert('?뚮┝', '?됰꽕?꾩씠 蹂寃쎄릺吏 ?딆븯?듬땲??');
+        openGameDialog({title: '알림', message: '닉네임이 변경되지 않았습니다.'});
         return;
       }
     }
 
     if (data && data.length > 0) {
-      Alert.alert('알림', '이미 사용 중인 닉네임입니다.');
+      openGameDialog({title: '알림', message: '이미 사용 중인 닉네임입니다.'});
       return;
     }
 
     if (nameChanged) {
       if (!gameData || gameData.diamonds < 200) {
-        Alert.alert('알림', '다이아가 부족합니다. (200 다이아 필요)');
+        openGameDialog({title: '알림', message: '다이아가 부족합니다. (200 다이아 필요)'});
         return;
       }
 
       const updatedGameData = await spendDiamonds(gameData, 200);
       if (!updatedGameData) {
-        Alert.alert('알림', '다이아가 부족합니다.');
+        openGameDialog({title: '알림', message: '다이아가 부족합니다.'});
         return;
       }
       setGameData(updatedGameData);
@@ -194,307 +212,400 @@ export default function ProfileScreen({navigation}: any) {
 
     setNameChanged(true);
     setEditingName(false);
-    Alert.alert('알림', '닉네임이 변경되었습니다.');
-  };
+    openGameDialog({title: '알림', message: '닉네임이 변경되었습니다.'});
+  }, [gameData, nameChanged, nameInput, userId]);
 
   if (!gameData) {
     return null;
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <View style={styles.backBtn}>
-            <BackImageButton onPress={() => navigation.goBack()} size={42} />
-          </View>
-          <Text style={styles.title}>프로필</Text>
-          <View style={styles.headerSpacer} />
+    <MenuScreenFrame
+      title="프로필"
+      subtitle="내 대표 캐릭터, 자원, 전적을 한 눈에 확인합니다."
+      onBack={() => navigation.goBack()}>
+      <GamePanel style={styles.heroPanel}>
+        <View style={styles.avatarBadge}>
+          <Text style={styles.avatarText}>
+            {(nickname.charAt(0) || 'P').toUpperCase()}
+          </Text>
         </View>
-
-        <View style={styles.card}>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>
-              {(nickname.charAt(0) || 'P').toUpperCase()}
+        <Text style={styles.nickname}>{nickname}</Text>
+        {email ? <Text style={styles.email}>{email}</Text> : null}
+        <View style={styles.heroMetaRow}>
+          <View style={styles.heroMetaChip}>
+            <Text style={styles.heroMetaLabel}>대표 직업</Text>
+            <Text style={styles.heroMetaValue}>
+              {selectedCharacterMeta.emoji} {selectedCharacterMeta.name}
             </Text>
           </View>
-          <Text style={styles.nickname}>{nickname}</Text>
-          {email ? <Text style={styles.email}>{email}</Text> : null}
+          <View style={styles.heroMetaChip}>
+            <Text style={styles.heroMetaLabel}>하트 상태</Text>
+            <Text style={styles.heroMetaValue}>
+              {formatHeartStatus(gameData.hearts, getConfiguredMaxHearts(MAX_HEARTS))}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => {
+            setNameInput(nickname);
+            setNameAvailable(null);
+            setEditingName(true);
+          }}>
+          <Text style={styles.primaryButtonText}>
+            닉네임 변경 {nameChanged ? '(200 다이아)' : '(무료)'}
+          </Text>
+        </TouchableOpacity>
+      </GamePanel>
 
-          <TouchableOpacity
-            style={styles.editNameBtn}
-            onPress={() => {
-              setNameInput(nickname);
+      {editingName ? (
+        <GamePanel>
+          <Text style={styles.sectionTitle}>닉네임 변경</Text>
+          <Text style={styles.sectionHint}>
+            2~10자까지 사용할 수 있습니다. 중복 확인 후 저장하세요.
+          </Text>
+          {nameChanged ? (
+            <Text style={styles.warningText}>
+              다음부터는 변경 시 200 다이아가 소모됩니다.
+            </Text>
+          ) : null}
+          <TextInput
+            autoFocus
+            maxLength={10}
+            placeholder="새 닉네임 입력"
+            placeholderTextColor="#9a7b58"
+            style={styles.nameInput}
+            value={nameInput}
+            onChangeText={value => {
+              setNameInput(value);
               setNameAvailable(null);
-              setEditingName(true);
-            }}>
-            <Text style={styles.editNameText}>
-              닉네임 변경 {nameChanged ? '(200 다이아)' : '(무료)'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            }}
+            onEndEditing={() => checkNickname(nameInput)}
+          />
+          {checking ? <Text style={styles.infoText}>중복 확인 중...</Text> : null}
+          {nameAvailable === true ? (
+            <Text style={styles.successText}>사용 가능한 닉네임입니다.</Text>
+          ) : null}
+          {nameAvailable === false ? (
+            <Text style={styles.warningText}>이미 사용 중인 닉네임입니다.</Text>
+          ) : null}
+          <View style={styles.buttonRow}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.flexButton]}
+              onPress={() => setEditingName(false)}>
+              <Text style={styles.secondaryButtonText}>취소</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.secondaryButton, styles.flexButton]}
+              onPress={() => checkNickname(nameInput)}>
+              <Text style={styles.secondaryButtonText}>중복 확인</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.primaryButton, styles.flexButton]}
+              onPress={handleSaveName}>
+              <Text style={styles.primaryButtonText}>저장</Text>
+            </TouchableOpacity>
+          </View>
+        </GamePanel>
+      ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>캐릭터 선택</Text>
-          <View style={styles.resourceRow}>
-            {CHARACTER_OPTIONS.map(character => (
+      <GamePanel>
+        <Text style={styles.sectionTitle}>캐릭터 선택</Text>
+        <View style={styles.characterGrid}>
+          {CHARACTER_OPTIONS.map(character => {
+            const active = selectedCharacter === character.id;
+            return (
               <TouchableOpacity
                 key={character.id}
-                style={[
-                  styles.charItem,
-                  selectedCharacter === character.id && styles.charItemActive,
-                ]}
+                style={[styles.characterCard, active && styles.characterCardActive]}
                 onPress={async () => {
                   setSelectedCharacterState(character.id);
                   await setSelectedCharacter(character.id);
-                  Alert.alert('알림', `${character.name}로 변경되었습니다.`);
+                  openGameDialog({
+                    title: '알림',
+                    message: `${character.name}로 변경되었습니다.`,
+                  });
                 }}>
-                <Text style={styles.charName}>{character.name}</Text>
+                <Text style={styles.characterEmoji}>{character.emoji}</Text>
+                <Text
+                  style={[
+                    styles.characterName,
+                    active && styles.characterNameActive,
+                  ]}>
+                  {character.name}
+                </Text>
               </TouchableOpacity>
-            ))}
+            );
+          })}
+        </View>
+      </GamePanel>
+
+      <GamePanel>
+        <Text style={styles.sectionTitle}>보유 재화</Text>
+        <View style={styles.metricGrid}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricEmoji}>❤️</Text>
+            <Text style={styles.metricValue}>
+              {formatHeartStatus(gameData.hearts, getConfiguredMaxHearts(MAX_HEARTS))}
+            </Text>
+            <Text style={styles.metricLabel}>하트</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricEmoji}>🪙</Text>
+            <Text style={styles.metricValue}>{gameData.gold}</Text>
+            <Text style={styles.metricLabel}>골드</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricEmoji}>💎</Text>
+            <Text style={styles.metricValue}>{gameData.diamonds}</Text>
+            <Text style={styles.metricLabel}>다이아</Text>
           </View>
         </View>
+      </GamePanel>
 
-        {editingName && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>닉네임 변경</Text>
-            {nameChanged && (
-              <Text style={styles.costNotice}>
-                다음부터는 변경 시 200 다이아가 소모됩니다.
-              </Text>
-            )}
-            <TextInput
-              autoFocus
-              maxLength={10}
-              placeholder="새 닉네임을 입력하세요 (2~10자)"
-              placeholderTextColor="#999"
-              style={styles.nameInput}
-              value={nameInput}
-              onChangeText={value => {
-                setNameInput(value);
-                setNameAvailable(null);
-              }}
-              onEndEditing={() => checkNickname(nameInput)}
-            />
-            {checking && <Text style={styles.checkText}>중복 확인 중...</Text>}
-            {nameAvailable === true && (
-              <Text style={styles.availableText}>사용 가능한 닉네임입니다.</Text>
-            )}
-            {nameAvailable === false && (
-              <Text style={styles.unavailableText}>
-                이미 사용 중인 닉네임입니다.
-              </Text>
-            )}
-
-            <View style={styles.btnRow}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setEditingName(false)}>
-                <Text style={styles.btnText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.checkBtn}
-                onPress={() => checkNickname(nameInput)}>
-                <Text style={styles.btnText}>중복 확인</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleSaveName}>
-                <Text style={styles.btnText}>변경</Text>
-              </TouchableOpacity>
-            </View>
+      <GamePanel>
+        <Text style={styles.sectionTitle}>기록</Text>
+        <View style={styles.metricGrid}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>{stats.totalGames}</Text>
+            <Text style={styles.metricLabel}>총 게임</Text>
           </View>
-        )}
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>보유 재화</Text>
-          <View style={styles.resourceRow}>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>❤️</Text>
-              <Text style={styles.resourceValue}>
-                {formatHeartStatus(gameData.hearts, getConfiguredMaxHearts(MAX_HEARTS))}
-              </Text>
-              <Text style={styles.resourceLabel}>하트</Text>
-            </View>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>🪙</Text>
-              <Text style={styles.resourceValue}>{gameData.gold}</Text>
-              <Text style={styles.resourceLabel}>골드</Text>
-            </View>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>💎</Text>
-              <Text style={styles.resourceValue}>{gameData.diamonds}</Text>
-              <Text style={styles.resourceLabel}>다이아</Text>
-            </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>{stats.levelsCleared}</Text>
+            <Text style={styles.metricLabel}>클리어 스테이지</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>{stats.highScore.toLocaleString()}</Text>
+            <Text style={styles.metricLabel}>최고 점수</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>{stats.maxCombo}</Text>
+            <Text style={styles.metricLabel}>최대 콤보</Text>
           </View>
         </View>
+      </GamePanel>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>기록</Text>
-          <View style={styles.statRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.totalGames}</Text>
-              <Text style={styles.statLabel}>총 게임</Text>
+      <GamePanel>
+        <Text style={styles.sectionTitle}>보유 아이템</Text>
+        <View style={styles.metricGrid}>
+          {ITEM_SUMMARY.map(item => (
+            <View key={item.key} style={styles.metricCard}>
+              <Text style={styles.metricEmoji}>{item.emoji}</Text>
+              <Text style={styles.metricValue}>{gameData.items[item.key]}</Text>
+              <Text style={styles.metricLabel}>{item.label}</Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.levelsCleared}</Text>
-              <Text style={styles.statLabel}>클리어 스테이지</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.highScore.toLocaleString()}</Text>
-              <Text style={styles.statLabel}>최고 점수</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.maxCombo}</Text>
-              <Text style={styles.statLabel}>최대 콤보</Text>
-            </View>
-          </View>
+          ))}
         </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>보유 아이템</Text>
-          <View style={styles.resourceRow}>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>🔨</Text>
-              <Text style={styles.resourceValue}>{gameData.items.hammer}</Text>
-              <Text style={styles.resourceLabel}>망치</Text>
-            </View>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>🔄</Text>
-              <Text style={styles.resourceValue}>{gameData.items.refresh}</Text>
-              <Text style={styles.resourceLabel}>새로고침</Text>
-            </View>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>💣</Text>
-              <Text style={styles.resourceValue}>{gameData.items.bomb}</Text>
-              <Text style={styles.resourceLabel}>폭탄</Text>
-            </View>
-            <View style={styles.resourceItem}>
-              <Text style={styles.resourceEmoji}>➕</Text>
-              <Text style={styles.resourceValue}>{gameData.items.addTurns}</Text>
-              <Text style={styles.resourceLabel}>턴 추가</Text>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      </GamePanel>
+    </MenuScreenFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {backgroundColor: '#f0edf5', flex: 1},
-  scroll: {padding: 16, paddingBottom: 40},
-  header: {
+  heroPanel: {
     alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
   },
-  backBtn: {width: 60},
-  backText: {color: '#6366f1', fontSize: 16, fontWeight: '700'},
-  title: {color: '#333', fontSize: 20, fontWeight: '800'},
-  headerSpacer: {width: 60},
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    elevation: 2,
-    marginBottom: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-  },
-  avatarCircle: {
+  avatarBadge: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: '#6366f1',
-    borderRadius: 36,
-    height: 72,
     justifyContent: 'center',
+    backgroundColor: '#7f5a32',
+    borderWidth: 3,
+    borderColor: '#f7d6a0',
     marginBottom: 12,
-    width: 72,
   },
-  avatarText: {color: '#fff', fontSize: 32, fontWeight: '800'},
-  nickname: {color: '#333', fontSize: 22, fontWeight: '800', textAlign: 'center'},
-  email: {color: '#888', fontSize: 13, marginTop: 4, textAlign: 'center'},
-  editNameBtn: {
-    alignSelf: 'center',
-    backgroundColor: '#eef2ff',
-    borderRadius: 8,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  avatarText: {
+    color: '#fff7ec',
+    fontSize: 34,
+    fontWeight: '900',
   },
-  editNameText: {color: '#6366f1', fontSize: 14, fontWeight: '700'},
-  sectionTitle: {color: '#333', fontSize: 16, fontWeight: '800', marginBottom: 12},
-  costNotice: {color: '#ef4444', fontSize: 12, marginBottom: 8},
-  nameInput: {
-    backgroundColor: '#f5f5f5',
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
+  nickname: {
+    color: '#4b2f18',
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  email: {
+    color: '#7f6248',
+    fontSize: 13,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 16,
+    width: '100%',
+  },
+  heroMetaChip: {
+    flex: 1,
+    backgroundColor: '#f9ecd5',
+    borderRadius: 16,
     borderWidth: 1,
-    color: '#333',
-    fontSize: 16,
-    marginBottom: 8,
-    paddingHorizontal: 16,
+    borderColor: '#d2b089',
+    paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  checkText: {color: '#888', fontSize: 12, marginBottom: 4},
-  availableText: {color: '#22c55e', fontSize: 12, fontWeight: '600', marginBottom: 4},
-  unavailableText: {color: '#ef4444', fontSize: 12, fontWeight: '600', marginBottom: 4},
-  btnRow: {flexDirection: 'row', gap: 8, marginTop: 8},
-  cancelBtn: {
-    alignItems: 'center',
-    backgroundColor: '#e0e0e0',
-    borderRadius: 8,
-    flex: 1,
-    paddingVertical: 10,
+  heroMetaLabel: {
+    color: '#8d6947',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 4,
   },
-  checkBtn: {
-    alignItems: 'center',
-    backgroundColor: '#f59e0b',
-    borderRadius: 8,
-    flex: 1,
-    paddingVertical: 10,
+  heroMetaValue: {
+    color: '#5c391d',
+    fontSize: 15,
+    fontWeight: '900',
   },
-  confirmBtn: {
-    alignItems: 'center',
-    backgroundColor: '#6366f1',
-    borderRadius: 8,
-    flex: 1,
-    paddingVertical: 10,
-  },
-  btnText: {color: '#fff', fontSize: 14, fontWeight: '700'},
-  resourceRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    rowGap: 12,
-  },
-  resourceItem: {alignItems: 'center', minWidth: 60},
-  resourceEmoji: {fontSize: 28},
-  resourceValue: {color: '#333', fontSize: 18, fontWeight: '800', marginTop: 4},
-  resourceLabel: {color: '#888', fontSize: 11, marginTop: 2},
-  statRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    rowGap: 12,
-  },
-  statItem: {alignItems: 'center', minWidth: 70},
-  statValue: {color: '#6366f1', fontSize: 18, fontWeight: '800'},
-  statLabel: {color: '#888', fontSize: 11, marginTop: 2},
-  charItem: {
-    alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    borderColor: '#e0e0e0',
-    borderRadius: 12,
+  primaryButton: {
+    backgroundColor: '#7f5a32',
+    borderRadius: 16,
     borderWidth: 2,
-    minWidth: 80,
-    paddingHorizontal: 20,
+    borderColor: '#4f3118',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+    paddingHorizontal: 18,
     paddingVertical: 12,
   },
-  charItemActive: {
-    backgroundColor: '#eef2ff',
-    borderColor: '#6366f1',
+  primaryButtonText: {
+    color: '#fff6ea',
+    fontSize: 15,
+    fontWeight: '900',
   },
-  charName: {color: '#333', fontSize: 15, fontWeight: '700'},
+  secondaryButton: {
+    backgroundColor: '#f5e8d0',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#b38961',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  secondaryButtonText: {
+    color: '#714c29',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  flexButton: {
+    flex: 1,
+  },
+  sectionTitle: {
+    color: '#50321a',
+    fontSize: 20,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  sectionHint: {
+    color: '#886447',
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  warningText: {
+    color: '#b34b39',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  infoText: {
+    color: '#7f6248',
+    fontSize: 13,
+    marginTop: 8,
+  },
+  successText: {
+    color: '#2d7d4c',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  nameInput: {
+    backgroundColor: '#fff9ef',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#d4b48d',
+    color: '#4f3118',
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  characterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  characterCard: {
+    width: '31%',
+    minWidth: 92,
+    backgroundColor: '#fff8ec',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#d6b48d',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+  },
+  characterCardActive: {
+    backgroundColor: '#7f5a32',
+    borderColor: '#4f3118',
+  },
+  characterEmoji: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  characterName: {
+    color: '#613d20',
+    fontSize: 14,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  characterNameActive: {
+    color: '#fff5e7',
+  },
+  metricGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metricCard: {
+    width: '48%',
+    minWidth: 132,
+    backgroundColor: '#f8ebd3',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d1ab7f',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+  },
+  metricEmoji: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  metricValue: {
+    color: '#4d2f17',
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  metricLabel: {
+    color: '#866347',
+    fontSize: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 5,
+  },
 });
