@@ -22,6 +22,8 @@ import {
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
 
+const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
+
 // Neon spark particle effect - sparks scatter fast from placed block area
 function PlaceEffect({x, y, color, onDone}: {x: number; y: number; color: string; onDone: () => void}) {
   const sparkCount = 14;
@@ -839,7 +841,12 @@ export default function BattleScreen({route, navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#1a0a3e'},
+  container: {
+    flex: 1,
+    backgroundColor: '#1a0a3e',
+    paddingTop: MODE_VERTICAL_GUTTER,
+    paddingBottom: MODE_VERTICAL_GUTTER,
+  },
   backButtonDock: {
     position: 'absolute',
     top: 10,
@@ -862,7 +869,7 @@ const styles = StyleSheet.create({
   attackDisabled: {opacity: 0.3},
   attackLines: {color: '#fff', fontSize: 12, fontWeight: '700'},
   attackCost: {color: '#fbbf24', fontSize: 9},
-  boardContainer: {flex: 1, justifyContent: 'center'},
+  boardContainer: {flex: 1, justifyContent: 'center', alignItems: 'center'},
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.8)',

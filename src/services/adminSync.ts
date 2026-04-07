@@ -1,38 +1,72 @@
 import {claimPendingResourceGrants} from './economyService';
 import type {GameData} from '../stores/gameStore';
-import {supabase} from './supabase';
+import {getCurrentUserId, supabase} from './supabase';
 import {parseAnnouncementContent} from '../game/announcementContent';
 
 const ADMIN_EMAIL = 'sinnaruggggg@gmail.com';
+let adminStatusCache: boolean | null = null;
+let adminStatusCacheUserId: string | null = null;
+let adminStatusInFlight: Promise<boolean> | null = null;
+
+export function getCachedAdminStatus(): boolean {
+  return adminStatusCache ?? false;
+}
+
+function setCachedAdminStatus(userId: string | null, next: boolean) {
+  adminStatusCacheUserId = userId;
+  adminStatusCache = next;
+}
 
 export async function getAdminStatus(): Promise<boolean> {
-  const {
-    data: {user},
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return false;
+  const cachedUserId = await getCurrentUserId();
+  if (adminStatusCache !== null && adminStatusCacheUserId === cachedUserId) {
+    return adminStatusCache;
   }
 
-  const {data: profile} = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
+  if (adminStatusInFlight) {
+    return adminStatusInFlight;
+  }
+
+  adminStatusInFlight = (async () => {
+    const {
+      data: {user},
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setCachedAdminStatus(null, false);
+      return false;
+    }
+
+    const {data: profile} = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
     .maybeSingle();
 
-  if (profile?.is_admin) {
-    return true;
+    if (profile?.is_admin) {
+      setCachedAdminStatus(user.id, true);
+      return true;
+    }
+
+    if ((user.email || '').trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      setCachedAdminStatus(user.id, false);
+      return false;
+    }
+
+    const {error} = await supabase
+      .from('profiles')
+      .upsert({id: user.id, is_admin: true}, {onConflict: 'id'});
+
+    const nextStatus = !error;
+    setCachedAdminStatus(user.id, nextStatus);
+    return nextStatus;
+  })();
+
+  try {
+    return await adminStatusInFlight;
+  } finally {
+    adminStatusInFlight = null;
   }
-
-  if ((user.email || '').trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
-    return false;
-  }
-
-  const {error} = await supabase
-    .from('profiles')
-    .upsert({id: user.id, is_admin: true}, {onConflict: 'id'});
-
-  return !error;
 }
 
 // Fetch active announcements

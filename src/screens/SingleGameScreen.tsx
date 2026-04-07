@@ -8,6 +8,7 @@ import {
   Image,
   ImageBackground,
   Alert,
+  Dimensions,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {t} from '../i18n';
@@ -18,6 +19,8 @@ import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+
+const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
@@ -28,7 +31,6 @@ import {
   LEVELS,
   COMBO_TIMEOUT_MS,
   FEVER_DURATION,
-  INFINITE_HEARTS_ENABLED,
 } from '../constants';
 import {
   createBoard,
@@ -1658,7 +1660,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   const handleRetryLevel = useCallback(async () => {
     const latestGameData = gameDataRef.current ?? (await loadGameData());
-    if (!latestGameData || (!INFINITE_HEARTS_ENABLED && latestGameData.hearts <= 0)) {
+    if (!latestGameData || (!isAdminRef.current && latestGameData.hearts <= 0)) {
       Alert.alert('하트 부족', '다시 도전하려면 하트가 필요합니다.');
       return;
     }
@@ -2506,6 +2508,8 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     flex: 1,
+    paddingTop: MODE_VERTICAL_GUTTER,
+    paddingBottom: MODE_VERTICAL_GUTTER,
   },
   missingContainer: {
     flex: 1,
@@ -2855,9 +2859,9 @@ const styles = StyleSheet.create({
     flex: 1,
     flexShrink: 1,
     minHeight: 0,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 2,
+    paddingTop: 0,
     paddingBottom: 4,
   },
   bottomActionRow: {

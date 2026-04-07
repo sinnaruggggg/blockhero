@@ -3,13 +3,13 @@ import {
   MAX_HEARTS,
   HEART_REGEN_MS,
   MAX_ITEM_PER_TYPE,
-  INFINITE_HEARTS_ENABLED,
   INFINITE_HEARTS_VALUE,
   getConfiguredMaxHearts,
 } from '../constants';
 import {CHARACTER_CLASSES, xpToNextLevel} from '../constants/characters';
 import {t} from '../i18n';
 import {getCurrentUserId} from '../services/supabase';
+import {getAdminStatus, getCachedAdminStatus} from '../services/adminSync';
 import {
   fetchPlayerState,
   loadOwnProfile,
@@ -91,7 +91,7 @@ export interface AchievementData {
 
 // Default values
 const defaultGameData: GameData = {
-  hearts: getConfiguredMaxHearts(MAX_HEARTS),
+  hearts: getConfiguredMaxHearts(MAX_HEARTS, false),
   lastHeartTime: Date.now(),
   gold: 0,
   diamonds: 0,
@@ -454,11 +454,23 @@ async function getSelectedCharacterEffects() {
   return getCharacterSkillEffects(characterId, characterData, {mode: 'level'});
 }
 
+async function hasInfiniteHeartsAccess(): Promise<boolean> {
+  try {
+    return await getAdminStatus();
+  } catch {
+    return getCachedAdminStatus();
+  }
+}
+
 // GameData operations
 export async function loadGameData(): Promise<GameData> {
   const data = await load<GameData>('gameData', defaultGameData);
   const effects = await getSelectedCharacterEffects();
-  const maxHearts = getConfiguredMaxHearts(getDynamicHeartCap(MAX_HEARTS, effects));
+  const isInfiniteHearts = await hasInfiniteHeartsAccess();
+  const maxHearts = getConfiguredMaxHearts(
+    getDynamicHeartCap(MAX_HEARTS, effects),
+    isInfiniteHearts,
+  );
   const heartRegenMs = getDynamicHeartRegenMs(HEART_REGEN_MS, effects);
   // Migration: stars → gold
   if ((data as any).stars !== undefined && (data as any).gold === undefined) {
@@ -466,13 +478,18 @@ export async function loadGameData(): Promise<GameData> {
     delete (data as any).stars;
     await save('gameData', data);
   }
-  if (INFINITE_HEARTS_ENABLED) {
-    if (data.hearts !== maxHearts) {
-      data.hearts = maxHearts;
+  if (isInfiniteHearts) {
+    if (data.hearts !== INFINITE_HEARTS_VALUE) {
+      data.hearts = INFINITE_HEARTS_VALUE;
       data.lastHeartTime = Date.now();
       await save('gameData', data);
     }
     return data;
+  }
+  if (data.hearts > maxHearts) {
+    data.hearts = maxHearts;
+    data.lastHeartTime = Date.now();
+    await save('gameData', data);
   }
   // Regenerate hearts
   if (data.hearts < maxHearts) {
@@ -488,7 +505,8 @@ export async function loadGameData(): Promise<GameData> {
 }
 
 export async function saveGameData(data: GameData): Promise<void> {
-  if (INFINITE_HEARTS_ENABLED) {
+  const isInfiniteHearts = await hasInfiniteHeartsAccess();
+  if (isInfiniteHearts) {
     await save('gameData', {
       ...data,
       hearts: INFINITE_HEARTS_VALUE,
@@ -496,11 +514,20 @@ export async function saveGameData(data: GameData): Promise<void> {
     });
     return;
   }
-  await save('gameData', data);
+  const effects = await getSelectedCharacterEffects();
+  const maxHearts = getConfiguredMaxHearts(
+    getDynamicHeartCap(MAX_HEARTS, effects),
+    false,
+  );
+  await save('gameData', {
+    ...data,
+    hearts: Math.min(maxHearts, Math.max(0, data.hearts)),
+  });
 }
 
 export async function useHeart(data: GameData): Promise<GameData | null> {
-  if (INFINITE_HEARTS_ENABLED) {
+  const isInfiniteHearts = await hasInfiniteHeartsAccess();
+  if (isInfiniteHearts) {
     const updated = {
       ...data,
       hearts: INFINITE_HEARTS_VALUE,
@@ -510,7 +537,10 @@ export async function useHeart(data: GameData): Promise<GameData | null> {
     return updated;
   }
   const effects = await getSelectedCharacterEffects();
-  const maxHearts = getConfiguredMaxHearts(getDynamicHeartCap(MAX_HEARTS, effects));
+  const maxHearts = getConfiguredMaxHearts(
+    getDynamicHeartCap(MAX_HEARTS, effects),
+    false,
+  );
   if (data.hearts <= 0) return null;
   const updated = {
     ...data,
@@ -625,8 +655,12 @@ export async function useItem(
 }
 
 export async function refillHearts(data: GameData): Promise<GameData> {
+  const isInfiniteHearts = await hasInfiniteHeartsAccess();
   const effects = await getSelectedCharacterEffects();
-  const maxHearts = getConfiguredMaxHearts(getDynamicHeartCap(MAX_HEARTS, effects));
+  const maxHearts = getConfiguredMaxHearts(
+    getDynamicHeartCap(MAX_HEARTS, effects),
+    isInfiniteHearts,
+  );
   const updated = {...data, hearts: maxHearts, lastHeartTime: Date.now()};
   await save('gameData', updated);
   return updated;
@@ -989,7 +1023,7 @@ export async function getHighestLevelCleared(): Promise<number> {
 
 // Heart timer remaining
 export function getHeartTimerRemaining(data: GameData): number {
-  if (INFINITE_HEARTS_ENABLED) return 0;
+  if (data.hearts >= INFINITE_HEARTS_VALUE) return 0;
   if (data.hearts >= MAX_HEARTS) return 0;
   const elapsed = Date.now() - data.lastHeartTime;
   return Math.max(0, HEART_REGEN_MS - (elapsed % HEART_REGEN_MS));

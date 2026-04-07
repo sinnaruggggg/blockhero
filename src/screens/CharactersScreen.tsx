@@ -9,7 +9,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import {useBlockHeroRuntime} from '../blockhero/BlockHeroRuntimeProvider';
-import {INFINITE_HEARTS_ENABLED, INFINITE_HEARTS_LABEL} from '../constants';
+import {INFINITE_HEARTS_LABEL, INFINITE_HEARTS_VALUE} from '../constants';
 import {
   getCurrentCharacterDefinition,
   getCurrentCharacterStats,
@@ -40,6 +40,7 @@ export default function CharactersScreen({navigation}: any) {
   const skillTree = getCurrentSkillTree(state);
   const equippedSkin = getEquippedSkin(state);
   const summon = getEquippedSummonProgress(state);
+  const hasInfiniteHearts = stats.maxHearts >= INFINITE_HEARTS_VALUE;
 
   const visibleSkills = useMemo(
     () => (tab === 'personal' ? skillTree.personal : skillTree.party),
@@ -121,8 +122,8 @@ export default function CharactersScreen({navigation}: any) {
           <Text style={styles.characterRole}>{definition.role}</Text>
           <Text style={styles.summaryText}>
             공격력 {stats.attack} / 체력 {stats.maxHp} / 하트{' '}
-            {INFINITE_HEARTS_ENABLED ? INFINITE_HEARTS_LABEL : stats.maxHearts} / 하트 회복{' '}
-            {INFINITE_HEARTS_ENABLED
+            {hasInfiniteHearts ? INFINITE_HEARTS_LABEL : stats.maxHearts} / 하트 회복{' '}
+            {hasInfiniteHearts
               ? '없음'
               : `${Math.floor(stats.heartRegenMs / 60000)}분`}
           </Text>

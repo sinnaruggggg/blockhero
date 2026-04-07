@@ -12,7 +12,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import {getWorldMonsterSprite} from '../assets/monsterSprites';
-import {INFINITE_HEARTS_ENABLED, LEVELS, WORLDS, formatHeartValue} from '../constants';
+import {INFINITE_HEARTS_VALUE, LEVELS, WORLDS, formatHeartValue} from '../constants';
 import {getNextUnlockedLevel, getWorldProgressSummary} from '../game/levelProgress';
 import {getAdminStatus} from '../services/adminSync';
 import {
@@ -31,6 +31,7 @@ export default function LevelsScreen({navigation}: any) {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [expandedWorld, setExpandedWorld] = useState<number>(1);
   const [isAdmin, setIsAdmin] = useState(false);
+  const hasInfiniteHearts = (gameData?.hearts ?? 0) >= INFINITE_HEARTS_VALUE;
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
@@ -68,7 +69,7 @@ export default function LevelsScreen({navigation}: any) {
         return;
       }
 
-      if (!INFINITE_HEARTS_ENABLED && gameData.hearts <= 0) {
+      if (!hasInfiniteHearts && gameData.hearts <= 0) {
         Alert.alert('하트 부족', '하트가 없습니다.\n5분마다 1개씩 회복됩니다.');
         return;
       }
@@ -81,7 +82,7 @@ export default function LevelsScreen({navigation}: any) {
       setGameData(updatedGameData);
       navigation.navigate('SingleGame', {levelId});
     },
-    [gameData, navigation, unlockedLevel],
+    [gameData, hasInfiniteHearts, navigation, unlockedLevel],
   );
 
   return (
@@ -92,7 +93,7 @@ export default function LevelsScreen({navigation}: any) {
           <Text style={styles.backBtn}>뒤로</Text>
         </TouchableOpacity>
         <Text style={styles.title}>레벨 선택</Text>
-        <Text style={styles.hearts}>{`하트 ${formatHeartValue(gameData?.hearts ?? 0)}`}</Text>
+        <Text style={styles.hearts}>{`하트 ${formatHeartValue(gameData?.hearts ?? 0, hasInfiniteHearts)}`}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>

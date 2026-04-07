@@ -43,7 +43,7 @@ import {
 } from '../stores/gameStore';
 import {
   HEART_REGEN_MS,
-  INFINITE_HEARTS_ENABLED,
+  INFINITE_HEARTS_VALUE,
   MAX_HEARTS,
   formatHeartStatus,
   getConfiguredMaxHearts,
@@ -174,8 +174,10 @@ export default function HomeScreen({navigation}: any) {
     selectedChar && charData
       ? getCharacterSkillEffects(selectedChar, charData, {mode: 'level'})
       : getCharacterSkillEffects(null, null);
+  const hasInfiniteHearts = (gameData?.hearts ?? 0) >= INFINITE_HEARTS_VALUE;
   const maxHearts = getConfiguredMaxHearts(
     getDynamicHeartCap(MAX_HEARTS, heartEffects),
+    hasInfiniteHearts,
   );
   const heartRegenMs = getDynamicHeartRegenMs(HEART_REGEN_MS, heartEffects);
   const selectedCharacterClass =
@@ -484,7 +486,7 @@ export default function HomeScreen({navigation}: any) {
   }, [loadData, navigation]);
 
   useEffect(() => {
-    if (INFINITE_HEARTS_ENABLED || !gameData || gameData.hearts >= maxHearts) {
+    if (hasInfiniteHearts || !gameData || gameData.hearts >= maxHearts) {
       setTimerText('');
       return;
     }
@@ -501,14 +503,14 @@ export default function HomeScreen({navigation}: any) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [gameData, heartRegenMs, loadData, maxHearts]);
+  }, [gameData, hasInfiniteHearts, heartRegenMs, loadData, maxHearts]);
 
   const handleRefillHearts = useCallback(async () => {
     if (!gameData) {
       return;
     }
 
-    if (INFINITE_HEARTS_ENABLED) {
+    if (hasInfiniteHearts) {
       Alert.alert(t('common.notice'), '하트 무제한 모드가 활성화되어 있습니다.');
       return;
     }
@@ -538,7 +540,7 @@ export default function HomeScreen({navigation}: any) {
         },
       },
     ]);
-  }, [gameData, maxHearts]);
+  }, [gameData, hasInfiniteHearts, maxHearts]);
 
   const handleSelectCharacter = useCallback(async (characterId: string) => {
     setSelectedCharState(characterId);
@@ -626,7 +628,7 @@ export default function HomeScreen({navigation}: any) {
             <View style={styles.currencySlot}>
               <View style={styles.currencyIconSpace} />
               <Text style={styles.currencyText}>
-                {formatHeartStatus(gameData.hearts, maxHearts)}
+                {formatHeartStatus(gameData.hearts, maxHearts, hasInfiniteHearts)}
                 {timerText ? ` ${timerText}` : ''}
               </Text>
             </View>

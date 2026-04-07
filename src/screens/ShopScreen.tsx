@@ -10,7 +10,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import {
-  INFINITE_HEARTS_ENABLED,
+  INFINITE_HEARTS_VALUE,
   MAX_ITEM_PER_TYPE,
   RAID_SKILLS,
 } from '../constants';
@@ -65,6 +65,7 @@ export default function ShopScreen({navigation}: any) {
   const [shopDiscountRate, setShopDiscountRate] = useState(0);
   const [refreshDiscountRate, setRefreshDiscountRate] = useState(0);
   const [itemCap, setItemCap] = useState(MAX_ITEM_PER_TYPE);
+  const hasInfiniteHearts = (gameData?.hearts ?? 0) >= INFINITE_HEARTS_VALUE;
 
   const loadData = useCallback(async () => {
     const data = await loadGameData();
@@ -88,7 +89,7 @@ export default function ShopScreen({navigation}: any) {
 
   const canBuyItem = useCallback(
     (item: (typeof SHOP_ITEMS)[number] | (typeof SPECIAL_PIECE_ITEMS)[number]) => {
-      if (item.type === 'hearts' && INFINITE_HEARTS_ENABLED) {
+      if (item.type === 'hearts' && hasInfiniteHearts) {
         Alert.alert('', '하트 무제한 모드가 활성화되어 있어 구매할 필요가 없습니다.');
         return false;
       }
@@ -105,7 +106,7 @@ export default function ShopScreen({navigation}: any) {
       Alert.alert('', `이미 최대 보유량(${itemCap})입니다.`);
       return false;
     },
-    [gameData, itemCap],
+    [gameData, hasInfiniteHearts, itemCap],
   );
 
   useEffect(() => {
@@ -320,13 +321,13 @@ export default function ShopScreen({navigation}: any) {
         {SHOP_ITEMS.map(item => {
           const goldPrice = getDiscountedGoldPrice(item);
           const discounted = goldPrice !== item.goldPrice;
-          const heartsDisabled = item.type === 'hearts' && INFINITE_HEARTS_ENABLED;
+          const heartsDisabled = item.type === 'hearts' && hasInfiniteHearts;
           return (
             <View key={item.id} style={styles.itemRow}>
               <Text style={styles.itemEmoji}>{item.emoji}</Text>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{t(item.nameKey)}</Text>
-                {item.type === 'hearts' && INFINITE_HEARTS_ENABLED ? (
+                {item.type === 'hearts' && hasInfiniteHearts ? (
                   <Text style={styles.itemDesc}>하트 무제한 모드가 활성화되어 있습니다.</Text>
                 ) : item.type === 'hearts' ? (
                   <Text style={styles.itemDesc}>하트를 최대치로 즉시 충전합니다.</Text>

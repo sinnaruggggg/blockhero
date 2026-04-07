@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useCallback, useRef} from 'react';
-import {View, StyleSheet, Alert, Text, Animated, TouchableOpacity} from 'react-native';
+import {View, StyleSheet, Alert, Text, Animated, TouchableOpacity, Dimensions} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
@@ -18,6 +18,8 @@ import {
   COMBO_TIMEOUT_MS,
   ENDLESS_GOLD_MILESTONES,
 } from '../constants';
+
+const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 import {
   createBoard,
   generatePlaceablePieces,
@@ -823,15 +825,20 @@ export default function EndlessScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#0a1628'},
+  container: {
+    flex: 1,
+    backgroundColor: '#0a1628',
+    paddingTop: MODE_VERTICAL_GUTTER,
+    paddingBottom: MODE_VERTICAL_GUTTER,
+  },
   boardContainer: {
     flex: 1,
     flexShrink: 1,
     minHeight: 0,
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingTop: 0,
+    paddingBottom: 4,
   },
   milestoneBanner: {
     position: 'absolute',

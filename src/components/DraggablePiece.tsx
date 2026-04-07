@@ -9,6 +9,8 @@ const BOARD_CELL_STEP = CELL_SIZE + CELL_GAP;
 const DRAG_OFFSET_Y = -Math.round(BOARD_CELL_STEP * 2.5); // 2 board blocks above finger
 const DRAG_EXTRA = 0.05; // 5% extra movement distance
 const BEVEL = 2;
+const TRAY_SLOT_SIZE = 108;
+const TRAY_SLOT_SIZE_COMPACT = 96;
 
 // Voxel helpers
 function hexToRgb(hex: string): {r: number; g: number; b: number} {
@@ -175,30 +177,30 @@ export default function DraggablePiece({
 
 const styles = StyleSheet.create({
   container: {
-    minWidth: 64,
-    minHeight: 64,
+    width: TRAY_SLOT_SIZE,
+    height: TRAY_SLOT_SIZE,
     backgroundColor: 'transparent',
     borderRadius: 10,
-    padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
   containerCompact: {
-    minWidth: 56,
-    minHeight: 56,
-    padding: 6,
+    width: TRAY_SLOT_SIZE_COMPACT,
+    height: TRAY_SLOT_SIZE_COMPACT,
   },
   emptyContainer: {
-    minWidth: 64,
-    minHeight: 64,
+    width: TRAY_SLOT_SIZE,
+    height: TRAY_SLOT_SIZE,
     backgroundColor: 'rgba(15, 10, 40, 0.3)',
     borderRadius: 10,
     opacity: 0.3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyContainerCompact: {
-    minWidth: 56,
-    minHeight: 56,
+    width: TRAY_SLOT_SIZE_COMPACT,
+    height: TRAY_SLOT_SIZE_COMPACT,
   },
   pieceRow: {
     flexDirection: 'row',

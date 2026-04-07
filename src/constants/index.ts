@@ -1,5 +1,5 @@
 // Grid dimensions
-export const ROWS = 10;
+export const ROWS = 8;
 export const COLS = 8;
 
 // Colors for blocks
@@ -81,22 +81,30 @@ export const COMBO_TIMEOUT_MS = 5000; // 5 seconds to maintain combo
 // Hearts — 10 max, 1 per 5 minutes
 export const MAX_HEARTS = 20;
 export const HEART_REGEN_MS = 5 * 60 * 1000; // 5 minutes
-export const INFINITE_HEARTS_ENABLED = true;
+export const INFINITE_HEARTS_ENABLED = false;
 export const INFINITE_HEARTS_VALUE = 999999;
 export const INFINITE_HEARTS_LABEL = '∞';
 
-export function getConfiguredMaxHearts(maxHearts: number): number {
-  return INFINITE_HEARTS_ENABLED ? INFINITE_HEARTS_VALUE : Math.min(MAX_HEARTS, maxHearts);
+export function getConfiguredMaxHearts(
+  maxHearts: number,
+  isInfinite: boolean = false,
+): number {
+  return isInfinite ? INFINITE_HEARTS_VALUE : Math.min(MAX_HEARTS, maxHearts);
 }
 
-export function formatHeartValue(hearts: number): string {
-  return INFINITE_HEARTS_ENABLED ? INFINITE_HEARTS_LABEL : String(hearts);
+export function formatHeartValue(
+  hearts: number,
+  isInfinite: boolean = hearts >= INFINITE_HEARTS_VALUE,
+): string {
+  return isInfinite ? INFINITE_HEARTS_LABEL : String(hearts);
 }
 
-export function formatHeartStatus(hearts: number, maxHearts: number): string {
-  return INFINITE_HEARTS_ENABLED
-    ? INFINITE_HEARTS_LABEL
-    : `${hearts}/${maxHearts}`;
+export function formatHeartStatus(
+  hearts: number,
+  maxHearts: number,
+  isInfinite: boolean = hearts >= INFINITE_HEARTS_VALUE || maxHearts >= INFINITE_HEARTS_VALUE,
+): string {
+  return isInfinite ? INFINITE_HEARTS_LABEL : `${Math.min(hearts, maxHearts)}/${maxHearts}`;
 }
 
 // Max items per type and total types

@@ -1,7 +1,7 @@
 import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View, Text, StyleSheet, Alert, TouchableOpacity, Animated,
-  Vibration, TextInput, ScrollView, KeyboardAvoidingView, Platform, Image,
+  Vibration, TextInput, ScrollView, KeyboardAvoidingView, Platform, Image, Dimensions,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Board from '../components/Board';
@@ -99,6 +99,8 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+
+const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 
 const HIT_FRAMES = [
   require('../assets/effects/hit_00.png'),
@@ -213,9 +215,11 @@ export default function RaidScreen({route, navigation}: any) {
   const [playerHp, setPlayerHp] = useState(200);
   const [maxPlayerHp, setMaxPlayerHp] = useState(200);
   const [combo, setCombo] = useState(0);
+  const [comboRemainingMs, setComboRemainingMs] = useState(0);
   const [linesCleared, setLinesCleared] = useState(0);
   const [feverGauge, setFeverGauge] = useState(0);
   const [feverActive, setFeverActive] = useState(false);
+  const [feverRemainingMs, setFeverRemainingMs] = useState(0);
   const [participants, setParticipants] = useState<RaidParticipant[]>([]);
   const [skillGauge, setSkillGauge] = useState(0);
   const [activeMultiplier, setActiveMultiplier] = useState(1);
@@ -275,7 +279,9 @@ export default function RaidScreen({route, navigation}: any) {
   const bossAttackTimer = useRef<any>(null);
   const bossPoseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const comboTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feverTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gameOverRef = useRef(false);
   const spectatorRef = useRef(false);
   const attackPowerRef = useRef(10);
@@ -287,9 +293,11 @@ export default function RaidScreen({route, navigation}: any) {
   const selectedCharacterDataRef = useRef<any>(null);
   const activeSkinIdRef = useRef(0);
   const comboRef = useRef(0);
+  const comboExpireAtRef = useRef<number | null>(null);
   const linesClearedRef = useRef(0);
   const feverGaugeRef = useRef(0);
   const feverActiveRef = useRef(false);
+  const feverExpireAtRef = useRef<number | null>(null);
   const reviveUsedRef = useRef(false);
   const smallPieceStreakRef = useRef(0);
   const summonGaugeRef = useRef(0);
@@ -410,10 +418,14 @@ export default function RaidScreen({route, navigation}: any) {
     linesClearedRef.current = 0;
     feverGaugeRef.current = 0;
     feverActiveRef.current = false;
+    comboExpireAtRef.current = null;
+    feverExpireAtRef.current = null;
     setCombo(0);
+    setComboRemainingMs(0);
     setLinesCleared(0);
     setFeverGauge(0);
     setFeverActive(false);
+    setFeverRemainingMs(0);
     activeSkinIdRef.current = 0;
     summonGaugeRef.current = 0;
     summonGaugeRequiredRef.current = 0;
@@ -683,7 +695,9 @@ export default function RaidScreen({route, navigation}: any) {
       if (attackTimer.current) clearInterval(attackTimer.current);
       if (bossAttackTimer.current) clearInterval(bossAttackTimer.current);
       if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+      if (comboTickerRef.current) clearInterval(comboTickerRef.current);
       if (feverTimerRef.current) clearTimeout(feverTimerRef.current);
+      if (feverTickerRef.current) clearInterval(feverTickerRef.current);
     };
   }, [bossStage, getCurrentPieceOptions, getRaidEffects, instanceId, isNormalRaid, navigation, playerHpAnim]);
 
@@ -752,32 +766,83 @@ export default function RaidScreen({route, navigation}: any) {
   }, [playerHpAnim]);
 
   const resetComboTimer = useCallback(() => {
+    const durationMs = COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
+
     if (comboTimerRef.current) {
       clearTimeout(comboTimerRef.current);
     }
+    if (comboTickerRef.current) {
+      clearInterval(comboTickerRef.current);
+    }
+
+    comboExpireAtRef.current = Date.now() + durationMs;
+    setComboRemainingMs(durationMs);
+
+    comboTickerRef.current = setInterval(() => {
+      if (!comboExpireAtRef.current) {
+        return;
+      }
+      const remaining = Math.max(0, comboExpireAtRef.current - Date.now());
+      setComboRemainingMs(remaining);
+      if (remaining <= 0 && comboTickerRef.current) {
+        clearInterval(comboTickerRef.current);
+        comboTickerRef.current = null;
+      }
+    }, 80);
 
     comboTimerRef.current = setTimeout(() => {
       comboRef.current = 0;
+      comboExpireAtRef.current = null;
       setCombo(0);
-    }, COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs);
+      setComboRemainingMs(0);
+      if (comboTickerRef.current) {
+        clearInterval(comboTickerRef.current);
+        comboTickerRef.current = null;
+      }
+    }, durationMs);
   }, [getRaidEffects]);
 
   const activateFever = useCallback(() => {
+    const durationMs = FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
+
     setFeverActive(true);
     setFeverGauge(100);
+    setFeverRemainingMs(durationMs);
     feverActiveRef.current = true;
     feverGaugeRef.current = 100;
+    feverExpireAtRef.current = Date.now() + durationMs;
 
     if (feverTimerRef.current) {
       clearTimeout(feverTimerRef.current);
     }
+    if (feverTickerRef.current) {
+      clearInterval(feverTickerRef.current);
+    }
+
+    feverTickerRef.current = setInterval(() => {
+      if (!feverExpireAtRef.current) {
+        return;
+      }
+      const remaining = Math.max(0, feverExpireAtRef.current - Date.now());
+      setFeverRemainingMs(remaining);
+      if (remaining <= 0 && feverTickerRef.current) {
+        clearInterval(feverTickerRef.current);
+        feverTickerRef.current = null;
+      }
+    }, 80);
 
     feverTimerRef.current = setTimeout(() => {
       setFeverActive(false);
       setFeverGauge(0);
+      setFeverRemainingMs(0);
       feverActiveRef.current = false;
       feverGaugeRef.current = 0;
-    }, FEVER_DURATION + getRaidEffects().feverDurationBonusMs);
+      feverExpireAtRef.current = null;
+      if (feverTickerRef.current) {
+        clearInterval(feverTickerRef.current);
+        feverTickerRef.current = null;
+      }
+    }, durationMs);
   }, [getRaidEffects]);
 
   useEffect(() => {
@@ -1551,42 +1616,49 @@ export default function RaidScreen({route, navigation}: any) {
   const renderTopStatusRow = (compact: boolean) => (
     <View style={[styles.topStatusRow, compact && styles.topStatusRowCompact]}>
       <View style={[styles.statusPanel, styles.statusPanelHp, compact && styles.statusPanelCompact]}>
-        <View style={styles.playerStatusHeader}>
-          <Text style={styles.playerStatusText}>
-            {t('raid.myHp', playerHp, maxPlayerHp)}
-          </Text>
-          <Text style={styles.playerStatusText}>
-            {t('raid.bossAttack', bossAttackStats.attack)}
-          </Text>
-        </View>
-        <View style={styles.playerHpBarBg}>
-          <Animated.View
-            style={[
-              styles.playerHpBarFill,
-              {
-                width: playerHpAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                  extrapolate: 'clamp',
-                }),
-              },
-            ]}
-          />
-        </View>
-        <View style={styles.playerMetaRow}>
-          <Text style={styles.playerMetaText}>
-            {`${t('game.combo')}: ${combo > 0 ? `${combo}콤보 ${formatComboMultiplier(combo)}` : '-'}`}
-          </Text>
-          <Text style={styles.playerMetaText}>
-            {`${t('game.lines')}: ${linesCleared}`}
-          </Text>
-          <Text
-            style={[
-              styles.playerMetaText,
-              feverActive && styles.playerMetaTextActive,
-            ]}>
-            {feverActive ? t('game.feverActive') : `${t('game.fever')} ${feverGauge}%`}
-          </Text>
+        <View style={styles.playerStatusBarGroup}>
+          <View style={styles.playerStatusBarRow}>
+            <View style={styles.playerHpBarBg}>
+              <Animated.View
+                style={[
+                  styles.playerHpBarFill,
+                  {
+                    width: playerHpAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ]}
+              />
+            </View>
+            <View pointerEvents="none" style={styles.playerStatusBarOverlay}>
+              <Text style={styles.playerStatusBarText}>
+                {`${playerHp.toLocaleString()} / ${maxPlayerHp.toLocaleString()}`}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.playerStatusBarRow}>
+            <View style={styles.playerFeverBarBg}>
+              <View
+                style={[
+                  styles.playerFeverBarFill,
+                  {width: `${Math.min(100, feverGauge)}%`},
+                  feverActive && styles.playerFeverBarFillActive,
+                ]}
+              />
+            </View>
+            <View pointerEvents="none" style={styles.playerStatusBarOverlay}>
+              <Text
+                style={[
+                  styles.playerStatusBarText,
+                  feverActive && styles.playerStatusBarTextActive,
+                ]}>
+                {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -1640,6 +1712,64 @@ export default function RaidScreen({route, navigation}: any) {
     </View>
   );
 
+  const comboGaugeMaxMs = COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
+  const feverGaugeMaxMs = FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
+
+  const renderBoardStatusDock = (compact: boolean) => {
+    const showComboGauge = combo > 0 && comboRemainingMs > 0;
+    const showFeverTimer = feverActive && feverRemainingMs > 0;
+
+    if (!showComboGauge && !showFeverTimer) {
+      return null;
+    }
+
+    return (
+      <View
+        pointerEvents="none"
+        style={[styles.boardStatusOverlay, compact && styles.boardStatusOverlayCompact]}>
+        {showComboGauge && (
+          <View style={styles.boardGaugeCard}>
+            <View style={styles.boardGaugeHeader}>
+              <Text style={styles.boardGaugeLabel}>콤보 유지</Text>
+              <Text style={styles.boardGaugeValue}>
+                {`${combo}콤보 · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`}
+              </Text>
+            </View>
+            <View style={styles.boardGaugeTrack}>
+              <View
+                style={[
+                  styles.boardGaugeFill,
+                  styles.boardGaugeFillCombo,
+                  {width: `${Math.max(0, Math.min(1, comboRemainingMs / Math.max(1, comboGaugeMaxMs))) * 100}%`},
+                ]}
+              />
+            </View>
+          </View>
+        )}
+
+        {showFeverTimer && (
+          <View style={styles.boardGaugeCard}>
+            <View style={styles.boardGaugeHeader}>
+              <Text style={styles.boardGaugeLabel}>피버 타이머</Text>
+              <Text style={styles.boardGaugeValue}>
+                {`${Math.max(0, feverRemainingMs / 1000).toFixed(2)}초`}
+              </Text>
+            </View>
+            <View style={styles.boardGaugeTrack}>
+              <View
+                style={[
+                  styles.boardGaugeFill,
+                  styles.boardGaugeFillFever,
+                  {width: `${Math.max(0, Math.min(1, feverRemainingMs / Math.max(1, feverGaugeMaxMs))) * 100}%`},
+                ]}
+              />
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderNormalRaidSlot = (
     participant: RaidParticipant | null,
     side: 'left' | 'right',
@@ -1685,16 +1815,6 @@ export default function RaidScreen({route, navigation}: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Attack timer */}
-      <View style={styles.timerBar}>
-        <Text style={[
-          styles.timerText,
-          !isNormalRaid && expiresAt - Date.now() < 60000 && styles.timerTextDanger,
-        ]}>
-          {isNormalRaid ? `일반 레이드 · ${attackTimerText}` : `보스 레이드 · ${attackTimerText}`}
-        </Text>
-      </View>
-
       {isNormalRaid ? (
         <>
           <View style={styles.normalRaidHeader}>
@@ -1923,19 +2043,20 @@ export default function RaidScreen({route, navigation}: any) {
       ) : (
         <>
           {/* Board */}
-          <View
-            style={[styles.boardContainer, isNormalRaid && styles.boardContainerCompact]}
-            onLayout={handleBoardLayout}>
-            <Board
-              ref={boardRef}
-              board={board}
-              backgroundColor={skinBoardBg}
+        <View
+          style={[styles.boardContainer, isNormalRaid && styles.boardContainerCompact]}
+          onLayout={handleBoardLayout}>
+          {renderBoardStatusDock(isNormalRaid)}
+          <Board
+            ref={boardRef}
+            board={board}
+            backgroundColor={skinBoardBg}
               compact
               previewCells={dragDrop.previewCells}
-              invalidPreview={dragDrop.invalidPreview}
-              clearGuideCells={dragDrop.clearGuideCells}
-            />
-          </View>
+            invalidPreview={dragDrop.invalidPreview}
+            clearGuideCells={dragDrop.clearGuideCells}
+          />
+        </View>
 
           {/* Piece Selector */}
           <PieceSelector
@@ -2011,7 +2132,12 @@ export default function RaidScreen({route, navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#1a0a3e'},
+  container: {
+    flex: 1,
+    backgroundColor: '#1a0a3e',
+    paddingTop: MODE_VERTICAL_GUTTER,
+    paddingBottom: MODE_VERTICAL_GUTTER,
+  },
   timerBar: {
     alignItems: 'center',
     paddingVertical: 4,
@@ -2043,26 +2169,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 5,
     marginHorizontal: 10,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   normalRaidPartyColumn: {
-    width: 72,
+    width: 64,
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 4,
   },
   normalRaidPartySlot: {
     flex: 1,
-    minHeight: 56,
+    minHeight: 45,
     backgroundColor: 'rgba(15,23,42,0.72)',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.25)',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
     justifyContent: 'center',
-    gap: 4,
+    gap: 2,
   },
   normalRaidPartySlotLeft: {
     alignItems: 'flex-end',
@@ -2074,9 +2200,9 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   normalRaidAvatarOrb: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(99,102,241,0.28)',
     borderWidth: 1,
     borderColor: 'rgba(165,180,252,0.65)',
@@ -2093,44 +2219,44 @@ const styles = StyleSheet.create({
   },
   normalRaidAvatarText: {
     color: '#f8fafc',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '900',
   },
   normalRaidAvatarName: {
     color: '#cbd5e1',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     maxWidth: '100%',
   },
   normalRaidBossCard: {
     flex: 1,
-    minHeight: 98,
+    minHeight: 78,
     backgroundColor: 'rgba(15,10,46,0.52)',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(71,85,105,0.45)',
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 4,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
   normalRaidBossName: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '900',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   normalRaidBossOrb: {
-    width: 86,
-    height: 86,
+    width: 68,
+    height: 68,
     borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
   normalRaidBossSprite: {
-    width: 78,
-    height: 78,
+    width: 60,
+    height: 60,
   },
   normalRaidBossOverlayHost: {
     ...StyleSheet.absoluteFillObject,
@@ -2181,18 +2307,18 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   normalRaidBossEmoji: {
-    fontSize: 28,
+    fontSize: 24,
   },
   normalRaidBossHpTrack: {
     width: '100%',
-    height: 7,
+    height: 6,
     backgroundColor: '#111827',
     borderRadius: 999,
     overflow: 'hidden',
-    marginTop: 6,
+    marginTop: 4,
   },
   normalRaidBossHpFill: {
-    height: 7,
+    height: 6,
     borderRadius: 999,
   },
   normalRaidBossHpFillHigh: {
@@ -2206,30 +2332,30 @@ const styles = StyleSheet.create({
   },
   normalRaidBossHpText: {
     color: '#e2e8f0',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '700',
-    marginTop: 3,
+    marginTop: 2,
   },
   topStatusRow: {
     flexDirection: 'row',
     gap: 8,
     marginHorizontal: 12,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   topStatusRowCompact: {
     marginHorizontal: 10,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   statusPanel: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
   },
   statusPanelCompact: {
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   statusPanelHp: {
     backgroundColor: 'rgba(15, 23, 42, 0.85)',
@@ -2269,16 +2395,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  playerStatusBarGroup: {
+    gap: 6,
+  },
+  playerStatusBarRow: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
   playerHpBarBg: {
-    height: 10,
-    backgroundColor: '#1e293b',
-    borderRadius: 5,
+    height: 18,
+    backgroundColor: '#0f172a',
+    borderRadius: 999,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(125,211,252,0.28)',
   },
   playerHpBarFill: {
-    height: 10,
-    borderRadius: 5,
+    height: '100%',
+    borderRadius: 999,
     backgroundColor: '#38bdf8',
+  },
+  playerFeverBarBg: {
+    height: 18,
+    backgroundColor: '#24124a',
+    borderRadius: 999,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(192,132,252,0.28)',
+  },
+  playerFeverBarFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#8b5cf6',
+  },
+  playerFeverBarFillActive: {
+    backgroundColor: '#f97316',
+  },
+  playerStatusBarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playerStatusBarText: {
+    color: '#eff6ff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  playerStatusBarTextActive: {
+    color: '#fff7ed',
   },
   playerMetaRow: {
     marginTop: 8,
@@ -2381,14 +2545,69 @@ const styles = StyleSheet.create({
     flex: 1,
     flexShrink: 1,
     minHeight: 0,
-    justifyContent: 'flex-start',
+    position: 'relative',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 4,
-    paddingBottom: 8,
+    paddingTop: 0,
+    paddingBottom: 4,
   },
   boardContainerCompact: {
     paddingTop: 0,
     paddingBottom: 4,
+  },
+  boardStatusOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 18,
+    right: 18,
+    zIndex: 12,
+    gap: 4,
+  },
+  boardStatusOverlayCompact: {
+    top: 6,
+    left: 14,
+    right: 14,
+  },
+  boardGaugeCard: {
+    backgroundColor: 'rgba(15,23,42,0.55)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.22)',
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  boardGaugeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 6,
+  },
+  boardGaugeLabel: {
+    color: '#cbd5e1',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  boardGaugeValue: {
+    color: '#f8fafc',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  boardGaugeTrack: {
+    height: 5,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(15,23,42,0.86)',
+  },
+  boardGaugeFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  boardGaugeFillCombo: {
+    backgroundColor: '#f59e0b',
+  },
+  boardGaugeFillFever: {
+    backgroundColor: '#f97316',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
