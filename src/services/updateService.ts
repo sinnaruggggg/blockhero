@@ -2,8 +2,8 @@ import {Alert, Linking, Platform} from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import {isNewerVersion} from './updateVersion';
 
-export const CURRENT_VERSION_CODE = 156;
-export const CURRENT_VERSION_NAME = '1.3.28';
+export const CURRENT_VERSION_CODE = 157;
+export const CURRENT_VERSION_NAME = '1.3.29';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const APK_MIME = 'application/vnd.android.package-archive';
@@ -15,14 +15,18 @@ interface GitHubRelease {
   assets: {
     name: string;
     browser_download_url: string;
+    size: number;
   }[];
 }
 
-export async function checkForUpdate(): Promise<{
+export interface UpdateInfo {
   versionName: string;
   downloadUrl: string;
   releaseNotes: string;
-} | null> {
+  sizeBytes: number;
+}
+
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
   try {
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
@@ -55,28 +59,49 @@ export async function checkForUpdate(): Promise<{
       versionName: latestVersionName,
       downloadUrl: apkAsset.browser_download_url,
       releaseNotes: release.body || '',
+      sizeBytes: apkAsset.size || 0,
     };
   } catch {
     return null;
   }
 }
 
+export function formatUpdateSize(sizeBytes: number): string {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return '알 수 없음';
+  }
+
+  const sizeMb = sizeBytes / (1024 * 1024);
+  const digits = sizeMb >= 100 ? 0 : 1;
+  return `${sizeMb.toFixed(digits)}MB`;
+}
+
+export function formatUpdateDialogMessage(update: {
+  versionName: string;
+  releaseNotes: string;
+  sizeBytes: number;
+}): string {
+  return [
+    `버전: ${update.versionName}`,
+    `용량: ${formatUpdateSize(update.sizeBytes)}`,
+    '',
+    '내용:',
+    update.releaseNotes.trim() || '변경 내용이 없습니다.',
+  ].join('\n');
+}
+
 export function showUpdateDialog(
-  update: {versionName: string; downloadUrl: string; releaseNotes: string},
-  onStartDownload: (update: {versionName: string; downloadUrl: string}) => void,
+  update: UpdateInfo,
+  onStartDownload: (update: UpdateInfo) => void,
 ) {
-  Alert.alert(
-    `새 버전 ${update.versionName}`,
-    update.releaseNotes || '새로운 업데이트가 있습니다.',
-    [
-      {text: '나중에', style: 'cancel'},
-      {text: '업데이트', onPress: () => onStartDownload(update)},
-    ],
-  );
+  Alert.alert('업데이트', formatUpdateDialogMessage(update), [
+    {text: '나중에', style: 'cancel'},
+    {text: '업데이트', onPress: () => onStartDownload(update)},
+  ]);
 }
 
 export async function downloadAndInstall(
-  update: {versionName: string; downloadUrl: string},
+  update: UpdateInfo,
   onProgress: (pct: number) => void,
   onDone: () => void,
   onError: (msg: string) => void,
