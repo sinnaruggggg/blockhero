@@ -18,6 +18,7 @@ import {submitLevelLeaderboard} from '../services/rankingService';
 import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
+import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 
 const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
@@ -50,7 +51,6 @@ import {
 import {getLevelEnemyStats} from '../game/battleBalance';
 import {resolveCombatTurn} from '../game/combatFlow';
 import {getLevelClearRewards} from '../game/levelProgress';
-import {formatComboMultiplier} from '../data/gameBalance';
 import {
   applyCombatDamageEffectsDetailed,
   applyDamageTakenReduction,
@@ -1696,6 +1696,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       : [];
   const hasSidePreview = previewPieces.length > 0;
   const compactPieceTray = hasSidePreview;
+  const comboGaugeMaxMs = COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
   const playerVisual =
     CHARACTER_VISUALS[selectedCharacterId] ?? CHARACTER_VISUALS.knight;
   const monsterSpriteSet = getWorldMonsterSpriteSet(
@@ -1863,25 +1864,15 @@ export default function SingleGameScreen({route, navigation}: any) {
             <Text style={styles.centerInfoText}>공격 {attackPower}</Text>
             <Text style={styles.centerInfoText}>적 공격 {enemyStats.attack}</Text>
           </View>
-          <View style={styles.centerInfoRow}>
-              <View style={styles.comboInfoBlock}>
-                <Text style={styles.centerInfoText}>
-                  {combo > 0 ? `${combo}콤보 · ${formatComboMultiplier(combo)}` : '콤보 없음'}
-                </Text>
-                {combo > 0 && comboRemainingMs > 0 && (
-                  <Text style={styles.comboTimerText}>
-                  유지 {Math.max(0, comboRemainingMs / 1000).toFixed(2)}초
-                </Text>
-              )}
-            </View>
-            <Text
-              style={[
-                styles.centerInfoText,
-                feverActive && styles.centerInfoTextActive,
-              ]}>
-              {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
-            </Text>
-          </View>
+        <View style={styles.centerInfoRow}>
+          <Text
+            style={[
+              styles.centerInfoStatus,
+              feverActive && styles.centerInfoTextActive,
+            ]}>
+            {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
+          </Text>
+        </View>
 
           {activeSkinIdRef.current > 0 && summonGaugeRequired > 0 && (
             <View style={styles.summonInlineCard}>
@@ -2020,16 +2011,7 @@ export default function SingleGameScreen({route, navigation}: any) {
                 <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
               </TouchableOpacity>
               <Text style={styles.stageLabel}>{activeLevel.name}</Text>
-              <View style={styles.headerComboBox}>
-                <Text style={styles.headerComboText}>
-                  {combo > 0 ? '콤보 유지' : ''}
-                </Text>
-                  <Text style={styles.headerTimerText}>
-                    {combo > 0 && comboRemainingMs > 0
-                      ? `${combo}콤보 · ${formatComboMultiplier(combo)} · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`
-                      : ''}
-                  </Text>
-                </View>
+              <View style={styles.headerSideSpacer} />
             </View>
 
               {renderBattleLane()}
@@ -2037,6 +2019,11 @@ export default function SingleGameScreen({route, navigation}: any) {
               <View
                 style={styles.boardContainer}
                 onLayout={handleBoardLayout}>
+                <ComboGaugeOverlay
+                  combo={combo}
+                  comboRemainingMs={comboRemainingMs}
+                  comboMaxMs={comboGaugeMaxMs}
+                />
                 <Board
                   ref={boardRef}
                   board={board}
@@ -2103,16 +2090,7 @@ export default function SingleGameScreen({route, navigation}: any) {
           <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
         </TouchableOpacity>
         <Text style={styles.stageLabel}>{activeLevel.name}</Text>
-        <View style={styles.headerComboBox}>
-          <Text style={styles.headerComboText}>
-            {combo > 0 ? '콤보 유지' : ''}
-          </Text>
-            <Text style={styles.headerTimerText}>
-              {combo > 0 && comboRemainingMs > 0
-                ? `${combo}콤보 · ${formatComboMultiplier(combo)} · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`
-                : ''}
-            </Text>
-          </View>
+        <View style={styles.headerSideSpacer} />
       </View>
 
         {renderBattleLane()}
@@ -2120,6 +2098,11 @@ export default function SingleGameScreen({route, navigation}: any) {
         <View
           style={styles.boardContainer}
           onLayout={handleBoardLayout}>
+          <ComboGaugeOverlay
+            combo={combo}
+            comboRemainingMs={comboRemainingMs}
+            comboMaxMs={comboGaugeMaxMs}
+          />
           <Board
             ref={boardRef}
             board={board}
@@ -2260,32 +2243,6 @@ export default function SingleGameScreen({route, navigation}: any) {
               />
             );
           })}
-          <Animated.View
-            style={[
-              styles.comboBurstTextWrap,
-              {
-                opacity: comboBurstAnim.interpolate({
-                  inputRange: [0, 0.08, 0.72, 1.15],
-                  outputRange: [0, 1, 1, 0],
-                  extrapolate: 'clamp',
-                }),
-                transform: [
-                  {
-                    translateY: comboBurstAnim.interpolate({
-                      inputRange: [0, 1.15],
-                      outputRange: [18, -36 - Math.min(44, comboBurstValue * 2)],
-                      extrapolate: 'clamp',
-                    }),
-                  },
-                ],
-              },
-            ]}>
-            <Text style={styles.comboBurstText}>
-              {comboBurstValue > 0
-                ? `${comboBurstValue}콤보 ${formatComboMultiplier(comboBurstValue)}`
-                : ''}
-            </Text>
-          </Animated.View>
         </View>
       )}
 
@@ -2535,23 +2492,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  headerComboBox: {
-    minWidth: 82,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  headerComboText: {
-    color: '#fbbf24',
-    fontSize: 13,
-    fontWeight: '900',
-    textAlign: 'right',
-  },
-  headerTimerText: {
-    color: '#fde68a',
-    fontSize: 10,
-    fontWeight: '800',
-    marginTop: 1,
-    textAlign: 'right',
+  headerSideSpacer: {
+    width: 40,
   },
   battleLane: {
     flexDirection: 'row',
@@ -2653,11 +2595,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  comboInfoBlock: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   centerInfoText: {
     flex: 1,
     color: '#dbeafe',
@@ -2665,11 +2602,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  comboTimerText: {
-    marginTop: 2,
-    color: '#fcd34d',
-    fontSize: 10,
-    fontWeight: '700',
+  centerInfoStatus: {
+    flex: 1,
+    color: '#dbeafe',
+    fontSize: 11,
+    fontWeight: '800',
     textAlign: 'center',
   },
   centerInfoTextActive: {
@@ -2861,8 +2798,8 @@ const styles = StyleSheet.create({
     minHeight: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: 4,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   bottomActionRow: {
     flexDirection: 'row',
@@ -2981,18 +2918,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 24,
     borderRadius: 999,
-  },
-  comboBurstTextWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  comboBurstText: {
-    color: '#f8fafc',
-    fontSize: 40,
-    fontWeight: '900',
-    textShadowColor: 'rgba(251,146,60,0.95)',
-    textShadowOffset: {width: 0, height: 0},
-    textShadowRadius: 20,
   },
   hitEffect: {
     position: 'absolute',

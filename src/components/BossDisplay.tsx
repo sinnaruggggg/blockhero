@@ -92,6 +92,7 @@ interface BossDisplayProps {
   onToggleStandings?: () => void;
   damageHits?: FloatingDamageHit[];
   activeDamageHit?: FloatingDamageHit | null;
+  onClearActiveDamageHit?: (hitId: number) => void;
   overlay?: React.ReactNode;
   bossPose?: MonsterSpritePose;
   playerOverlay?: React.ReactNode;
@@ -133,6 +134,7 @@ export default function BossDisplay({
   onToggleStandings,
   damageHits = [],
   activeDamageHit = null,
+  onClearActiveDamageHit,
   overlay,
   bossPose = 'idle',
   playerOverlay,
@@ -199,7 +201,7 @@ export default function BossDisplay({
               <HitEffect
                 key={`boss-hit-${activeDamageHit.id}`}
                 damage={activeDamageHit.damage}
-                onDone={() => {}}
+                onDone={() => onClearActiveDamageHit?.(activeDamageHit.id)}
               />
             )}
             <View pointerEvents="none" style={styles.damageHost}>
@@ -298,7 +300,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 10, 46, 0.45)',
+    backgroundColor: 'transparent',
     borderRadius: 16,
     paddingVertical: 7,
     paddingHorizontal: 7,

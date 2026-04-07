@@ -869,7 +869,13 @@ const styles = StyleSheet.create({
   attackDisabled: {opacity: 0.3},
   attackLines: {color: '#fff', fontSize: 12, fontWeight: '700'},
   attackCost: {color: '#fbbf24', fontSize: 9},
-  boardContainer: {flex: 1, justifyContent: 'center', alignItems: 'center'},
+  boardContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.8)',

@@ -5,6 +5,7 @@ import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
+import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
@@ -79,6 +80,7 @@ export default function EndlessScreen({navigation}: any) {
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
+  const [comboRemainingMs, setComboRemainingMs] = useState(0);
   const [linesCleared, setLinesCleared] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [feverGauge, setFeverGauge] = useState(0);
@@ -109,6 +111,8 @@ export default function EndlessScreen({navigation}: any) {
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feverActiveRef = useRef(false);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const comboTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const comboExpireAtRef = useRef<number | null>(null);
   const comboRef = useRef(0);
   const scoreRef = useRef(0);
   const linesClearedRef = useRef(0);
@@ -218,6 +222,7 @@ export default function EndlessScreen({navigation}: any) {
     setSummonAttack(0);
     setSummonActive(false);
     setSummonRemainingMs(0);
+    setComboRemainingMs(0);
     updateNextPieces([]);
     const initialPack = buildPiecePack('easy', initialBoard);
     setPieces(initialPack);
@@ -319,14 +324,58 @@ export default function EndlessScreen({navigation}: any) {
     return () => clearInterval(timer);
   }, [gameOver, summonActive, summonRemainingMs]);
 
+  useEffect(() => {
+    return () => {
+      if (feverTimerRef.current) {
+        clearTimeout(feverTimerRef.current);
+      }
+      if (comboTimerRef.current) {
+        clearTimeout(comboTimerRef.current);
+      }
+      if (comboTickerRef.current) {
+        clearInterval(comboTickerRef.current);
+      }
+    };
+  }, []);
+
   const resetComboTimer = useCallback(() => {
+    const durationMs =
+      COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
+
     if (comboTimerRef.current) {
       clearTimeout(comboTimerRef.current);
     }
+    if (comboTickerRef.current) {
+      clearInterval(comboTickerRef.current);
+    }
+
+    comboExpireAtRef.current = Date.now() + durationMs;
+    setComboRemainingMs(durationMs);
+
+    comboTickerRef.current = setInterval(() => {
+      if (!comboExpireAtRef.current) {
+        return;
+      }
+
+      const remaining = Math.max(0, comboExpireAtRef.current - Date.now());
+      setComboRemainingMs(remaining);
+
+      if (remaining <= 0 && comboTickerRef.current) {
+        clearInterval(comboTickerRef.current);
+        comboTickerRef.current = null;
+      }
+    }, 50);
+
     comboTimerRef.current = setTimeout(() => {
       setCombo(0);
       comboRef.current = 0;
-    }, COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs);
+      comboExpireAtRef.current = null;
+      setComboRemainingMs(0);
+      if (comboTickerRef.current) {
+        clearInterval(comboTickerRef.current);
+        comboTickerRef.current = null;
+      }
+    }, durationMs);
   }, []);
 
   const endGame = useCallback(async () => {
@@ -340,6 +389,12 @@ export default function EndlessScreen({navigation}: any) {
     if (comboTimerRef.current) {
       clearTimeout(comboTimerRef.current);
     }
+    if (comboTickerRef.current) {
+      clearInterval(comboTickerRef.current);
+      comboTickerRef.current = null;
+    }
+    comboExpireAtRef.current = null;
+    setComboRemainingMs(0);
 
     const finalScore = scoreRef.current;
     const finalLines = linesClearedRef.current;
@@ -683,6 +738,7 @@ export default function EndlessScreen({navigation}: any) {
   );
 
   const nextMilestone = ENDLESS_GOLD_MILESTONES[nextMilestoneIdx];
+  const comboGaugeMaxMs = COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -793,6 +849,11 @@ export default function EndlessScreen({navigation}: any) {
       )}
 
       <View style={styles.boardContainer} onLayout={handleBoardLayout}>
+        <ComboGaugeOverlay
+          combo={combo}
+          comboRemainingMs={comboRemainingMs}
+          comboMaxMs={comboGaugeMaxMs}
+        />
         <Board
           ref={boardRef}
           board={board}
@@ -837,8 +898,8 @@ const styles = StyleSheet.create({
     minHeight: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: 4,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   milestoneBanner: {
     position: 'absolute',

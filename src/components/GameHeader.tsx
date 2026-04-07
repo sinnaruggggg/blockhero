@@ -2,7 +2,6 @@ import React from 'react';
 import {View, StyleSheet, Text} from 'react-native';
 import BackImageButton from './BackImageButton';
 import {t} from '../i18n';
-import {formatComboMultiplier} from '../data/gameBalance';
 
 interface GameHeaderProps {
   score: number;
@@ -42,13 +41,6 @@ export default function GameHeader({
         <View style={styles.stat}>
           <Text style={styles.statLabel}>{t('game.score')}</Text>
           <Text style={styles.statValue}>{score.toLocaleString()}</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statLabel}>{t('game.combo')}</Text>
-          <Text style={[styles.statValue, combo > 0 && styles.comboActive]}>
-            {combo > 0 ? `${combo}콤보` : '-'}
-          </Text>
-          {combo > 0 && <Text style={styles.comboMeta}>{formatComboMultiplier(combo)}</Text>}
         </View>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>{t('game.lines')}</Text>
@@ -134,15 +126,6 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     fontSize: 18,
     fontWeight: '800',
-  },
-  comboActive: {
-    color: '#fbbf24',
-  },
-  comboMeta: {
-    color: '#fde68a',
-    fontSize: 11,
-    fontWeight: '800',
-    marginTop: 1,
   },
   lowTurns: {
     color: '#ef4444',

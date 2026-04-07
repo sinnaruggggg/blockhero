@@ -6,11 +6,11 @@ import {Board as BoardType, CellValue} from '../game/engine';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const BOARD_PADDING = 8;
 const CELL_GAP = 2;
-const BOARD_WIDTH = Math.min(SCREEN_WIDTH - 32, 400);
+const BOARD_WIDTH = Math.min(SCREEN_WIDTH - 48, 388);
 const CELL_SIZE = (BOARD_WIDTH - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
 
 // Compact mode for battle screen
-const COMPACT_SCALE = 0.85;
+const COMPACT_SCALE = 0.82;
 const COMPACT_CELL_SIZE = CELL_SIZE * COMPACT_SCALE;
 const COMPACT_CELL_GAP = CELL_GAP * COMPACT_SCALE;
 const COMPACT_BOARD_PADDING = BOARD_PADDING * COMPACT_SCALE;
@@ -61,7 +61,16 @@ const Cell = React.memo(function Cell({
 }) {
   if (!cell && !isPreview) {
     return (
-      <View style={{width: size, height: size, borderRadius: 3, backgroundColor: '#0a0820', borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.08)'}} />
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 4,
+          backgroundColor: '#110d24',
+          borderWidth: 0.5,
+          borderColor: 'rgba(255,255,255,0.07)',
+        }}
+      />
     );
   }
 
@@ -149,6 +158,12 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
         gap,
         backgroundColor,
       }]}>
+      <View pointerEvents="none" style={styles.boardFrame}>
+        <View style={[styles.corner, styles.cornerTopLeft]} />
+        <View style={[styles.corner, styles.cornerTopRight]} />
+        <View style={[styles.corner, styles.cornerBottomLeft]} />
+        <View style={[styles.corner, styles.cornerBottomRight]} />
+      </View>
       {board.map((row, r) => (
         <View key={r} style={{flexDirection: 'row', gap}}>
           {row.map((cell, c) => {
@@ -211,8 +226,55 @@ export {CELL_SIZE, BOARD_WIDTH, BOARD_PADDING, CELL_GAP, COMPACT_SCALE};
 const styles = StyleSheet.create({
   board: {
     backgroundColor: '#0a0820',
-    borderRadius: 12,
+    borderRadius: 16,
     alignSelf: 'center',
+    position: 'relative',
+    shadowColor: '#040211',
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    shadowOffset: {width: 0, height: 8},
+    elevation: 10,
+  },
+  boardFrame: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(191, 132, 74, 0.9)',
+    backgroundColor: 'rgba(21, 16, 44, 0.08)',
+  },
+  corner: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderColor: '#f6c26b',
+  },
+  cornerTopLeft: {
+    top: 5,
+    left: 5,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 8,
+  },
+  cornerTopRight: {
+    top: 5,
+    right: 5,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 8,
+  },
+  cornerBottomLeft: {
+    left: 5,
+    bottom: 5,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 8,
+  },
+  cornerBottomRight: {
+    right: 5,
+    bottom: 5,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 8,
   },
   hardBadge: {
     position: 'absolute',

@@ -9,6 +9,7 @@ import PieceSelector from '../components/PieceSelector';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import BossDisplay from '../components/BossDisplay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
+import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillBar from '../components/SkillBar';
@@ -20,7 +21,6 @@ import {RAID_BOSSES} from '../constants/raidBosses';
 import {formatAttackTimer} from '../constants/raidConfig';
 import {getRaidBossAttackStats} from '../game/battleBalance';
 import {resolveCombatTurn} from '../game/combatFlow';
-import {formatComboMultiplier} from '../data/gameBalance';
 import {
   applyCombatDamageEffectsDetailed,
   applyDamageTakenReduction,
@@ -1716,6 +1716,18 @@ export default function RaidScreen({route, navigation}: any) {
   const feverGaugeMaxMs = FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
 
   const renderBoardStatusDock = (compact: boolean) => {
+    return (
+      <ComboGaugeOverlay
+        combo={combo}
+        comboRemainingMs={comboRemainingMs}
+        comboMaxMs={comboGaugeMaxMs}
+        feverActive={feverActive}
+        feverRemainingMs={feverRemainingMs}
+        feverMaxMs={feverGaugeMaxMs}
+        compact={compact}
+      />
+    );
+
     const showComboGauge = combo > 0 && comboRemainingMs > 0;
     const showFeverTimer = feverActive && feverRemainingMs > 0;
 
@@ -1917,6 +1929,9 @@ export default function RaidScreen({route, navigation}: any) {
               onToggleStandings={() => setStandingsExpanded(prev => !prev)}
               damageHits={bossDamageHits}
               activeDamageHit={bossImpactHit}
+              onClearActiveDamageHit={hitId =>
+                setBossImpactHit(current => (current?.id === hitId ? null : current))
+              }
               overlay={renderSummonOverlay(false)}
               bossPose={bossPose}
               playerOverlay={renderRaidPlayerSprite(false)}
@@ -2231,10 +2246,9 @@ const styles = StyleSheet.create({
   normalRaidBossCard: {
     flex: 1,
     minHeight: 78,
-    backgroundColor: 'rgba(15,10,46,0.52)',
+    backgroundColor: 'transparent',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(71,85,105,0.45)',
+    borderWidth: 0,
     paddingHorizontal: 8,
     paddingVertical: 4,
     alignItems: 'center',
@@ -2548,12 +2562,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: 4,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   boardContainerCompact: {
-    paddingTop: 0,
-    paddingBottom: 4,
+    paddingTop: 6,
+    paddingBottom: 6,
   },
   boardStatusOverlay: {
     position: 'absolute',
