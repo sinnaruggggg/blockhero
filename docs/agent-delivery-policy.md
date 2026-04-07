@@ -15,3 +15,4 @@ For this repository, the default completion order is:
 - Git push is not blocked by phone install success or failure.
 - User-facing delivery should end with a version bump and GitHub release tag, not just a `main` push.
 - A `main` push alone is not considered complete when the user asked for deployment or expects auto-update.
+- Release completion is only valid after confirming that GitHub `releases/latest` points to the new tag.
