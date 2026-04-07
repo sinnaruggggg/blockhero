@@ -2499,7 +2499,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     marginHorizontal: 12,
-    marginBottom: 6,
+    marginBottom: 12,
     gap: 8,
   },
   battleUnit: {
@@ -2798,7 +2798,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 18,
     paddingBottom: 8,
   },
   bottomActionRow: {

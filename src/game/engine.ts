@@ -81,6 +81,43 @@ function getPieceShapeKey(shape: PieceShape): string {
   return shape.map(row => row.join('')).join('|');
 }
 
+function rotateShape(shape: PieceShape): PieceShape {
+  return Array.from({length: shape[0].length}, (_, colIndex) =>
+    Array.from({length: shape.length}, (_, rowIndex) =>
+      shape[shape.length - 1 - rowIndex][colIndex],
+    ),
+  );
+}
+
+function mirrorShape(shape: PieceShape): PieceShape {
+  return shape.map(row => [...row].reverse());
+}
+
+function getNormalizedPiecePatternKey(shape: PieceShape): string {
+  const variants: string[] = [];
+  let current = shape;
+
+  for (let step = 0; step < 4; step += 1) {
+    variants.push(getPieceShapeKey(current));
+    variants.push(getPieceShapeKey(mirrorShape(current)));
+    current = rotateShape(current);
+  }
+
+  return variants.sort()[0];
+}
+
+function isLineShape(shape: PieceShape): boolean {
+  return shape.length === 1 || shape[0].length === 1;
+}
+
+function getPieceFamilyKey(shape: PieceShape): string {
+  if (isLineShape(shape)) {
+    return `line:${countBlocks(shape)}`;
+  }
+
+  return getNormalizedPiecePatternKey(shape);
+}
+
 function rememberGeneratedPiece(piece: Piece) {
   recentGeneratedPieces = [...recentGeneratedPieces, piece].slice(-PIECE_HISTORY_LIMIT);
 }
@@ -183,7 +220,7 @@ function isImmediateRepeat(candidate: Piece, previous: Piece | null): boolean {
   }
 
   return (
-    getPieceShapeKey(candidate.shape) === getPieceShapeKey(previous.shape) ||
+    getPieceFamilyKey(candidate.shape) === getPieceFamilyKey(previous.shape) ||
     countBlocks(candidate.shape) === countBlocks(previous.shape)
   );
 }
@@ -191,19 +228,49 @@ function isImmediateRepeat(candidate: Piece, previous: Piece | null): boolean {
 function getBalanceScore(candidate: Piece, history: Piece[]): number {
   const recent = history.slice(-6);
   const candidateCount = countBlocks(candidate.shape);
-  const candidateShapeKey = getPieceShapeKey(candidate.shape);
+  const candidateFamilyKey = getPieceFamilyKey(candidate.shape);
+  const recentFamilyMatches = recent.filter(
+    previous => getPieceFamilyKey(previous.shape) === candidateFamilyKey,
+  ).length;
+  const recentCountMatches = recent.filter(
+    previous => countBlocks(previous.shape) === candidateCount,
+  ).length;
 
-  return recent.reduce((score, previous, index) => {
+  let score = recent.reduce((scoreValue, previous, index) => {
     const weight = recent.length - index;
-    let nextScore = score;
+    let nextScore = scoreValue;
     if (countBlocks(previous.shape) === candidateCount) {
-      nextScore += 3 * weight;
+      nextScore += 5 * weight;
     }
-    if (getPieceShapeKey(previous.shape) === candidateShapeKey) {
-      nextScore += 6 * weight;
+    if (getPieceFamilyKey(previous.shape) === candidateFamilyKey) {
+      nextScore += 14 * weight;
     }
     return nextScore;
   }, 0);
+
+  if (recentCountMatches >= 2) {
+    score += 60;
+  }
+
+  if (recentFamilyMatches >= 1) {
+    score += 45;
+  }
+
+  if (recentFamilyMatches >= 2) {
+    score += 200;
+  }
+
+  return score;
+}
+
+function hasRecentFamilySaturation(candidate: Piece, history: Piece[]): boolean {
+  const recentWindow = history.slice(-5);
+  const candidateFamilyKey = getPieceFamilyKey(candidate.shape);
+  const repeatedFamilyCount = recentWindow.filter(
+    previous => getPieceFamilyKey(previous.shape) === candidateFamilyKey,
+  ).length;
+
+  return repeatedFamilyCount >= 2;
 }
 
 function canPlaceShapeAnywhere(board: Board, shape: PieceShape): boolean {
@@ -217,70 +284,101 @@ function canPlaceShapeAnywhere(board: Board, shape: PieceShape): boolean {
   return false;
 }
 
+function getRankedShapeCandidates(
+  sourcePool: number[],
+  history: Piece[],
+  board?: Board,
+): {shapeIndex: number; score: number; immediateRepeat: boolean}[] {
+  const previous = history.length > 0 ? history[history.length - 1] : null;
+  const uniquePool = [...new Set(sourcePool)];
+
+  return uniquePool
+    .filter(shapeIndex => !board || canPlaceShapeAnywhere(board, PIECE_SHAPES[shapeIndex]))
+    .map(shapeIndex => {
+      const candidate: Piece = {
+        shape: PIECE_SHAPES[shapeIndex],
+        color: '#000000',
+        id: 0,
+      };
+
+      return {
+        shapeIndex,
+        score: getBalanceScore(candidate, history),
+        immediateRepeat:
+          isImmediateRepeat(candidate, previous) ||
+          hasRecentFamilySaturation(candidate, history),
+      };
+    })
+    .sort((left, right) => left.score - right.score);
+}
+
+function pickFromRankedCandidates(
+  candidates: {shapeIndex: number; score: number}[],
+  sourcePool: number[],
+): number | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const bestScore = candidates[0].score;
+  const preferredCandidates = candidates.filter(candidate => candidate.score <= bestScore + 8);
+  const weightedPool = preferredCandidates.flatMap(candidate => {
+    const duplicateCount = sourcePool.filter(entry => entry === candidate.shapeIndex).length;
+    return Array.from({length: Math.max(1, duplicateCount)}, () => candidate.shapeIndex);
+  });
+
+  if (weightedPool.length === 0) {
+    return preferredCandidates[0].shapeIndex;
+  }
+
+  return weightedPool[Math.floor(Math.random() * weightedPool.length)];
+}
+
+function getPreferredSourcePool(
+  difficulty: 'easy' | 'medium' | 'hard',
+  options: PieceGenerationOptions = {},
+): number[] {
+  const pool = getPoolForDifficulty(difficulty);
+  const preferSmall =
+    (options.smallPieceChanceBonus ?? 0) > 0 &&
+    Math.random() < (options.smallPieceChanceBonus ?? 0);
+
+  return preferSmall ? FILL_FRIENDLY : pool;
+}
+
 function pickBalancedShapeIndex(
   difficulty: 'easy' | 'medium' | 'hard',
   history: Piece[],
   options: PieceGenerationOptions = {},
   board?: Board,
 ): number {
-  const previous = history.length > 0 ? history[history.length - 1] : null;
   const pool = getPoolForDifficulty(difficulty);
-  const uniquePool = [...new Set(pool)];
-  let bestIndex: number | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
+  const sourcePool = getPreferredSourcePool(difficulty, options);
+  const rankedPreferredCandidates = getRankedShapeCandidates(sourcePool, history, board);
+  const rankedPreferredNonRepeat = rankedPreferredCandidates.filter(
+    candidate => !candidate.immediateRepeat,
+  );
+  const chosenPreferredIndex = pickFromRankedCandidates(
+    rankedPreferredNonRepeat.length > 0 ? rankedPreferredNonRepeat : rankedPreferredCandidates,
+    sourcePool,
+  );
 
-  for (let attempt = 0; attempt < 28; attempt += 1) {
-    const preferSmall =
-      (options.smallPieceChanceBonus ?? 0) > 0 &&
-      Math.random() < (options.smallPieceChanceBonus ?? 0);
-    const sourcePool = preferSmall ? FILL_FRIENDLY : pool;
-    const shapeIndex = pickWeightedShapeIndex(sourcePool);
-    const candidate: Piece = {
-      shape: PIECE_SHAPES[shapeIndex],
-      color: '#000000',
-      id: 0,
-    };
-
-    if (board && !canPlaceShapeAnywhere(board, candidate.shape)) {
-      continue;
-    }
-    if (isImmediateRepeat(candidate, previous)) {
-      continue;
-    }
-
-    const score = getBalanceScore(candidate, history);
-    if (score < bestScore) {
-      bestScore = score;
-      bestIndex = shapeIndex;
-      if (score === 0) {
-        break;
-      }
-    }
+  if (chosenPreferredIndex !== null) {
+    return chosenPreferredIndex;
   }
 
-  if (bestIndex !== null) {
-    return bestIndex;
-  }
+  const fallbackPool = [...new Set([...FILL_FRIENDLY, ...pool])];
+  const rankedFallbackCandidates = getRankedShapeCandidates(fallbackPool, history, board);
+  const rankedFallbackNonRepeat = rankedFallbackCandidates.filter(
+    candidate => !candidate.immediateRepeat,
+  );
+  const chosenFallbackIndex = pickFromRankedCandidates(
+    rankedFallbackNonRepeat.length > 0 ? rankedFallbackNonRepeat : rankedFallbackCandidates,
+    fallbackPool,
+  );
 
-  const fallbackPool = [...new Set([...FILL_FRIENDLY, ...uniquePool])];
-  for (const shapeIndex of fallbackPool) {
-    const candidate: Piece = {
-      shape: PIECE_SHAPES[shapeIndex],
-      color: '#000000',
-      id: 0,
-    };
-    if (board && !canPlaceShapeAnywhere(board, candidate.shape)) {
-      continue;
-    }
-    if (!isImmediateRepeat(candidate, previous)) {
-      return shapeIndex;
-    }
-  }
-
-  for (const shapeIndex of fallbackPool) {
-    if (!board || canPlaceShapeAnywhere(board, PIECE_SHAPES[shapeIndex])) {
-      return shapeIndex;
-    }
+  if (chosenFallbackIndex !== null) {
+    return chosenFallbackIndex;
   }
 
   return pickWeightedShapeIndex(pool);

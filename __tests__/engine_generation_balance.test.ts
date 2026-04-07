@@ -13,6 +13,34 @@ function shapeKey(piece: Piece): string {
   return piece.shape.map(row => row.join('')).join('|');
 }
 
+function rotateShape(shape: number[][]): number[][] {
+  return Array.from({length: shape[0].length}, (_, colIndex) =>
+    Array.from({length: shape.length}, (_, rowIndex) =>
+      shape[shape.length - 1 - rowIndex][colIndex],
+    ),
+  );
+}
+
+function mirrorShape(shape: number[][]): number[][] {
+  return shape.map(row => [...row].reverse());
+}
+
+function normalizedFamilyKey(piece: Piece): string {
+  if (piece.shape.length === 1 || piece.shape[0].length === 1) {
+    return `line:${countBlocks(piece.shape)}`;
+  }
+
+  const variants: string[] = [];
+  let current = piece.shape;
+  for (let step = 0; step < 4; step += 1) {
+    variants.push(current.map(row => row.join('')).join('|'));
+    variants.push(mirrorShape(current).map(row => row.join('')).join('|'));
+    current = rotateShape(current);
+  }
+
+  return variants.sort()[0];
+}
+
 function expectNoImmediateRepeat(sequence: Piece[]) {
   for (let index = 1; index < sequence.length; index += 1) {
     const previous = sequence[index - 1];
@@ -54,6 +82,21 @@ describe('engine piece generation balance', () => {
 
     expect(sequence).toHaveLength(18);
     expectNoImmediateRepeat(sequence);
+  });
+
+  it('keeps strong piece-family diversity within short recent windows', () => {
+    const board = createBoard();
+    const sequence: Piece[] = [];
+
+    for (let index = 0; index < 10; index += 1) {
+      sequence.push(...generatePlaceablePieces(board, 'easy'));
+    }
+
+    for (let index = 0; index <= sequence.length - 5; index += 1) {
+      const recentWindow = sequence.slice(index, index + 5);
+      const uniqueFamilyCount = new Set(recentWindow.map(normalizedFamilyKey)).size;
+      expect(uniqueFamilyCount).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it('halves 1-cell and 2-cell spawn probability in normal and fill-friendly pools', () => {
