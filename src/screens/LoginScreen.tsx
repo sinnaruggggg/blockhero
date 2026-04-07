@@ -32,9 +32,18 @@ type Mode = 'login' | 'signup';
 const GUEST_EMAIL_KEY = 'guestAuthEmail';
 const GUEST_PASSWORD_KEY = 'guestAuthPassword';
 const GUEST_NICKNAME_KEY = 'guestAuthNickname';
+const NICKNAME_CACHE_PREFIX = 'nickname_cache_';
 
 function createGuestSeed() {
   return `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createGuestNickname() {
+  return `게스트${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function getNicknameCacheKey(userId: string) {
+  return `${NICKNAME_CACHE_PREFIX}${userId}`;
 }
 
 export default function LoginScreen({
@@ -49,23 +58,74 @@ export default function LoginScreen({
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const saveNicknameCache = async (userId: string, value: string | null) => {
+    const key = getNicknameCacheKey(userId);
+    if (value) {
+      await AsyncStorage.setItem(key, value);
+    } else {
+      await AsyncStorage.removeItem(key);
+    }
+  };
+
+  const syncProfileNickname = async (
+    userId: string,
+    options?: {
+      fallbackNickname?: string;
+      provider?: 'guest' | 'email' | 'google';
+    },
+  ) => {
+    const {data: existingProfile, error} = await supabase
+      .from('profiles')
+      .select('nickname, provider')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (existingProfile?.nickname) {
+      await saveNicknameCache(userId, existingProfile.nickname);
+      if (existingProfile.provider === 'guest') {
+        await AsyncStorage.setItem(GUEST_NICKNAME_KEY, existingProfile.nickname);
+      }
+      return existingProfile.nickname;
+    }
+
+    if (options?.fallbackNickname) {
+      const {error: upsertError} = await supabase.from('profiles').upsert({
+        id: userId,
+        nickname: options.fallbackNickname,
+        provider: options.provider ?? existingProfile?.provider ?? 'email',
+      });
+
+      if (upsertError) {
+        throw upsertError;
+      }
+
+      await saveNicknameCache(userId, options.fallbackNickname);
+      if ((options.provider ?? existingProfile?.provider) === 'guest') {
+        await AsyncStorage.setItem(GUEST_NICKNAME_KEY, options.fallbackNickname);
+      }
+      return options.fallbackNickname;
+    }
+
+    await saveNicknameCache(userId, null);
+    return null;
+  };
+
   const ensureGuestProfile = async (userId: string, guestNickname: string) => {
-    await supabase.from('profiles').upsert({
-      id: userId,
-      nickname: guestNickname,
+    await syncProfileNickname(userId, {
+      fallbackNickname: guestNickname,
       provider: 'guest',
     });
-    await AsyncStorage.setItem('nickname', guestNickname);
-    await AsyncStorage.setItem(GUEST_NICKNAME_KEY, guestNickname);
   };
 
   const signInWithStoredGuest = async () => {
     const savedEmail = await AsyncStorage.getItem(GUEST_EMAIL_KEY);
     const savedPassword = await AsyncStorage.getItem(GUEST_PASSWORD_KEY);
     const savedNickname =
-      (await AsyncStorage.getItem(GUEST_NICKNAME_KEY)) ||
-      (await AsyncStorage.getItem('nickname')) ||
-      `게스트${Math.floor(1000 + Math.random() * 9000)}`;
+      (await AsyncStorage.getItem(GUEST_NICKNAME_KEY)) || createGuestNickname();
 
     if (!savedEmail || !savedPassword) {
       return false;
@@ -93,8 +153,7 @@ export default function LoginScreen({
     const guestEmail = `guest_${seed}@blockhero.local`;
     const guestPassword = `Guest#${seed}`;
     const guestNickname =
-      (await AsyncStorage.getItem('nickname')) ||
-      `게스트${Math.floor(1000 + Math.random() * 9000)}`;
+      (await AsyncStorage.getItem(GUEST_NICKNAME_KEY)) || createGuestNickname();
 
     const {data, error} = await supabase.auth.signUp({
       email: guestEmail,
@@ -159,9 +218,8 @@ export default function LoginScreen({
         }
 
         if (data.user) {
-          await supabase.from('profiles').upsert({
-            id: data.user.id,
-            nickname: nickname.trim(),
+          await syncProfileNickname(data.user.id, {
+            fallbackNickname: nickname.trim(),
             provider: 'email',
           });
         }
@@ -169,12 +227,15 @@ export default function LoginScreen({
         Alert.alert(t('common.notice'), t('auth.signupSuccess'));
         onLoginSuccess();
       } else {
-        const {error} = await supabase.auth.signInWithPassword({
+        const {data, error} = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
         if (error) {
           throw error;
+        }
+        if (data.user) {
+          await syncProfileNickname(data.user.id);
         }
         onLoginSuccess();
       }
@@ -201,13 +262,17 @@ export default function LoginScreen({
         throw new Error('구글 로그인에 실패했습니다. 토큰을 가져오지 못했습니다.');
       }
 
-      const {error} = await supabase.auth.signInWithIdToken({
+      const {data, error} = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: idToken,
       });
 
       if (error) {
         throw error;
+      }
+
+      if (data.user) {
+        await syncProfileNickname(data.user.id, {provider: 'google'});
       }
 
       onLoginSuccess();
@@ -223,7 +288,7 @@ export default function LoginScreen({
   const handleGuestLogin = async () => {
     setLoading(true);
     try {
-      const {error} = await supabase.auth.signInAnonymously();
+      const {data, error} = await supabase.auth.signInAnonymously();
       if (error) {
         const message = String(error.message || '');
         if (message.toLowerCase().includes('anonymous sign-ins are disabled')) {
@@ -231,6 +296,13 @@ export default function LoginScreen({
         } else {
           throw error;
         }
+      } else if (data.user) {
+        const guestNickname =
+          (await AsyncStorage.getItem(GUEST_NICKNAME_KEY)) || createGuestNickname();
+        await syncProfileNickname(data.user.id, {
+          fallbackNickname: guestNickname,
+          provider: 'guest',
+        });
       }
       onLoginSuccess();
     } catch (error: any) {
@@ -261,7 +333,7 @@ export default function LoginScreen({
           </View>
 
           <View style={styles.form}>
-            {mode === 'signup' && (
+            {mode === 'signup' ? (
               <TextInput
                 autoCapitalize="none"
                 maxLength={10}
@@ -271,7 +343,7 @@ export default function LoginScreen({
                 value={nickname}
                 onChangeText={setNickname}
               />
-            )}
+            ) : null}
 
             <TextInput
               autoCapitalize="none"
@@ -293,7 +365,7 @@ export default function LoginScreen({
               onChangeText={setPassword}
             />
 
-            {mode === 'signup' && (
+            {mode === 'signup' ? (
               <TextInput
                 placeholder={t('auth.confirmPassword')}
                 placeholderTextColor="#64748b"
@@ -302,7 +374,7 @@ export default function LoginScreen({
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
               />
-            )}
+            ) : null}
 
             <TouchableOpacity
               disabled={loading}

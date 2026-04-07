@@ -82,8 +82,8 @@ android {
         applicationId "com.blockhero.game"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 158
-        versionName "1.3.30"
+        versionCode 159
+        versionName "1.3.31"
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
         }

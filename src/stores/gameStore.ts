@@ -200,6 +200,20 @@ async function saveLocalString(key: string, value: string | null): Promise<void>
   } catch {}
 }
 
+const NICKNAME_CACHE_PREFIX = 'nickname_cache_';
+
+function getNicknameCacheKey(userId: string) {
+  return `${NICKNAME_CACHE_PREFIX}${userId}`;
+}
+
+async function loadNicknameCache(userId: string): Promise<string | null> {
+  return loadLocalString(getNicknameCacheKey(userId));
+}
+
+async function saveNicknameCache(userId: string, nickname: string | null): Promise<void> {
+  await saveLocalString(getNicknameCacheKey(userId), nickname);
+}
+
 async function buildLocalPlayerStatePatch(): Promise<
   Partial<Omit<PlayerStateRow, 'user_id'>>
 > {
@@ -749,26 +763,37 @@ export async function getPlayerId(): Promise<string> {
 
 export async function getNickname(): Promise<string> {
   try {
+    const userId = await getCurrentUserId();
     const profile = await loadOwnProfile();
     if (profile?.nickname) {
-      await saveLocalString('nickname', profile.nickname);
+      if (userId) {
+        await saveNicknameCache(userId, profile.nickname);
+      }
       return profile.nickname;
+    }
+
+    if (userId) {
+      const cachedNickname = await loadNicknameCache(userId);
+      if (cachedNickname) {
+        return cachedNickname;
+      }
     }
   } catch {}
 
-  return (await loadLocalString('nickname')) || t('common.player');
+  return t('common.player');
 }
 
 export async function setNickname(name: string): Promise<void> {
   try {
+    const userId = await getCurrentUserId();
     const updated = await updateOwnProfile({nickname: name});
     if (updated) {
-      await saveLocalString('nickname', name);
+      if (userId) {
+        await saveNicknameCache(userId, name);
+      }
       return;
     }
   } catch {}
-
-  await saveLocalString('nickname', name);
 }
 
 // Diamond operations

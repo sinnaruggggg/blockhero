@@ -67,6 +67,7 @@ function ToggleRow({
 
 export default function SettingsScreen({navigation}: any) {
   const [email, setEmail] = useState('');
+  const [provider, setProvider] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [bgmEnabled, setBgmEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
@@ -84,7 +85,7 @@ export default function SettingsScreen({navigation}: any) {
       if (user?.email) {
         setEmail(user.email);
       }
-
+      setProvider((user?.app_metadata?.provider as string) || '');
       setIsAdmin(await getAdminStatus());
 
       const settings = await loadGameSettings();
@@ -142,6 +143,42 @@ export default function SettingsScreen({navigation}: any) {
     openGameDialog({title: '알림', message: '캐시가 삭제되었습니다.'});
   };
 
+  const handleSwitchGoogleAccount = async () => {
+    const confirmed = await showGameConfirm({
+      title: '구글 계정 변경',
+      message: '현재 구글 로그인을 해제하고 다른 계정으로 다시 로그인합니다.',
+      confirmText: '계정 변경',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      let GoogleSignin: any = null;
+      try {
+        const googleSignIn = require('@react-native-google-signin/google-signin');
+        GoogleSignin = googleSignIn.GoogleSignin;
+      } catch {}
+
+      if (GoogleSignin) {
+        try {
+          await GoogleSignin.signOut();
+        } catch {}
+        try {
+          await GoogleSignin.disconnect();
+        } catch {}
+      }
+
+      await supabase.auth.signOut();
+    } catch (error: any) {
+      openGameDialog({
+        title: '오류',
+        message: error?.message || '구글 계정을 변경하지 못했습니다.',
+        variant: 'error',
+      });
+    }
+  };
+
   return (
     <MenuScreenFrame
       title="설정"
@@ -153,6 +190,11 @@ export default function SettingsScreen({navigation}: any) {
           <Text style={styles.infoLabel}>로그인 계정</Text>
           <Text style={styles.infoValue}>{email || '불러오는 중...'}</Text>
         </View>
+        {provider === 'google' ? (
+          <TouchableOpacity style={styles.menuItem} onPress={handleSwitchGoogleAccount}>
+            <Text style={styles.menuText}>구글 계정 변경</Text>
+          </TouchableOpacity>
+        ) : null}
       </GamePanel>
 
       <GamePanel>
