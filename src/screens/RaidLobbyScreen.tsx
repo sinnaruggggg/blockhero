@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+﻿import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
+import {useCreatorConfig} from '../hooks/useCreatorConfig';
 import {
   getPlayerId,
   getNickname,
@@ -51,6 +52,10 @@ import {
   formatBossRaidCountdownLabel,
   getBossRaidWindowInfo,
 } from '../game/raidRules';
+import {
+  listCreatorRaids,
+  resolveCreatorRaidRuntime,
+} from '../game/creatorManifest';
 import {getUnlockedBossRaidStages} from '../game/levelProgress';
 import {getCharacterSkillEffects} from '../game/characterSkillEffects';
 import {getAdminStatus} from '../services/adminSync';
@@ -237,6 +242,7 @@ function buildBlockingLoadSummary(issue: LoadIssue): LoadSummary {
 }
 
 export default function RaidLobbyScreen({navigation}: any) {
+  const {manifest: creatorManifest} = useCreatorConfig();
   const [raidMode, setRaidMode] = useState<'normal' | 'boss'>('normal');
   const [loading, setLoading] = useState(true);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
@@ -256,6 +262,67 @@ export default function RaidLobbyScreen({navigation}: any) {
   const [chatNickname, setChatNickname] = useState('');
   const [chatSessionKey, setChatSessionKey] = useState(0);
 
+  const creatorNormalRaids = useMemo(
+    () => listCreatorRaids(creatorManifest, 'normal').filter(raid => raid.enabled !== false),
+    [creatorManifest],
+  );
+  const creatorBossRaids = useMemo(
+    () => listCreatorRaids(creatorManifest, 'boss').filter(raid => raid.enabled !== false),
+    [creatorManifest],
+  );
+  const normalRaidEntries = useMemo(() => {
+    if (creatorNormalRaids.length > 0) {
+      return creatorNormalRaids.map(raid => {
+        const raidDisplay = resolveCreatorRaidRuntime(creatorManifest, 'normal', raid.stage);
+        return {
+          stage: raid.stage,
+          name: raidDisplay?.name ?? raid.name,
+          color: raidDisplay?.monsterColor ?? '#22c55e',
+          emoji: raidDisplay?.monsterEmoji ?? '⚔',
+          maxHp: raidDisplay?.maxHp ?? 0,
+          reward: raid.reward,
+        };
+      });
+    }
+
+    return NORMAL_RAID_REWARDS.map(reward => {
+      const boss = RAID_BOSSES.find(entry => entry.stage === reward.stage) ?? RAID_BOSSES[0];
+      return {
+        stage: reward.stage,
+        name: t(boss.nameKey),
+        color: boss.color,
+        emoji: boss.emoji,
+        maxHp: boss.maxHp,
+        reward: {
+          firstClearDiamondReward: reward.firstDia,
+          repeatDiamondReward: reward.perKill,
+        },
+      };
+    });
+  }, [creatorManifest, creatorNormalRaids]);
+  const bossRaidEntries = useMemo(() => {
+    if (creatorBossRaids.length > 0) {
+      return creatorBossRaids.map(raid => {
+        const raidDisplay = resolveCreatorRaidRuntime(creatorManifest, 'boss', raid.stage);
+        return {
+          stage: raid.stage,
+          name: raidDisplay?.name ?? raid.name,
+          color: raidDisplay?.monsterColor ?? '#ef4444',
+          emoji: raidDisplay?.monsterEmoji ?? '⚔',
+          maxHp: raidDisplay?.maxHp ?? 0,
+        };
+      });
+    }
+
+    return RAID_BOSSES.map(boss => ({
+      stage: boss.stage,
+      name: t(boss.nameKey),
+      color: boss.color,
+      emoji: boss.emoji,
+      maxHp: boss.maxHp,
+    }));
+  }, [creatorBossRaids, creatorManifest]);
+
   const playerIdRef = useRef('');
   const nicknameRef = useRef('');
   const partyChannelRef = useRef<any>(null);
@@ -270,6 +337,29 @@ export default function RaidLobbyScreen({navigation}: any) {
   });
 
   const bossWindowInfo = getBossRaidWindowInfo(Date.now());
+  const resolveRaidDisplay = useCallback(
+    (raidType: 'normal' | 'boss', stage: number) => {
+      const creatorRaid = resolveCreatorRaidRuntime(creatorManifest, raidType, stage);
+      const staticBoss = RAID_BOSSES.find(entry => entry.stage === stage) ?? RAID_BOSSES[0];
+      return {
+        name: creatorRaid?.name ?? t(staticBoss.nameKey),
+        color: creatorRaid?.monsterColor ?? staticBoss.color,
+        emoji: creatorRaid?.monsterEmoji ?? staticBoss.emoji,
+        maxHp: creatorRaid?.maxHp ?? staticBoss.maxHp,
+        timeLimitMs:
+          creatorRaid?.timeLimitMs ??
+          (raidType === 'normal' ? 15 * 60 * 1000 : BOSS_RAID_WINDOW_MS),
+        reward:
+          creatorRaid?.reward ?? {
+            firstClearDiamondReward:
+              NORMAL_RAID_REWARDS.find(entry => entry.stage === stage)?.firstDia ?? 0,
+            repeatDiamondReward:
+              NORMAL_RAID_REWARDS.find(entry => entry.stage === stage)?.perKill ?? 0,
+          },
+      };
+    },
+    [creatorManifest],
+  );
 
   const cleanup = useCallback(() => {
     if (partyChannelRef.current) {
@@ -544,18 +634,18 @@ export default function RaidLobbyScreen({navigation}: any) {
 
   const handleNormalRaidChallenge = useCallback(
     async (bossStage: number) => {
-      const boss = RAID_BOSSES.find(entry => entry.stage === bossStage);
-      if (!boss) {
-        return;
-      }
+      const raidDisplay = resolveRaidDisplay('normal', bossStage);
 
       const {data: instance, error} = await startRaid(
         bossStage,
-        boss.maxHp,
+        raidDisplay.maxHp,
         playerIdRef.current,
         nicknameRef.current,
         {
-          expiresInMs: 365 * 24 * 60 * 60 * 1000,
+          expiresInMs: Math.max(
+            365 * 24 * 60 * 60 * 1000,
+            raidDisplay.timeLimitMs,
+          ),
           skipCooldown: true,
         },
       );
@@ -584,7 +674,7 @@ export default function RaidLobbyScreen({navigation}: any) {
         isNormalRaid: true,
       });
     },
-    [cleanup, navigation, partyId],
+    [cleanup, navigation, partyId, resolveRaidDisplay],
   );
 
   const handleChallengeBoss = useCallback(
@@ -592,7 +682,7 @@ export default function RaidLobbyScreen({navigation}: any) {
       if (false && !bossWindowInfo.isOpen) {
         Alert.alert(
           '보스 레이드',
-          '보스 레이드는 4시간마다 10분 동안만 열립니다.',
+          '보스 레이드는 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수 있습니다.',
         );
         return;
       }
@@ -600,15 +690,12 @@ export default function RaidLobbyScreen({navigation}: any) {
       if (!isAdmin && !unlockedBossStages.includes(bossStage)) {
         Alert.alert(
           '보스 레이드',
-          '해당 월드 30스테이지를 모두 클리어해야 도전할 수 있습니다.',
+          '해당 월드의 30스테이지를 모두 클리어해야 보스 레이드에 도전할 수 있습니다.',
         );
         return;
       }
 
-      const boss = RAID_BOSSES.find(entry => entry.stage === bossStage);
-      if (!boss) {
-        return;
-      }
+      const raidDisplay = resolveRaidDisplay('boss', bossStage);
 
       const selectedCharacter = await getSelectedCharacter();
       let raidTimeBonusMs = 0;
@@ -627,11 +714,11 @@ export default function RaidLobbyScreen({navigation}: any) {
 
       const {data: instance, error} = await startRaid(
         bossStage,
-        boss.maxHp,
+        raidDisplay.maxHp,
         playerIdRef.current,
         nicknameRef.current,
         {
-          expiresInMs: BOSS_RAID_WINDOW_MS + raidTimeBonusMs,
+          expiresInMs: raidDisplay.timeLimitMs + raidTimeBonusMs,
           reuseOpenInstance: true,
           skipCooldown: true,
         },
@@ -668,6 +755,7 @@ export default function RaidLobbyScreen({navigation}: any) {
       navigation,
       partyId,
       partyMembers.length,
+      resolveRaidDisplay,
       unlockedBossStages,
     ],
   );
@@ -675,7 +763,7 @@ export default function RaidLobbyScreen({navigation}: any) {
   const handleJoinRaid = useCallback(
     async (raid: ActiveRaid) => {
       if (!isAdmin && !unlockedBossStages.includes(raid.boss_stage)) {
-        Alert.alert('보스 레이드', '해당 단계가 아직 잠겨 있습니다.');
+        Alert.alert('보스 레이드', '해당 보스 단계가 아직 열리지 않았습니다.');
         return;
       }
 
@@ -737,7 +825,7 @@ export default function RaidLobbyScreen({navigation}: any) {
             cleanup();
             navigation.goBack();
           }}>
-          <Text style={styles.backBtn}>←</Text>
+          <Text style={styles.backBtn}>뒤로</Text>
         </TouchableOpacity>
         <Text style={styles.title}>레이드</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Friends')}>
@@ -769,7 +857,6 @@ export default function RaidLobbyScreen({navigation}: any) {
           </Text>
         </TouchableOpacity>
       </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {loadSummary && (
           <View
@@ -789,37 +876,32 @@ export default function RaidLobbyScreen({navigation}: any) {
             {false && (
               <>
             <Text style={styles.modeDesc}>
-              일반 레이드는 언제든지 도전할 수 있습니다. 최초 토벌 다이아를 받고,
-              이후에는 누적 토벌 수에 따라 반복 보상을 획득합니다.
+              일반 레이드는 상시 도전할 수 있습니다. 제한 시간 동안 최대한 많은 피해를 넣고
+              누적 처치 수를 올려 보상을 챙기세요.
             </Text>
             <Text style={styles.skinHint}>
-              같은 일반 레이드를 10번 클리어하면 해당 레이드 스킨이 해금됩니다.
+              일반 레이드 10회 누적 처치 시 스킨 관련 보상을 받을 수 있습니다.
             </Text>
 
               </>
             )}
-            {NORMAL_RAID_REWARDS.map(reward => {
-              const boss = RAID_BOSSES.find(entry => entry.stage === reward.stage);
-              if (!boss) {
-                return null;
-              }
-
-              const stageProgress = normalRaidProgress[reward.stage];
+            {normalRaidEntries.map(entry => {
+              const stageProgress = normalRaidProgress[entry.stage];
               const killCount = stageProgress?.killCount ?? 0;
-              const skinEarned = hasSkinFromRaid(normalRaidProgress, reward.stage);
+              const skinEarned = hasSkinFromRaid(normalRaidProgress, entry.stage);
 
               return (
                 <View
-                  key={reward.stage}
-                  style={[styles.normalRaidCard, {borderColor: `${boss.color}80`}]}>
-                  <Text style={styles.nrEmoji}>{boss.emoji}</Text>
+                  key={entry.stage}
+                  style={[styles.normalRaidCard, {borderColor: `${entry.color}80`}]}>
+                  <Text style={styles.nrEmoji}>{entry.emoji}</Text>
                   <View style={styles.nrInfo}>
-                    <Text style={[styles.nrName, {color: boss.color}]}>
-                      {t(boss.nameKey)}
+                    <Text style={[styles.nrName, {color: entry.color}]}>
+                      {entry.name}
                       {skinEarned ? ' · 스킨 획득 완료' : ''}
                     </Text>
                     <Text style={styles.nrReward}>
-                      최초 토벌 다이아 {reward.firstDia} / 반복 토벌 +{reward.perKill}
+                      첫 클리어 다이아 {entry.reward.firstClearDiamondReward} / 반복 처치 +{entry.reward.repeatDiamondReward}
                     </Text>
                     <View style={styles.killBar}>
                       <View
@@ -827,20 +909,20 @@ export default function RaidLobbyScreen({navigation}: any) {
                           styles.killBarFill,
                           {
                             width: `${Math.min((killCount / 10) * 100, 100)}%`,
-                            backgroundColor: boss.color,
+                            backgroundColor: entry.color,
                           },
                         ]}
                       />
                     </View>
-                    <Text style={styles.killCount}>누적 토벌 {killCount}회</Text>
+                    <Text style={styles.killCount}>누적 처치 {killCount}회</Text>
                   </View>
                   <TouchableOpacity
                     style={[
                       styles.nrChallengeBtn,
-                      {backgroundColor: `${boss.color}33`, borderColor: boss.color},
+                      {backgroundColor: `${entry.color}33`, borderColor: entry.color},
                     ]}
-                    onPress={() => handleNormalRaidChallenge(reward.stage)}>
-                    <Text style={[styles.nrChallengeBtnText, {color: boss.color}]}>
+                    onPress={() => handleNormalRaidChallenge(entry.stage)}>
+                    <Text style={[styles.nrChallengeBtnText, {color: entry.color}]}>
                       도전
                     </Text>
                   </TouchableOpacity>
@@ -853,12 +935,10 @@ export default function RaidLobbyScreen({navigation}: any) {
             <View style={styles.bossRaidScheduleCard}>
               <Text style={styles.bossRaidScheduleTitle}>보스 레이드</Text>
               <Text style={styles.bossRaidScheduleDesc}>
-                서버 시간 기준 4시간마다 열리며, 열리고 나면 10분 동안만 입장할 수
-                있습니다.
+                서버 시간 기준 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수 있습니다.
               </Text>
               <Text style={styles.bossRaidScheduleDesc}>
-                방당 최대 {BOSS_RAID_MAX_PLAYERS}명까지 참여 가능하며, 가득 차면 새
-                방이 생성됩니다.
+                방당 최대 {BOSS_RAID_MAX_PLAYERS}명까지 참가 가능하며, 가득 차면 새 방이 생성됩니다.
               </Text>
               <Text style={styles.voiceHint}>
                 음성 대화는 레이드 전투 안에서만 사용할 수 있습니다.
@@ -874,18 +954,15 @@ export default function RaidLobbyScreen({navigation}: any) {
             </View>
 
             <Text style={styles.modeDesc}>
-              각 월드 30스테이지를 모두 클리어하면 해당 단계의 보스 레이드가
-              해금됩니다.
+              모든 월드 30스테이지를 클리어하면 해당 단계의 보스 레이드가 열립니다.
+
             </Text>
 
             {activeRaids.length > 0 && (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>진행 중인 보스 레이드</Text>
                 {activeRaids.map(raid => {
-                  const boss = RAID_BOSSES.find(entry => entry.stage === raid.boss_stage);
-                  if (!boss) {
-                    return null;
-                  }
+                  const raidDisplay = resolveRaidDisplay('boss', raid.boss_stage);
 
                   const remainingMs = Math.max(
                     0,
@@ -897,20 +974,20 @@ export default function RaidLobbyScreen({navigation}: any) {
                   return (
                     <TouchableOpacity
                       key={raid.id}
-                      style={[styles.activeRaidCard, {borderColor: boss.color}]}
+                      style={[styles.activeRaidCard, {borderColor: raidDisplay.color}]}
                       onPress={() => handleJoinRaid(raid)}>
-                      {getRaidBossSprite(boss.stage) ? (
+                      {getRaidBossSprite(raid.boss_stage) ? (
                         <Image
-                          source={getRaidBossSprite(boss.stage)!}
+                          source={getRaidBossSprite(raid.boss_stage)!}
                           resizeMode="contain"
                           fadeDuration={0}
                           style={styles.activeRaidSprite}
                         />
                       ) : (
-                        <Text style={styles.activeRaidEmoji}>{boss.emoji}</Text>
+                        <Text style={styles.activeRaidEmoji}>{raidDisplay.emoji}</Text>
                       )}
                       <View style={styles.activeRaidInfo}>
-                        <Text style={styles.activeRaidName}>{t(boss.nameKey)}</Text>
+                        <Text style={styles.activeRaidName}>{raidDisplay.name}</Text>
                         <Text style={styles.activeRaidHp}>
                           체력 {formatHp(raid.boss_current_hp)} / {formatHp(raid.boss_max_hp)}
                         </Text>
@@ -927,41 +1004,41 @@ export default function RaidLobbyScreen({navigation}: any) {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>보스 단계</Text>
               <View style={styles.bossGrid}>
-                {RAID_BOSSES.map(boss => {
-                  const unlocked = isAdmin || unlockedBossStages.includes(boss.stage);
+                {bossRaidEntries.map(entry => {
+                  const unlocked = isAdmin || unlockedBossStages.includes(entry.stage);
                   const disabled = !unlocked;
 
                   return (
                     <TouchableOpacity
-                      key={boss.stage}
+                      key={entry.stage}
                       style={[
                         styles.bossCard,
-                        {borderColor: boss.color},
+                        {borderColor: entry.color},
                         disabled && styles.bossCardLocked,
                       ]}
                       disabled={disabled}
-                      onPress={() => handleChallengeBoss(boss.stage)}>
-                      {getRaidBossSprite(boss.stage) ? (
+                      onPress={() => handleChallengeBoss(entry.stage)}>
+                      {getRaidBossSprite(entry.stage) ? (
                         <Image
-                          source={getRaidBossSprite(boss.stage)!}
+                          source={getRaidBossSprite(entry.stage)!}
                           resizeMode="contain"
                           fadeDuration={0}
                           style={styles.bossSprite}
                         />
                       ) : (
-                        <Text style={styles.bossEmoji}>{boss.emoji}</Text>
+                        <Text style={styles.bossEmoji}>{entry.emoji}</Text>
                       )}
-                      <Text style={styles.bossStage}>{boss.stage}단계</Text>
+                      <Text style={styles.bossStage}>{entry.stage}단계</Text>
                       <Text
                         style={[
                           styles.bossName,
                           unlocked
-                            ? getBossNameColorStyle(boss.color)
+                            ? getBossNameColorStyle(entry.color)
                             : styles.bossNameLocked,
                         ]}>
-                        {t(boss.nameKey)}
+                        {entry.name}
                       </Text>
-                      <Text style={styles.bossHp}>{formatHp(boss.maxHp)}</Text>
+                      <Text style={styles.bossHp}>{formatHp(entry.maxHp)}</Text>
                       <Text
                         style={[
                           styles.unlockState,
@@ -1227,3 +1304,4 @@ const styles = StyleSheet.create({
   unlocked: {color: '#22c55e'},
   locked: {color: '#f87171'},
 });
+

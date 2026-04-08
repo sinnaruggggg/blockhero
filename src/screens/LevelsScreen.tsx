@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   Alert,
   Dimensions,
@@ -12,7 +12,14 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import {getWorldMonsterSprite} from '../assets/monsterSprites';
-import {INFINITE_HEARTS_VALUE, LEVELS, WORLDS, formatHeartValue} from '../constants';
+import {
+  INFINITE_HEARTS_VALUE,
+  LEVELS,
+  WORLDS,
+  formatHeartValue,
+} from '../constants';
+import {useCreatorConfig} from '../hooks/useCreatorConfig';
+import {getCreatorLevelConfig, getCreatorRaidConfig} from '../game/creatorManifest';
 import {getNextUnlockedLevel, getWorldProgressSummary} from '../game/levelProgress';
 import {getAdminStatus} from '../services/adminSync';
 import {
@@ -27,10 +34,12 @@ const {width: screenWidth} = Dimensions.get('window');
 const cellSize = (screenWidth - 32 - 5 * 8) / 6;
 
 export default function LevelsScreen({navigation}: any) {
+  const {manifest: creatorManifest} = useCreatorConfig();
   const [progress, setProgress] = useState<LevelProgress>({});
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [expandedWorld, setExpandedWorld] = useState<number>(1);
   const [isAdmin, setIsAdmin] = useState(false);
+
   const hasInfiniteHearts = (gameData?.hearts ?? 0) >= INFINITE_HEARTS_VALUE;
 
   useEffect(() => {
@@ -52,15 +61,30 @@ export default function LevelsScreen({navigation}: any) {
   const unlockedLevel = isAdmin ? LEVELS.length : getNextUnlockedLevel(progress);
 
   useEffect(() => {
-    if (unlockedLevel <= 300) {
+    if (unlockedLevel <= LEVELS.length) {
       const worldId = LEVELS.find(level => level.id === unlockedLevel)?.world ?? 1;
       setExpandedWorld(worldId);
     }
   }, [unlockedLevel]);
 
+  const disabledLevelIds = useMemo(() => {
+    const disabled = new Set<number>();
+    Object.values(creatorManifest.levels).forEach(level => {
+      if (level.enabled === false) {
+        disabled.add(level.levelId);
+      }
+    });
+    return disabled;
+  }, [creatorManifest.levels]);
+
   const handleLevelPress = useCallback(
     async (levelId: number) => {
       if (!gameData) {
+        return;
+      }
+
+      if (disabledLevelIds.has(levelId)) {
+        Alert.alert('사용 불가', '이 스테이지는 현재 비활성화되어 있습니다.');
         return;
       }
 
@@ -82,7 +106,7 @@ export default function LevelsScreen({navigation}: any) {
       setGameData(updatedGameData);
       navigation.navigate('SingleGame', {levelId});
     },
-    [gameData, hasInfiniteHearts, navigation, unlockedLevel],
+    [disabledLevelIds, gameData, hasInfiniteHearts, navigation, unlockedLevel],
   );
 
   return (
@@ -93,7 +117,9 @@ export default function LevelsScreen({navigation}: any) {
           <Text style={styles.backBtn}>뒤로</Text>
         </TouchableOpacity>
         <Text style={styles.title}>레벨 선택</Text>
-        <Text style={styles.hearts}>{`하트 ${formatHeartValue(gameData?.hearts ?? 0, hasInfiniteHearts)}`}</Text>
+        <Text style={styles.hearts}>
+          {`하트 ${formatHeartValue(gameData?.hearts ?? 0, hasInfiniteHearts)}`}
+        </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -102,6 +128,11 @@ export default function LevelsScreen({navigation}: any) {
           const isExpanded = expandedWorld === world.id;
           const worldFirstLevel = (world.id - 1) * 30 + 1;
           const isWorldUnlocked = unlockedLevel >= worldFirstLevel;
+          const creatorBossRaid = getCreatorRaidConfig(
+            creatorManifest,
+            'boss',
+            world.id,
+          );
 
           return (
             <View key={world.id} style={styles.worldSection}>
@@ -149,10 +180,19 @@ export default function LevelsScreen({navigation}: any) {
                 <View style={styles.levelGrid}>
                   {LEVELS.filter(level => level.world === world.id).map(level => {
                     const stageProgress = progress[level.id];
-                    const isLocked = level.id > unlockedLevel;
+                    const isDisabled = disabledLevelIds.has(level.id);
+                    const isLocked = level.id > unlockedLevel || isDisabled;
                     const isCurrent = level.id === unlockedLevel;
                     const stageInWorld = ((level.id - 1) % 30) + 1;
                     const isBoss = stageInWorld === 30;
+                    const creatorLevel = getCreatorLevelConfig(
+                      creatorManifest,
+                      level.id,
+                    );
+                    const bossEmoji =
+                      creatorLevel?.enemyOverrides.monsterEmoji ??
+                      creatorLevel?.enemyOverrides.displayName ??
+                      level.goal.monsterEmoji;
 
                     return (
                       <TouchableOpacity
@@ -177,7 +217,9 @@ export default function LevelsScreen({navigation}: any) {
                                 style={styles.bossSprite}
                               />
                             ) : (
-                              <Text style={styles.bossEmoji}>{level.goal.monsterEmoji}</Text>
+                              <Text style={styles.bossEmoji}>
+                                {typeof bossEmoji === 'string' ? bossEmoji : level.goal.monsterEmoji}
+                              </Text>
                             )}
                             <Text style={styles.bossLabel}>보스</Text>
                           </>
@@ -191,8 +233,10 @@ export default function LevelsScreen({navigation}: any) {
                           </Text>
                         )}
 
-                        {isLocked && !isBoss && <Text style={styles.lockIcon}>🔒</Text>}
-                        {stageProgress?.cleared && <Text style={styles.clearCheck}>완</Text>}
+                        {isLocked && !isBoss && (
+                          <Text style={styles.lockIcon}>{isDisabled ? 'OFF' : '🔒'}</Text>
+                        )}
+                        {stageProgress?.cleared && <Text style={styles.clearCheck}>✓</Text>}
                       </TouchableOpacity>
                     );
                   })}
@@ -202,7 +246,8 @@ export default function LevelsScreen({navigation}: any) {
               {completed && (
                 <View style={[styles.bossRaidUnlock, {borderColor: world.color}]}>
                   <Text style={styles.bossRaidText}>
-                    {world.bossEmoji} 보스 레이드 해금: {world.bossName}
+                    {world.bossEmoji} 보스 레이드 해금:{' '}
+                    {creatorBossRaid?.name ?? world.bossName}
                   </Text>
                 </View>
               )}

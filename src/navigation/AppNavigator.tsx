@@ -23,6 +23,12 @@ import {
   downloadPublishedVisualConfigIfNeeded,
   loadCachedVisualConfigManifest,
 } from '../services/visualConfigService';
+import {
+  downloadPublishedCreatorManifestIfNeeded,
+  ensureCreatorDraftSeeded,
+  loadCachedCreatorManifest,
+} from '../services/creatorService';
+import {getAdminStatus} from '../services/adminSync';
 import AdminScreen from '../screens/AdminScreen';
 import BattleScreen from '../screens/BattleScreen';
 import BossCodexScreen from '../screens/BossCodexScreen';
@@ -160,6 +166,14 @@ export default function AppNavigator() {
 
     void preloadGameStoreState();
     void downloadPublishedVisualConfigIfNeeded().catch(() => {});
+    void downloadPublishedCreatorManifestIfNeeded().catch(() => {});
+    void (async () => {
+      try {
+        if (await getAdminStatus()) {
+          await ensureCreatorDraftSeeded();
+        }
+      } catch {}
+    })();
   }, [registerSession, scheduleUpdateCheck]);
 
   useEffect(() => {
@@ -175,6 +189,14 @@ export default function AppNavigator() {
         setAppState('app');
         void preloadGameStoreState();
         void downloadPublishedVisualConfigIfNeeded().catch(() => {});
+        void downloadPublishedCreatorManifestIfNeeded().catch(() => {});
+        void (async () => {
+          try {
+            if (await getAdminStatus()) {
+              await ensureCreatorDraftSeeded();
+            }
+          } catch {}
+        })();
         scheduleUpdateCheck();
       } else {
         if (sessionCheckRef.current) {
@@ -211,6 +233,7 @@ export default function AppNavigator() {
 
   useEffect(() => {
     void loadCachedVisualConfigManifest();
+    void loadCachedCreatorManifest();
   }, []);
 
   useEffect(() => {

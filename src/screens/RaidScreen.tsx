@@ -105,6 +105,8 @@ import {
   getRaidBackgroundOverride,
   getVisualElementRule,
 } from '../game/visualConfig';
+import {useCreatorConfig} from '../hooks/useCreatorConfig';
+import {resolveCreatorRaidRuntime} from '../game/creatorManifest';
 import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
@@ -217,15 +219,30 @@ function withTimeout<T>(
 
 export default function RaidScreen({route, navigation}: any) {
   const {instanceId, bossStage, isNormalRaid = false} = route.params;
-  const boss = RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
+  const staticBoss = RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
   const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
+  const {manifest: creatorManifest, assetUris: creatorAssetUris} = useCreatorConfig();
   const raidScreenId = isNormalRaid ? 'raidNormal' : 'raidBoss';
-  const bossAttackStats = getRaidBossAttackStats(bossStage);
+  const creatorRaidRuntime = resolveCreatorRaidRuntime(
+    creatorManifest,
+    isNormalRaid ? 'normal' : 'boss',
+    bossStage,
+  );
+  const bossName = creatorRaidRuntime?.name ?? t(staticBoss.nameKey);
+  const bossColor = creatorRaidRuntime?.monsterColor ?? staticBoss.color;
+  const bossEmoji = creatorRaidRuntime?.monsterEmoji ?? staticBoss.emoji;
+  const bossMaxHp = creatorRaidRuntime?.maxHp ?? staticBoss.maxHp;
+  const bossAttackStats = creatorRaidRuntime
+    ? {
+        attack: creatorRaidRuntime.enemyAttack,
+        attackIntervalMs: creatorRaidRuntime.attackIntervalMs,
+      }
+    : getRaidBossAttackStats(bossStage);
   const raidBoardMetrics = getBoardMetrics(Dimensions.get('window').width, {compact: true});
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
-  const [bossHp, setBossHp] = useState(boss.maxHp);
+  const [bossHp, setBossHp] = useState(bossMaxHp);
   const [playerHp, setPlayerHp] = useState(200);
   const [maxPlayerHp, setMaxPlayerHp] = useState(200);
   const [combo, setCombo] = useState(0);
@@ -302,7 +319,7 @@ export default function RaidScreen({route, navigation}: any) {
   const baseAttackPowerRef = useRef(10);
   const playerHpRef = useRef(200);
   const baseMaxPlayerHpRef = useRef(200);
-  const bossHpRef = useRef(boss.maxHp);
+  const bossHpRef = useRef(bossMaxHp);
   const selectedCharacterRef = useRef<string | null>(null);
   const selectedCharacterDataRef = useRef<any>(null);
   const activeSkinIdRef = useRef(0);
@@ -359,9 +376,9 @@ export default function RaidScreen({route, navigation}: any) {
     {
       mode: 'raid',
       partySize: Math.max(1, participantCountRef.current),
-      bossHpRatio: bossHpRef.current / Math.max(1, boss.maxHp),
+      bossHpRatio: bossHpRef.current / Math.max(1, bossMaxHp),
     },
-  ), [boss.maxHp]);
+  ), [bossMaxHp]);
 
   const getCurrentPieceOptions = useCallback(
     () =>
@@ -1524,14 +1541,14 @@ export default function RaidScreen({route, navigation}: any) {
     return t('raid.boardFull');
   };
 
-  const bossSpriteSet = getRaidBossSpriteSet(boss.stage);
+  const bossSpriteSet = getRaidBossSpriteSet(bossStage);
   const bossSprite =
     getMonsterPoseSource(bossSpriteSet, bossPose) ??
     getMonsterPoseSource(bossSpriteSet, 'idle');
   const summonSpriteSet = getRaidSummonSpriteSet(bossStage);
   useEffect(() => {
     setBossPose('idle');
-  }, [boss.stage]);
+  }, [bossStage]);
   const hasSummon = activeSkinIdRef.current > 0 && summonGaugeRequired > 0;
   const summonButtonDisabled =
     !hasSummon ||
@@ -1728,23 +1745,33 @@ export default function RaidScreen({route, navigation}: any) {
 
   const comboGaugeMaxMs = COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
   const feverGaugeMaxMs = FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
+  const creatorRaidBackgroundRule = creatorRaidRuntime?.background ?? null;
   const raidBackgroundOverride = getRaidBackgroundOverride(
     visualManifest,
-    boss.stage,
+    bossStage,
     isNormalRaid,
   );
   const raidBackgroundSource =
-    raidBackgroundOverride?.removeImage === true
+    raidBackgroundOverride?.removeImage === true ||
+    creatorRaidBackgroundRule?.removeImage === true
       ? null
       : raidBackgroundOverride?.assetKey &&
           visualAssetUris[raidBackgroundOverride.assetKey]
         ? {uri: visualAssetUris[raidBackgroundOverride.assetKey]}
+        : creatorRaidBackgroundRule?.assetKey &&
+            creatorAssetUris[creatorRaidBackgroundRule.assetKey]
+          ? {uri: creatorAssetUris[creatorRaidBackgroundRule.assetKey]}
         : null;
   const raidBackgroundTint = raidBackgroundOverride
     ? buildVisualTintColor(
         raidBackgroundOverride.tintColor,
         raidBackgroundOverride.tintOpacity,
       )
+    : creatorRaidBackgroundRule
+      ? buildVisualTintColor(
+          creatorRaidBackgroundRule.tintColor,
+          creatorRaidBackgroundRule.tintOpacity,
+        )
     : 'transparent';
   const raidComboGaugeRule = getVisualElementRule(
     visualManifest,
@@ -1895,10 +1922,10 @@ export default function RaidScreen({route, navigation}: any) {
             </View>
 
             <View style={styles.normalRaidBossCard}>
-              <Text style={[styles.normalRaidBossName, {color: boss.color}]}>
-                {t(boss.nameKey)}
+              <Text style={[styles.normalRaidBossName, {color: bossColor}]}>
+                {bossName}
               </Text>
-              <View style={[styles.normalRaidBossOrb, {borderColor: boss.color}]}>
+              <View style={[styles.normalRaidBossOrb, {borderColor: bossColor}]}>
                 {bossSprite ? (
                   <Image
                     source={bossSprite}
@@ -1910,7 +1937,7 @@ export default function RaidScreen({route, navigation}: any) {
                     ]}
                   />
                 ) : (
-                  <Text style={styles.normalRaidBossEmoji}>{boss.emoji}</Text>
+                  <Text style={styles.normalRaidBossEmoji}>{bossEmoji}</Text>
                 )}
                 {bossImpactHit && bossImpactHit.damage >= 10 && (
                   <HitEffect
@@ -1946,17 +1973,17 @@ export default function RaidScreen({route, navigation}: any) {
                 <View
                   style={[
                     styles.normalRaidBossHpFill,
-                    {width: `${Math.max(0, (bossHp / Math.max(1, boss.maxHp)) * 100)}%`},
-                    bossHp / Math.max(1, boss.maxHp) > 0.5
+                    {width: `${Math.max(0, (bossHp / Math.max(1, bossMaxHp)) * 100)}%`},
+                    bossHp / Math.max(1, bossMaxHp) > 0.5
                       ? styles.normalRaidBossHpFillHigh
-                      : bossHp / Math.max(1, boss.maxHp) > 0.25
+                      : bossHp / Math.max(1, bossMaxHp) > 0.25
                         ? styles.normalRaidBossHpFillMid
                         : styles.normalRaidBossHpFillLow,
                   ]}
                 />
               </View>
               <Text style={styles.normalRaidBossHpText}>
-                {bossHp.toLocaleString()} / {boss.maxHp.toLocaleString()}
+                {bossHp.toLocaleString()} / {bossMaxHp.toLocaleString()}
               </Text>
             </View>
 
@@ -1971,12 +1998,12 @@ export default function RaidScreen({route, navigation}: any) {
       ) : (
         <>
           <BossDisplay
-            bossName={t(boss.nameKey)}
-            bossEmoji={boss.emoji}
-            bossColor={boss.color}
+            bossName={bossName}
+            bossEmoji={bossEmoji}
+            bossColor={bossColor}
             currentHp={bossHp}
-            maxHp={boss.maxHp}
-            stage={boss.stage}
+            maxHp={bossMaxHp}
+            stage={bossStage}
             participants={participants
               .slice(0, 30)
               .map(p => ({
@@ -2172,7 +2199,7 @@ export default function RaidScreen({route, navigation}: any) {
       {bossDefeated && rewardData && !rewardCollected && (
         <RaidRewardPopup
           reward={rewardData}
-          bossName={t(boss.nameKey)}
+          bossName={bossName}
           onCollect={handleCollectReward}
         />
       )}

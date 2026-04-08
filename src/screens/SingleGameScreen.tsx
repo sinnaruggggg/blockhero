@@ -24,11 +24,13 @@ import VisualElementView, {
   buildVisualElementStyle,
 } from '../components/VisualElementView';
 import {useVisualConfig} from '../hooks/useVisualConfig';
+import {useCreatorConfig} from '../hooks/useCreatorConfig';
 import {
   buildVisualTintColor,
   getLevelBackgroundOverride,
   getVisualElementRule,
 } from '../game/visualConfig';
+import {resolveCreatorLevelRuntime} from '../game/creatorManifest';
 
 const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 import Board from '../components/Board';
@@ -331,9 +333,27 @@ export default function SingleGameScreen({route, navigation}: any) {
   const levelData = LEVELS.find(l => l.id === levelId);
   const activeLevel = levelData ?? LEVELS[0];
   const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
-  const monster = activeLevel.goal;
+  const {manifest: creatorManifest, assetUris: creatorAssetUris} = useCreatorConfig();
+  const creatorLevelRuntime = resolveCreatorLevelRuntime(creatorManifest, levelId);
+  const activeWorldId = creatorLevelRuntime?.worldId ?? activeLevel.world;
+  const activeLevelName = creatorLevelRuntime?.name ?? activeLevel.name;
+  const activeObstacles = activeLevel.obstacles;
+  const monster = creatorLevelRuntime
+    ? {
+        monsterHp: creatorLevelRuntime.monsterHp,
+        monsterName: creatorLevelRuntime.monsterName,
+        monsterEmoji: creatorLevelRuntime.monsterEmoji,
+        monsterColor: creatorLevelRuntime.monsterColor,
+      }
+    : activeLevel.goal;
   const maxMonsterHp = monster.monsterHp;
-  const enemyStats = getLevelEnemyStats(levelId, activeLevel.world);
+  const enemyStats = creatorLevelRuntime
+    ? {
+        attack: creatorLevelRuntime.enemyAttack,
+        attackIntervalMs: creatorLevelRuntime.attackIntervalMs,
+        tier: creatorLevelRuntime.enemyTier,
+      }
+    : getLevelEnemyStats(levelId, activeWorldId);
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
@@ -428,7 +448,7 @@ export default function SingleGameScreen({route, navigation}: any) {
   const playerAvatarShakeX = useRef(new Animated.Value(0)).current;
   const monsterAvatarShakeX = useRef(new Animated.Value(0)).current;
   const startedAtRef = useRef(Date.now());
-  const levelPieceDifficulty = getLevelPieceDifficulty(activeLevel.world);
+  const levelPieceDifficulty = getLevelPieceDifficulty(activeWorldId);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const {message: battleNoticeMessage, showNotice: showBattleNotice, clearNotice} =
     useBattleNotice(3000);
@@ -589,8 +609,8 @@ export default function SingleGameScreen({route, navigation}: any) {
     feverGaugeRef.current = 0;
 
     let nextBoard = createBoard();
-    if (activeLevel.obstacles) {
-      nextBoard = addObstacles(nextBoard, activeLevel.obstacles);
+    if (activeObstacles) {
+      nextBoard = addObstacles(nextBoard, activeObstacles);
     }
     setBoard(nextBoard);
 
@@ -1007,13 +1027,19 @@ export default function SingleGameScreen({route, navigation}: any) {
         );
         await saveLevelProgress(progress, levelId, totalDamageRef.current, stars);
 
-        const world = activeLevel.world;
-        const reward = getLevelClearRewards(
-          world,
-          levelId,
-          progress[levelId]?.cleared === true,
-          {isAdmin: isAdminRef.current},
-        );
+        const world = activeWorldId;
+        const reward = creatorLevelRuntime
+          ? {
+              gold:
+                creatorLevelRuntime.reward.repeatGold +
+                (progress[levelId]?.cleared === true
+                  ? 0
+                  : creatorLevelRuntime.reward.firstClearBonusGold),
+              xp: creatorLevelRuntime.reward.characterExp,
+            }
+          : getLevelClearRewards(world, levelId, progress[levelId]?.cleared === true, {
+              isAdmin: isAdminRef.current,
+            });
         const rewardTotals = applyRewardMultipliers(
           reward.gold,
           0,
@@ -1084,7 +1110,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       });
     },
     [
-      activeLevel.world,
+      activeWorldId,
       levelId,
       maxPlayerHp,
       selectedCharacterId,
@@ -1709,31 +1735,38 @@ export default function SingleGameScreen({route, navigation}: any) {
   const comboGaugeMaxMs = COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
   const playerVisual =
     CHARACTER_VISUALS[selectedCharacterId] ?? CHARACTER_VISUALS.knight;
-  const monsterSpriteSet = getWorldMonsterSpriteSet(
-    activeLevel.world,
-    monster.monsterName,
-  );
+  const monsterSpriteSet = getWorldMonsterSpriteSet(activeWorldId, monster.monsterName);
   const monsterSprite =
     getMonsterPoseSource(monsterSpriteSet, monsterPose) ??
     getMonsterPoseSource(monsterSpriteSet, 'idle');
-  const backgroundImage = WORLD_BACKGROUND_IMAGES[activeLevel.world] ?? null;
+  const backgroundImage = WORLD_BACKGROUND_IMAGES[activeWorldId] ?? null;
   const levelBackgroundOverride = getLevelBackgroundOverride(
     visualManifest,
     activeLevel.id,
-    activeLevel.world,
+    activeWorldId,
   );
+  const creatorBackgroundRule = creatorLevelRuntime?.background ?? null;
   const backgroundTint = levelBackgroundOverride
     ? buildVisualTintColor(
         levelBackgroundOverride.tintColor,
         levelBackgroundOverride.tintOpacity,
       )
-    : WORLD_BACKGROUND_TINTS[activeLevel.world] ?? 'rgba(10, 10, 30, 0.72)';
+    : creatorBackgroundRule
+      ? buildVisualTintColor(
+          creatorBackgroundRule.tintColor,
+          creatorBackgroundRule.tintOpacity,
+        )
+      : WORLD_BACKGROUND_TINTS[activeWorldId] ?? 'rgba(10, 10, 30, 0.72)';
   const runtimeBackgroundImage =
-    levelBackgroundOverride?.removeImage === true
+    levelBackgroundOverride?.removeImage === true ||
+    creatorBackgroundRule?.removeImage === true
       ? null
       : levelBackgroundOverride?.assetKey &&
           visualAssetUris[levelBackgroundOverride.assetKey]
         ? {uri: visualAssetUris[levelBackgroundOverride.assetKey]}
+        : creatorBackgroundRule?.assetKey &&
+            creatorAssetUris[creatorBackgroundRule.assetKey]
+          ? {uri: creatorAssetUris[creatorBackgroundRule.assetKey]}
         : backgroundImage;
   const comboGaugeRule = getVisualElementRule(
     visualManifest,
@@ -1743,7 +1776,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   useEffect(() => {
     setMonsterPose('idle');
-  }, [activeLevel.world, monster.monsterName]);
+  }, [activeWorldId, monster.monsterName]);
   const renderCharacterPortrait = (
     characterId: string,
     size: number,
@@ -2041,7 +2074,7 @@ export default function SingleGameScreen({route, navigation}: any) {
                   onPress={() => setShowExitConfirm(true)}>
                 <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
               </TouchableOpacity>
-              <Text style={styles.stageLabel}>{activeLevel.name}</Text>
+              <Text style={styles.stageLabel}>{activeLevelName}</Text>
               <View style={styles.headerSideSpacer} />
               </VisualElementView>
 
@@ -2140,7 +2173,7 @@ export default function SingleGameScreen({route, navigation}: any) {
             onPress={() => setShowExitConfirm(true)}>
           <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
         </TouchableOpacity>
-        <Text style={styles.stageLabel}>{activeLevel.name}</Text>
+        <Text style={styles.stageLabel}>{activeLevelName}</Text>
         <View style={styles.headerSideSpacer} />
         </VisualElementView>
 
