@@ -23555,6 +23555,7 @@ ${suffix}`;
     assets: [],
     selected: null
   };
+  var localDesktopConfig = typeof window !== "undefined" ? window.__BLOCKHERO_CREATOR_LOCAL_CONFIG__ ?? null : null;
   function deepClone2(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -24148,6 +24149,10 @@ ${suffix}`;
     if (saved?.url) elements.supabaseUrl.value = saved.url;
     if (saved?.key) elements.supabaseAnonKey.value = saved.key;
     if (saved?.email) elements.adminEmail.value = saved.email;
+    if (localDesktopConfig?.supabaseUrl) elements.supabaseUrl.value = localDesktopConfig.supabaseUrl;
+    if (localDesktopConfig?.supabaseAnonKey) elements.supabaseAnonKey.value = localDesktopConfig.supabaseAnonKey;
+    if (localDesktopConfig?.email) elements.adminEmail.value = localDesktopConfig.email;
+    if (localDesktopConfig?.password) elements.adminPassword.value = localDesktopConfig.password;
     elements.loginButton.addEventListener("click", () => void initializeWorkspace("login"));
     elements.restoreButton.addEventListener("click", () => void restoreWorkspaceIfPossible(true));
     elements.refreshButton.addEventListener("click", () => void loadWorkspace());
@@ -24224,7 +24229,10 @@ ${suffix}`;
       renderAll();
       bindDynamicEvents();
     });
-    await restoreWorkspaceIfPossible(false);
+    const restored = await restoreWorkspaceIfPossible(false);
+    if (!restored && localDesktopConfig?.autoLogin !== false && elements.adminEmail.value && elements.adminPassword.value) {
+      await initializeWorkspace("login");
+    }
   }
   void bootstrap();
 })();

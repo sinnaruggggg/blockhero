@@ -14,11 +14,12 @@
 
 ### exe 실행기
 1. 루트에서 [run-blockhero-creator-exe.bat](/C:/www/game/blockhero_codex/run-blockhero-creator-exe.bat)을 실행합니다.
-2. 또는 `tools/blockhero-creator-desktop/dist` 아래의 최신 `BlockHero Creator *.exe`를 직접 실행합니다.
-3. 실행 후 관리자 계정으로 로그인하면 같은 편집기가 데스크톱 창으로 열립니다.
+2. 처음 실행이라 `blockhero-creator.local.json`이 없으면, 관리자 이메일과 비밀번호를 한 번만 입력받아 로컬 설정 파일을 만듭니다.
+3. 그 다음부터는 로그인 화면 없이 자동 로그인됩니다.
+4. 또는 `tools/blockhero-creator-desktop/dist` 아래의 최신 `BlockHero Creator *.exe`를 직접 실행할 수도 있습니다.
 
 ## 첫 사용 흐름
-1. 로그인
+1. 첫 실행 시 로컬 자동 로그인 설정 저장
 2. draft 자동 불러오기
 3. draft가 없으면 최신 published release 불러오기
 4. published도 없으면 기본 manifest를 생성해서 draft로 저장
@@ -61,6 +62,14 @@
 - draft가 있으면 draft를 우선 사용합니다.
 - draft가 없고 published release가 있으면 최신 published release를 불러옵니다.
 - 둘 다 없으면 기본 manifest를 로드해서 새 draft를 만듭니다.
+- exe에서는 `blockhero-creator.local.json`이 있으면 자동 로그인까지 수행합니다.
+
+## 로컬 자동 로그인 파일
+- 파일명: `blockhero-creator.local.json`
+- 위치: 저장소 루트 또는 exe 옆 폴더
+- Git에는 포함되지 않습니다.
+- 예시는 [blockhero-creator.local.example.json](/C:/www/game/blockhero_codex/blockhero-creator.local.example.json) 입니다.
+- 이 파일에는 관리자 이메일과 비밀번호가 평문으로 저장되므로, 본인 PC에서만 사용해야 합니다.
 
 ## 서버 테이블
 - draft: `creator_draft`

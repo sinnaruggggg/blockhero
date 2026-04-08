@@ -76,6 +76,7 @@ yarn-error.log
 
 # APK files
 *.apk
+blockhero-creator.local.json
 
 # Screenshots
 screenshot*.png

@@ -10,6 +10,7 @@ function createWindow() {
     backgroundColor: '#101a33',
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, 'desktop-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

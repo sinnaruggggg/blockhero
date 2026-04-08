@@ -1,0 +1,7 @@
+{
+  "supabaseUrl": "https://alhlmdhixmlmsdvgzhdu.supabase.co",
+  "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY",
+  "email": "admin@example.com",
+  "password": "YOUR_ADMIN_PASSWORD",
+  "autoLogin": true
+}
