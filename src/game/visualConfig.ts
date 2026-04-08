@@ -7,6 +7,13 @@ export type VisualViewport = {
   safeBottom: number;
 };
 
+export type VisualElementFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type VisualDeviceProfile = {
   id: string;
   label: string;
@@ -95,6 +102,14 @@ export type RaidScreenVisualConfig = {
 export type VisualConfigManifest = {
   version: number;
   referenceViewport: VisualViewport;
+  studioSnapshots?: Partial<Record<VisualScreenId, {
+    assetKey: string | null;
+    capturedAt: string;
+    viewport: VisualViewport;
+    referenceViewport: VisualViewport;
+    elementFrames: Record<string, VisualElementFrame>;
+    elementRules: Record<string, VisualElementRule>;
+  }>>;
   screens: {
     level: LevelScreenVisualConfig;
     endless: EndlessScreenVisualConfig;
@@ -321,6 +336,89 @@ function sanitizeViewport(
   };
 }
 
+function sanitizeElementFrame(
+  value?: Partial<VisualElementFrame> | null,
+): VisualElementFrame {
+  const merged = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    ...(value ?? {}),
+  };
+
+  return {
+    x: Math.round(clamp(Number(merged.x) || 0, -2000, 4000)),
+    y: Math.round(clamp(Number(merged.y) || 0, -2000, 4000)),
+    width: Math.round(clamp(Number(merged.width) || 0, 0, 4000)),
+    height: Math.round(clamp(Number(merged.height) || 0, 0, 4000)),
+  };
+}
+
+function sanitizeStudioSnapshots(
+  value?: Partial<
+    Record<
+      VisualScreenId,
+      {
+        assetKey?: string | null;
+        capturedAt?: string;
+        viewport?: Partial<VisualViewport>;
+        referenceViewport?: Partial<VisualViewport>;
+        elementFrames?: Record<string, Partial<VisualElementFrame>>;
+        elementRules?: Record<string, Partial<VisualElementRule>>;
+      }
+    >
+  > | null,
+) {
+  const result: Partial<
+    Record<
+      VisualScreenId,
+      {
+        assetKey: string | null;
+        capturedAt: string;
+        viewport: VisualViewport;
+        referenceViewport: VisualViewport;
+        elementFrames: Record<string, VisualElementFrame>;
+        elementRules: Record<string, VisualElementRule>;
+      }
+    >
+  > = {};
+
+  (Object.keys(VISUAL_SCREEN_LABELS) as VisualScreenId[]).forEach(screenId => {
+    const snapshot = value?.[screenId];
+    if (!snapshot) {
+      return;
+    }
+
+    const elementFrames: Record<string, VisualElementFrame> = {};
+    Object.entries(snapshot.elementFrames ?? {}).forEach(([elementId, frame]) => {
+      elementFrames[elementId] = sanitizeElementFrame(frame);
+    });
+
+    const elementRules: Record<string, VisualElementRule> = {};
+    Object.entries(snapshot.elementRules ?? {}).forEach(([elementId, rule]) => {
+      elementRules[elementId] = sanitizeElementRule(rule);
+    });
+
+    result[screenId] = {
+      assetKey:
+        typeof snapshot.assetKey === 'string' && snapshot.assetKey.trim().length > 0
+          ? snapshot.assetKey.trim()
+          : null,
+      capturedAt:
+        typeof snapshot.capturedAt === 'string' && snapshot.capturedAt.trim().length > 0
+          ? snapshot.capturedAt
+          : '',
+      viewport: sanitizeViewport(snapshot.viewport),
+      referenceViewport: sanitizeViewport(snapshot.referenceViewport),
+      elementFrames,
+      elementRules,
+    };
+  });
+
+  return result;
+}
+
 function sanitizeBackgroundOverride(
   value?: Partial<VisualBackgroundOverride> | null,
 ): VisualBackgroundOverride {
@@ -373,6 +471,7 @@ export function sanitizeVisualConfigManifest(
   return {
     version: Math.max(0, Math.round(Number(value?.version) || 0)),
     referenceViewport: sanitizeViewport(value?.referenceViewport),
+    studioSnapshots: sanitizeStudioSnapshots(value?.studioSnapshots),
     screens: {
       level: {
         elements: sanitizeElementMap(
@@ -461,6 +560,11 @@ export function collectReferencedVisualAssetKeys(
   Object.values(manifest.screens.raid.backgrounds.byBossStage).forEach(rule => {
     if (rule.assetKey) {
       keys.add(rule.assetKey);
+    }
+  });
+  Object.values(manifest.studioSnapshots ?? {}).forEach(snapshot => {
+    if (snapshot?.assetKey) {
+      keys.add(snapshot.assetKey);
     }
   });
   return Array.from(keys);

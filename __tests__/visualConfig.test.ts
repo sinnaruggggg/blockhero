@@ -66,6 +66,28 @@ describe('visualConfig helpers', () => {
 
   it('collects referenced asset keys without duplicates', () => {
     const manifest = sanitizeVisualConfigManifest({
+      studioSnapshots: {
+        level: {
+          assetKey: 'runtime-level-shot',
+          capturedAt: '2026-04-08T10:00:00.000Z',
+          viewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+          referenceViewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+          elementFrames: {
+            board: {x: 20, y: 300, width: 340, height: 340},
+          },
+          elementRules: {
+            board: {
+              offsetX: 0,
+              offsetY: 0,
+              scale: 1,
+              opacity: 1,
+              visible: true,
+              zIndex: 0,
+              safeAreaAware: false,
+            },
+          },
+        },
+      },
       screens: {
         ...DEFAULT_VISUAL_CONFIG_MANIFEST.screens,
         level: {
@@ -107,8 +129,45 @@ describe('visualConfig helpers', () => {
 
     expect(collectReferencedVisualAssetKeys(manifest).sort()).toEqual([
       'raid-only-bg',
+      'runtime-level-shot',
       'shared-bg',
     ]);
+  });
+
+  it('sanitizes studio snapshot metadata', () => {
+    const manifest = sanitizeVisualConfigManifest({
+      studioSnapshots: {
+        raid: {
+          assetKey: ' studio-shot ',
+          capturedAt: '2026-04-08T11:00:00.000Z',
+          viewport: {width: 430, height: 932, safeTop: 59, safeBottom: 34},
+          referenceViewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+          elementFrames: {
+            board: {x: 24.6, y: 320.1, width: 344.4, height: 344.8},
+          },
+          elementRules: {
+            board: {
+              offsetX: 12.4,
+              offsetY: -6.2,
+              scale: 1.1,
+              opacity: 0.9,
+              visible: true,
+              zIndex: 3,
+              safeAreaAware: false,
+            },
+          },
+        },
+      },
+    });
+
+    expect(manifest.studioSnapshots?.raid?.assetKey).toBe('studio-shot');
+    expect(manifest.studioSnapshots?.raid?.elementFrames.board).toEqual({
+      x: 25,
+      y: 320,
+      width: 344,
+      height: 345,
+    });
+    expect(manifest.studioSnapshots?.raid?.elementRules.board.offsetX).toBe(12);
   });
 
   it('sanitizes and preserves reference viewport metadata', () => {

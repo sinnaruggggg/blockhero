@@ -323,10 +323,14 @@ export async function publishVisualConfigDraft(notes: string) {
     ...draft,
     version: nextVersion,
   });
+  const publishedManifest = sanitizeVisualConfigManifest({
+    ...nextManifest,
+    studioSnapshots: {},
+  });
 
   const {error} = await supabase.from('ui_config_releases').insert({
     version: nextVersion,
-    config_json: nextManifest,
+    config_json: publishedManifest,
     notes: notes.trim() || null,
     created_by: userId,
   });

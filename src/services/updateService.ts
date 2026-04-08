@@ -3,8 +3,8 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 import {isNewerVersion} from './updateVersion';
 import {openGameDialog} from './gameDialogService';
 
-export const CURRENT_VERSION_CODE = 167;
-export const CURRENT_VERSION_NAME = '1.3.39';
+export const CURRENT_VERSION_CODE = 168;
+export const CURRENT_VERSION_NAME = '1.3.40';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const APK_MIME = 'application/vnd.android.package-archive';

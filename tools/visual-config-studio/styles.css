@@ -470,6 +470,14 @@ textarea {
   filter: saturate(1.08);
 }
 
+.preview-element.snapshot-overlay {
+  background: rgba(12, 18, 34, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(1px);
+}
+
 .preview-element-header {
   display: flex;
   justify-content: space-between;

@@ -389,6 +389,7 @@ function createDefaultManifest() {
   return {
     version: 0,
     referenceViewport: clone(DEFAULT_REFERENCE_VIEWPORT),
+    studioSnapshots: {},
     screens: {
       level: {
         elements: Object.fromEntries(ELEMENT_DEFS.level.map(({id}) => [id, clone(DEFAULT_RULE)])),
@@ -447,6 +448,43 @@ function sanitizeBackgroundRule(rule) {
   };
 }
 
+function sanitizeFrame(frame) {
+  return {
+    x: Math.round(clamp(numberOr(frame?.x, 0), -4000, 4000)),
+    y: Math.round(clamp(numberOr(frame?.y, 0), -4000, 4000)),
+    width: Math.round(clamp(numberOr(frame?.width, 0), 0, 4000)),
+    height: Math.round(clamp(numberOr(frame?.height, 0), 0, 4000)),
+  };
+}
+
+function sanitizeStudioSnapshot(snapshot) {
+  if (!snapshot) {
+    return null;
+  }
+
+  const next = {
+    assetKey:
+      typeof snapshot.assetKey === 'string' && snapshot.assetKey.trim().length > 0
+        ? snapshot.assetKey.trim()
+        : null,
+    capturedAt: typeof snapshot.capturedAt === 'string' ? snapshot.capturedAt : '',
+    viewport: sanitizeViewport(snapshot.viewport),
+    referenceViewport: sanitizeViewport(snapshot.referenceViewport),
+    elementFrames: {},
+    elementRules: {},
+  };
+
+  Object.entries(snapshot.elementFrames ?? {}).forEach(([elementId, frame]) => {
+    next.elementFrames[elementId] = sanitizeFrame(frame);
+  });
+
+  Object.entries(snapshot.elementRules ?? {}).forEach(([elementId, rule]) => {
+    next.elementRules[elementId] = sanitizeRule(rule);
+  });
+
+  return next;
+}
+
 function ensureManifest(raw) {
   const next = createDefaultManifest();
   const value = raw ?? {};
@@ -473,6 +511,12 @@ function ensureManifest(raw) {
   const raidBackgrounds = value?.screens?.raid?.backgrounds?.byBossStage ?? {};
   Object.entries(raidBackgrounds).forEach(([key, background]) => {
     next.screens.raid.backgrounds.byBossStage[key] = sanitizeBackgroundRule(background);
+  });
+
+  Object.entries(value?.studioSnapshots ?? {}).forEach(([screenId, snapshot]) => {
+    if (SCREEN_LABELS[screenId]) {
+      next.studioSnapshots[screenId] = sanitizeStudioSnapshot(snapshot);
+    }
   });
 
   return next;
@@ -580,6 +624,67 @@ function scaleRect(rect, viewport) {
   };
 }
 
+function convertViewportDeltaToReference(dx, dy, currentViewport, referenceViewport, safeAreaAware) {
+  const currentWidth = Math.max(1, currentViewport.width);
+  const referenceWidth = Math.max(1, referenceViewport.width);
+  const currentHeight = Math.max(
+    1,
+    currentViewport.height - (safeAreaAware ? currentViewport.safeTop + currentViewport.safeBottom : 0),
+  );
+  const referenceHeight = Math.max(
+    1,
+    referenceViewport.height -
+      (safeAreaAware ? referenceViewport.safeTop + referenceViewport.safeBottom : 0),
+  );
+
+  return {
+    x: dx * (referenceWidth / currentWidth),
+    y: dy * (referenceHeight / currentHeight),
+  };
+}
+
+function getSnapshotDrivenRect(screenId, elementId, viewport, referenceViewport) {
+  const snapshot = getActiveStudioSnapshot();
+  if (!snapshot?.elementFrames?.[elementId]) {
+    return null;
+  }
+
+  const frame = snapshot.elementFrames[elementId];
+  const currentRule = getRule(screenId, elementId);
+  const capturedRule = snapshot.elementRules?.[elementId] ?? DEFAULT_RULE;
+  const capturedReferenceViewport = snapshot.referenceViewport || referenceViewport;
+
+  const currentOffset = resolveVisualOffset(
+    currentRule.offsetX,
+    currentRule.offsetY,
+    snapshot.viewport,
+    referenceViewport,
+    currentRule.safeAreaAware,
+  );
+  const capturedOffset = resolveVisualOffset(
+    capturedRule.offsetX,
+    capturedRule.offsetY,
+    snapshot.viewport,
+    capturedReferenceViewport,
+    capturedRule.safeAreaAware,
+  );
+  const deltaX = currentOffset.x - capturedOffset.x;
+  const deltaY = currentOffset.y - capturedOffset.y;
+  const scaleRatio = currentRule.scale / Math.max(capturedRule.scale || 1, 0.001);
+  const width = Math.max(1, Math.round(frame.width * scaleRatio));
+  const height = Math.max(1, Math.round(frame.height * scaleRatio));
+  const left = Math.round(frame.x + deltaX - (width - frame.width) / 2);
+  const top = Math.round(frame.y + deltaY - (height - frame.height) / 2);
+
+  return {
+    left,
+    top,
+    width,
+    height,
+    viewport: snapshot.viewport,
+  };
+}
+
 function getRule(screenId, elementId) {
   return state.manifest.screens[screenId].elements[elementId];
 }
@@ -651,7 +756,16 @@ function collectManifestAssetKeys(manifest) {
       keys.add(rule.assetKey);
     }
   });
+  Object.values(manifest.studioSnapshots ?? {}).forEach(snapshot => {
+    if (snapshot?.assetKey) {
+      keys.add(snapshot.assetKey);
+    }
+  });
   return Array.from(keys);
+}
+
+function getActiveStudioSnapshot() {
+  return state.manifest.studioSnapshots?.[state.screenId] ?? null;
 }
 
 function getServerConfig() {
@@ -1329,7 +1443,8 @@ function renderBackgroundPreviewCard(asset) {
 }
 
 async function renderPreview() {
-  const viewport = getViewport();
+  const snapshot = getActiveStudioSnapshot();
+  const viewport = snapshot?.viewport ? sanitizeViewport(snapshot.viewport) : getViewport();
   const stageHost = byId('stage-host');
   const frame = byId('device-frame');
   const canvas = byId('preview-canvas');
@@ -1353,7 +1468,9 @@ async function renderPreview() {
   byId('safe-top-overlay').style.height = `${Math.round(viewport.safeTop * state.displayScale)}px`;
   byId('safe-bottom-overlay').style.height = `${Math.round(viewport.safeBottom * state.displayScale)}px`;
 
-  const backgroundImage = await resolveBackgroundImage();
+  const snapshotAsset =
+    snapshot?.assetKey ? await ensureAssetLoaded(snapshot.assetKey).catch(() => null) : null;
+  const backgroundImage = snapshotAsset?.data_url ?? (await resolveBackgroundImage());
   canvas.style.background =
     `linear-gradient(180deg, rgba(6, 10, 19, 0.14), rgba(6, 10, 19, 0.54)), url("${backgroundImage}") center/cover no-repeat`;
 
@@ -1365,8 +1482,9 @@ async function renderPreview() {
   const tint = document.createElement('div');
   tint.style.position = 'absolute';
   tint.style.inset = '0';
-  tint.style.background = tintOpacity > 0 ? tintColor : 'transparent';
-  tint.style.opacity = String(tintOpacity);
+  tint.style.background =
+    !snapshotAsset && tintOpacity > 0 ? tintColor : 'transparent';
+  tint.style.opacity = String(!snapshotAsset ? tintOpacity : 0);
   tint.style.pointerEvents = 'none';
   canvas.appendChild(tint);
 
@@ -1378,6 +1496,7 @@ async function renderPreview() {
   gridOverlay.style.backgroundSize = `${gridStep}px ${gridStep}px`;
 
   const referenceViewport = state.manifest.referenceViewport || viewport;
+  const usingRuntimeSnapshot = !!snapshotAsset;
 
   ELEMENT_DEFS[state.screenId].forEach(({id, label}) => {
     const rule = getRule(state.screenId, id);
@@ -1385,19 +1504,25 @@ async function renderPreview() {
       return;
     }
 
-    const baseRect = scaleRect(PREVIEW_LAYOUT[state.screenId][id], viewport);
-    const offset = resolveVisualOffset(
-      rule.offsetX,
-      rule.offsetY,
-      viewport,
-      referenceViewport,
-      rule.safeAreaAware,
-    );
+    const snapshotRect = getSnapshotDrivenRect(state.screenId, id, viewport, referenceViewport);
+    const baseRect = snapshotRect ?? scaleRect(PREVIEW_LAYOUT[state.screenId][id], viewport);
+    const offset = snapshotRect
+      ? {x: 0, y: 0}
+      : resolveVisualOffset(
+          rule.offsetX,
+          rule.offsetY,
+          viewport,
+          referenceViewport,
+          rule.safeAreaAware,
+        );
 
     const card = document.createElement('div');
     card.className = `preview-element${state.elementId === id ? ' selected' : ''}${
       state.drag?.elementId === id ? ' dragging' : ''
     }`;
+    if (usingRuntimeSnapshot) {
+      card.classList.add('snapshot-overlay');
+    }
     card.dataset.elementId = id;
     card.style.left = `${baseRect.left + offset.x}px`;
     card.style.top = `${baseRect.top + offset.y}px`;
@@ -1405,14 +1530,21 @@ async function renderPreview() {
     card.style.height = `${baseRect.height}px`;
     card.style.opacity = String(rule.opacity);
     card.style.zIndex = String(20 + rule.zIndex);
-    card.style.transform = `scale(${rule.scale})`;
-    card.style.transformOrigin = 'top left';
+    if (snapshotRect) {
+      card.style.transform = 'none';
+      card.style.transformOrigin = 'center center';
+    } else {
+      card.style.transform = `scale(${rule.scale})`;
+      card.style.transformOrigin = 'top left';
+    }
 
     const header = document.createElement('div');
     header.className = 'preview-element-header';
     header.innerHTML = `<span>${label}</span><span>${rule.offsetX}, ${rule.offsetY}</span>`;
     card.appendChild(header);
-    card.appendChild(renderElementBody(state.screenId, id));
+    if (!usingRuntimeSnapshot) {
+      card.appendChild(renderElementBody(state.screenId, id));
+    }
 
     if (state.elementId === id) {
       ['tl', 'tr', 'bl', 'br'].forEach(handleId => {
@@ -1488,11 +1620,22 @@ function handlePointerMove(event) {
   }
 
   const rule = getRule(state.screenId, state.drag.elementId);
-  const deltaX = (event.clientX - state.drag.startClientX) / Math.max(state.displayScale, 0.01);
-  const deltaY = (event.clientY - state.drag.startClientY) / Math.max(state.displayScale, 0.01);
+  const snapshot = getActiveStudioSnapshot();
+  const viewport = snapshot?.viewport ? sanitizeViewport(snapshot.viewport) : getViewport();
+  const visualDelta = {
+    x: (event.clientX - state.drag.startClientX) / Math.max(state.displayScale, 0.01),
+    y: (event.clientY - state.drag.startClientY) / Math.max(state.displayScale, 0.01),
+  };
+  const referenceDelta = convertViewportDeltaToReference(
+    visualDelta.x,
+    visualDelta.y,
+    viewport,
+    state.manifest.referenceViewport || viewport,
+    rule.safeAreaAware,
+  );
 
-  let nextX = state.drag.originalOffsetX + deltaX;
-  let nextY = state.drag.originalOffsetY + deltaY;
+  let nextX = state.drag.originalOffsetX + referenceDelta.x;
+  let nextY = state.drag.originalOffsetY + referenceDelta.y;
 
   if (state.snapGrid) {
     nextX = Math.round(nextX / state.gridSize) * state.gridSize;

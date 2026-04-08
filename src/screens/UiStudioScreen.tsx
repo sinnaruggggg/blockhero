@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import ViewShot from 'react-native-view-shot';
 import GamePanel from '../components/GamePanel';
 import MenuScreenFrame from '../components/MenuScreenFrame';
 import VisualRuntimePreview from '../components/VisualRuntimePreview';
@@ -26,8 +27,10 @@ import {
   sanitizeVisualConfigManifest,
   type VisualBackgroundOverride,
   type VisualConfigManifest,
+  type VisualElementFrame,
   type VisualElementId,
   type VisualScreenId,
+  type VisualElementRule,
   type VisualViewport,
   VISUAL_DEVICE_PROFILES,
   VISUAL_ELEMENT_LABELS,
@@ -100,6 +103,15 @@ export default function UiStudioScreen({navigation}: any) {
   );
   const [levelBackgroundScope, setLevelBackgroundScope] =
     useState<BackgroundScopeMode>('world');
+  const runtimeSnapshotFramesRef = useRef<
+    Partial<
+      Record<
+        VisualScreenId,
+        Record<string, {frame: VisualElementFrame; rule: VisualElementRule}>
+      >
+    >
+  >({});
+  const previewShotRef = useRef<ViewShot | null>(null);
 
   const currentViewport = useMemo<VisualViewport>(
     () => ({
@@ -261,6 +273,67 @@ export default function UiStudioScreen({navigation}: any) {
     numericPreviewWorld,
   ]);
 
+  const handleMeasureElement = useCallback(
+    (
+      screenId: VisualScreenId,
+      elementId: VisualElementId,
+      payload: {frame: VisualElementFrame; rule: VisualElementRule},
+    ) => {
+      const current = runtimeSnapshotFramesRef.current[screenId] ?? {};
+      runtimeSnapshotFramesRef.current = {
+        ...runtimeSnapshotFramesRef.current,
+        [screenId]: {
+          ...current,
+          [elementId]: payload,
+        },
+      };
+    },
+    [],
+  );
+
+  const captureActiveScreenSnapshotIntoManifest = useCallback(
+    async (baseManifest: VisualConfigManifest) => {
+      const captureResult = await previewShotRef.current?.capture?.();
+      const currentFrames = runtimeSnapshotFramesRef.current[activeScreen] ?? {};
+
+      if (!captureResult || Object.keys(currentFrames).length === 0) {
+        return baseManifest;
+      }
+
+      const assetKey = `studio_snapshot_${activeScreen}`;
+      await uploadVisualAsset({
+        assetKey,
+        dataUrl: captureResult,
+        mimeType: captureResult.includes('image/jpeg') ? 'image/jpeg' : 'image/png',
+      });
+
+      const nextManifest = sanitizeVisualConfigManifest(baseManifest);
+      nextManifest.studioSnapshots = {
+        ...(nextManifest.studioSnapshots ?? {}),
+        [activeScreen]: {
+          assetKey,
+          capturedAt: new Date().toISOString(),
+          viewport: activePreviewViewport,
+          referenceViewport: nextManifest.referenceViewport,
+          elementFrames: Object.fromEntries(
+            Object.entries(currentFrames).map(([elementId, value]) => [
+              elementId,
+              value.frame,
+            ]),
+          ),
+          elementRules: Object.fromEntries(
+            Object.entries(currentFrames).map(([elementId, value]) => [
+              elementId,
+              value.rule,
+            ]),
+          ),
+        },
+      };
+      return nextManifest;
+    },
+    [activePreviewViewport, activeScreen],
+  );
+
   const mutateDraft = useCallback(
     (mutator: (next: VisualConfigManifest) => void) => {
       setDraftManifest(current => {
@@ -416,10 +489,11 @@ export default function UiStudioScreen({navigation}: any) {
   const handleSaveDraft = useCallback(async () => {
     setSaving(true);
     try {
-      const nextDraft = sanitizeVisualConfigManifest({
+      let nextDraft = sanitizeVisualConfigManifest({
         ...draftManifest,
         referenceViewport: activePreviewViewport,
       });
+      nextDraft = await captureActiveScreenSnapshotIntoManifest(nextDraft);
       await saveVisualConfigDraft(nextDraft);
       setDraftManifest(nextDraft);
       syncCustomViewportFromManifest(nextDraft);
@@ -432,15 +506,21 @@ export default function UiStudioScreen({navigation}: any) {
     } finally {
       setSaving(false);
     }
-  }, [activePreviewViewport, draftManifest, syncCustomViewportFromManifest]);
+  }, [
+    activePreviewViewport,
+    captureActiveScreenSnapshotIntoManifest,
+    draftManifest,
+    syncCustomViewportFromManifest,
+  ]);
 
   const handlePublish = useCallback(async () => {
     setPublishing(true);
     try {
-      const nextDraft = sanitizeVisualConfigManifest({
+      let nextDraft = sanitizeVisualConfigManifest({
         ...draftManifest,
         referenceViewport: activePreviewViewport,
       });
+      nextDraft = await captureActiveScreenSnapshotIntoManifest(nextDraft);
       await saveVisualConfigDraft(nextDraft);
       const version = await publishVisualConfigDraft(publishNotes);
       const [refreshedDraft, history] = await Promise.all([
@@ -463,6 +543,7 @@ export default function UiStudioScreen({navigation}: any) {
     }
   }, [
     activePreviewViewport,
+    captureActiveScreenSnapshotIntoManifest,
     draftManifest,
     publishNotes,
     syncCustomViewportFromManifest,
@@ -683,24 +764,33 @@ export default function UiStudioScreen({navigation}: any) {
             </TouchableOpacity>
           </View>
 
-          <VisualRuntimePreview
-            screenId={activeScreen}
-            manifest={draftManifest}
-            assetUris={assetUris}
-            selectedElementId={selectedElementId}
-            previewWorld={numericPreviewWorld}
-            previewLevelId={numericPreviewLevelId}
-            previewRaidStage={numericPreviewRaidStage}
-            viewport={activePreviewViewport}
-            displayScale={previewScale}
-            onSelectElement={setSelectedElementId}
-            onMoveElement={(elementId, nextOffsetX, nextOffsetY) =>
-              patchElementRule(activeScreen, elementId, {
-                offsetX: nextOffsetX,
-                offsetY: nextOffsetY,
-              })
-            }
-          />
+          <ViewShot
+            ref={previewShotRef}
+            options={{
+              result: 'data-uri',
+              format: 'png',
+              quality: 1,
+            }}>
+            <VisualRuntimePreview
+              screenId={activeScreen}
+              manifest={draftManifest}
+              assetUris={assetUris}
+              selectedElementId={selectedElementId}
+              previewWorld={numericPreviewWorld}
+              previewLevelId={numericPreviewLevelId}
+              previewRaidStage={numericPreviewRaidStage}
+              viewport={activePreviewViewport}
+              displayScale={previewScale}
+              onSelectElement={setSelectedElementId}
+              onMoveElement={(elementId, nextOffsetX, nextOffsetY) =>
+                patchElementRule(activeScreen, elementId, {
+                  offsetX: nextOffsetX,
+                  offsetY: nextOffsetY,
+                })
+              }
+              onMeasureElement={handleMeasureElement}
+            />
+          </ViewShot>
         </GamePanel>
 
         <GamePanel>
@@ -1092,6 +1182,7 @@ export default function UiStudioScreen({navigation}: any) {
                 offsetY: nextOffsetY,
               })
             }
+            onMeasureElement={handleMeasureElement}
           />
         </View>
       </Modal>

@@ -22,8 +22,11 @@ import {
   getLevelBackgroundOverride,
   getRaidBackgroundOverride,
   getVisualElementRule,
+  resolveVisualOffset,
   type VisualConfigManifest,
+  type VisualElementFrame,
   type VisualElementId,
+  type VisualElementRule,
   type VisualScreenId,
   type VisualViewport,
 } from '../game/visualConfig';
@@ -100,6 +103,7 @@ function EditorFrame({
   screenId,
   onSelect,
   onMove,
+  onMeasure,
   style,
   children,
 }: {
@@ -112,10 +116,24 @@ function EditorFrame({
   screenId: VisualScreenId;
   onSelect: (elementId: VisualElementId) => void;
   onMove: (elementId: VisualElementId, nextX: number, nextY: number) => void;
+  onMeasure?: (
+    elementId: VisualElementId,
+    payload: {
+      frame: VisualElementFrame;
+      rule: VisualElementRule;
+    },
+  ) => void;
   style?: any;
   children: React.ReactNode;
 }) {
   const rule = getVisualElementRule(manifest, screenId, elementId);
+  const resolvedOffset = resolveVisualOffset(
+    rule.offsetX,
+    rule.offsetY,
+    viewport,
+    manifest.referenceViewport,
+    rule.safeAreaAware === true,
+  );
   const dragOriginRef = useRef({x: rule.offsetX, y: rule.offsetY});
 
   const panResponder = useMemo(
@@ -147,6 +165,25 @@ function EditorFrame({
         style,
         buildVisualElementStyle(rule, viewport, manifest.referenceViewport),
       ]}
+      onLayout={event => {
+        const layout = event.nativeEvent.layout;
+        const scaledWidth = layout.width * rule.scale;
+        const scaledHeight = layout.height * rule.scale;
+        const scaledX =
+          layout.x + resolvedOffset.x - Math.round((scaledWidth - layout.width) / 2);
+        const scaledY =
+          layout.y + resolvedOffset.y - Math.round((scaledHeight - layout.height) / 2);
+
+        onMeasure?.(elementId, {
+          frame: {
+            x: Math.round(scaledX),
+            y: Math.round(scaledY),
+            width: Math.round(scaledWidth),
+            height: Math.round(scaledHeight),
+          },
+          rule,
+        });
+      }}
       {...(selected ? panResponder.panHandlers : {})}>
       <TouchableOpacity activeOpacity={1} onPress={() => onSelect(elementId)}>
         <View style={styles.frameInner}>
@@ -195,6 +232,7 @@ export default function VisualRuntimePreview({
   displayScale = 1,
   onSelectElement,
   onMoveElement,
+  onMeasureElement,
 }: {
   screenId: VisualScreenId;
   manifest: VisualConfigManifest;
@@ -207,6 +245,14 @@ export default function VisualRuntimePreview({
   displayScale?: number;
   onSelectElement: (elementId: VisualElementId) => void;
   onMoveElement: (elementId: VisualElementId, nextOffsetX: number, nextOffsetY: number) => void;
+  onMeasureElement?: (
+    screenId: VisualScreenId,
+    elementId: VisualElementId,
+    payload: {
+      frame: VisualElementFrame;
+      rule: VisualElementRule;
+    },
+  ) => void;
 }) {
   const board = useMemo(() => buildPreviewBoard(), []);
   const enemyBoard = useMemo(() => buildSmallPreviewBoard(), []);
@@ -258,6 +304,30 @@ export default function VisualRuntimePreview({
   const comboGaugeLevel = getVisualElementRule(manifest, 'level', 'combo_gauge');
   const comboGaugeEndless = getVisualElementRule(manifest, 'endless', 'combo_gauge');
   const comboGaugeRaid = getVisualElementRule(manifest, 'raid', 'combo_gauge');
+  const reportLevelMeasure = useMemo(
+    () =>
+      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+        onMeasureElement?.('level', elementId, payload),
+    [onMeasureElement],
+  );
+  const reportEndlessMeasure = useMemo(
+    () =>
+      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+        onMeasureElement?.('endless', elementId, payload),
+    [onMeasureElement],
+  );
+  const reportBattleMeasure = useMemo(
+    () =>
+      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+        onMeasureElement?.('battle', elementId, payload),
+    [onMeasureElement],
+  );
+  const reportRaidMeasure = useMemo(
+    () =>
+      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+        onMeasureElement?.('raid', elementId, payload),
+    [onMeasureElement],
+  );
 
   const renderLevel = () => (
     <View style={[styles.runtimeScreen, contentPadding]}>
@@ -270,7 +340,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="level"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportLevelMeasure}>
         <View style={styles.levelHeader}>
           <BackImageButton onPress={() => undefined} size={40} />
           <Text style={styles.levelTitle}>레벨 모드 1-1</Text>
@@ -288,6 +359,7 @@ export default function VisualRuntimePreview({
         screenId="level"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportLevelMeasure}
         style={styles.sectionGap}>
         <SampleBattleLane />
       </EditorFrame>
@@ -302,6 +374,7 @@ export default function VisualRuntimePreview({
         screenId="level"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportLevelMeasure}
         style={[styles.sectionGap, styles.centered]}>
         <View>
           <Board board={board} viewportWidth={viewport.width} />
@@ -331,7 +404,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="level"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportLevelMeasure}>
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -351,6 +425,7 @@ export default function VisualRuntimePreview({
         screenId="level"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportLevelMeasure}
         style={styles.sectionGapSmall}>
         <ItemBar
           items={SAMPLE_ITEMS}
@@ -373,7 +448,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="endless"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}>
         <GameHeader
           score={12840}
           combo={6}
@@ -396,6 +472,7 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}
         style={styles.sectionGap}>
         <View style={styles.statusBar}>
           <Text style={styles.statusBarText}>이번 판 획득 골드: 120</Text>
@@ -413,6 +490,7 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}
         style={styles.sectionGapSmall}>
         <NextPiecePreview pieces={SAMPLE_NEXT_PIECES} />
       </EditorFrame>
@@ -427,6 +505,7 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}
         style={styles.sectionGapSmall}>
         <View style={styles.summonCard}>
           <Text style={styles.summonTitle}>소환수</Text>
@@ -447,6 +526,7 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}
         style={[styles.sectionGap, styles.centered]}>
         <View>
           <Board board={board} viewportWidth={viewport.width} />
@@ -476,7 +556,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="endless"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}>
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -496,6 +577,7 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportEndlessMeasure}
         style={styles.sectionGapSmall}>
         <ItemBar
           items={SAMPLE_ITEMS}
@@ -518,7 +600,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="battle"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportBattleMeasure}>
         <View style={styles.backDock}>
           <BackImageButton onPress={() => undefined} size={42} />
         </View>
@@ -534,6 +617,7 @@ export default function VisualRuntimePreview({
         screenId="battle"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportBattleMeasure}
         style={styles.sectionGap}>
         <View style={styles.opponentSection}>
           <Text style={styles.opponentName}>상대 PlayerTwo</Text>
@@ -551,6 +635,7 @@ export default function VisualRuntimePreview({
         screenId="battle"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportBattleMeasure}
         style={styles.sectionGap}>
         <View style={styles.attackBar}>
           <Text style={styles.attackLabel}>공격 포인트 24</Text>
@@ -574,6 +659,7 @@ export default function VisualRuntimePreview({
         screenId="battle"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportBattleMeasure}
         style={[styles.sectionGap, styles.centered]}>
         <Board board={board} compact viewportWidth={viewport.width} />
       </EditorFrame>
@@ -589,7 +675,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="battle"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportBattleMeasure}>
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -613,7 +700,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="raid"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportRaidMeasure}>
         <BossDisplay
           bossName="킹슬라임"
           bossEmoji="🟢"
@@ -639,6 +727,7 @@ export default function VisualRuntimePreview({
         screenId="raid"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportRaidMeasure}
         style={styles.sectionGapSmall}>
         <SkillBar
           currentGauge={17}
@@ -660,6 +749,7 @@ export default function VisualRuntimePreview({
         screenId="raid"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportRaidMeasure}
         style={styles.sectionGapSmall}>
         <View style={styles.statusBar}>
           <Text style={styles.statusBarText}>내 누적 대미지 8,420</Text>
@@ -677,6 +767,7 @@ export default function VisualRuntimePreview({
         screenId="raid"
         onSelect={onSelectElement}
         onMove={onMoveElement}
+        onMeasure={reportRaidMeasure}
         style={[styles.sectionGap, styles.centered]}>
         <View>
           <Board board={board} compact viewportWidth={viewport.width} />
@@ -710,7 +801,8 @@ export default function VisualRuntimePreview({
         manifest={manifest}
         screenId="raid"
         onSelect={onSelectElement}
-        onMove={onMoveElement}>
+        onMove={onMoveElement}
+        onMeasure={reportRaidMeasure}>
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
