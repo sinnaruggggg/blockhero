@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "creator:bundle": "node scripts/build_blockhero_creator_desktop.mjs --bundle-only",
+    "creator:exe": "node scripts/build_blockhero_creator_desktop.mjs && npm --prefix tools/blockhero-creator-desktop run dist",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "postinstall": "patch-package",
@@ -47,6 +49,9 @@
     "@types/react": "^19.2.0",
     "@types/react-test-renderer": "^19.1.0",
     "eslint": "^8.19.0",
+    "esbuild": "^0.25.11",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
     "jest": "^29.6.3",
     "patch-package": "^8.0.0",
     "prettier": "2.8.8",

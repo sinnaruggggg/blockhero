@@ -1,38 +1,44 @@
 # BlockHero Creator
 
 ## 목적
-- 현재 게임 코드 기준의 레벨, 일반 레이드, 보스 레이드, 적 템플릿 데이터를 자동으로 draft로 가져옵니다.
-- 관리자 계정이 PC에서 수정한 뒤 `creator_draft`에 저장하고 `creator_releases`로 publish 합니다.
-- 일반 유저 앱은 publish된 creator manifest를 시작 시 한 번 내려받아 로컬에 캐시합니다.
+- 현재 게임 코드의 기본 레벨/레이드/적 템플릿을 초안으로 불러옵니다.
+- 관리자 계정으로 수정한 내용을 `creator_draft`에 저장하고 `creator_releases`로 배포합니다.
+- 일반 유저 앱은 published creator manifest를 내려받아 로컬 캐시에 저장해 사용합니다.
 
-## 실행
-1. 루트의 [run-blockhero-creator.bat](/C:/www/game/blockhero_codex/run-blockhero-creator.bat)을 실행합니다.
-2. 브라우저가 `http://localhost:4273`을 엽니다.
-3. 관리자 이메일/비밀번호로 로그인합니다.
-4. draft 또는 latest published manifest가 자동으로 로드됩니다.
+## PC 실행 방법
+### 개발용 웹 실행
+1. 루트에서 [run-blockhero-creator.bat](/C:/www/game/blockhero_codex/run-blockhero-creator.bat)을 실행합니다.
+2. 브라우저에서 `http://localhost:4273`이 열립니다.
+3. 관리자 계정으로 로그인하면 draft 또는 최신 배포본이 자동으로 불러와집니다.
+
+### Windows 실행 파일
+1. 루트에서 `npm run creator:exe`를 실행합니다.
+2. 빌드가 끝나면 `tools/blockhero-creator-desktop/dist` 아래에 `BlockHero Creator` 실행 파일이 생성됩니다.
+3. 생성된 `.exe`를 실행하면 브라우저 없이 데스크톱 앱으로 편집기를 사용할 수 있습니다.
+4. 이후에는 [run-blockhero-creator-exe.bat](/C:/www/game/blockhero_codex/run-blockhero-creator-exe.bat)을 더블클릭해 바로 실행할 수 있습니다.
 
 ## 주요 기능
-- 레벨/일반 레이드/보스 레이드/적 템플릿 트리
-- 선택 항목 상세 폼 편집
-- assetKey 기반 배경 자산 라이브러리와 업로드
+- 레벨 / 일반 레이드 / 보스 레이드 / 적 템플릿 트리 편집
+- 항목별 상세 수치 편집
+- 배경 assetKey 업로드 및 연결
 - draft 저장
 - publish
 - 릴리즈 이력 확인 및 rollback
-- 전체 manifest JSON 복사/수동 적용
+- 전체 manifest JSON 복사 / 붙여넣기
 
 ## 자동 불러오기 규칙
-- draft가 있으면 draft 우선
-- draft가 없고 published release가 있으면 latest release 사용
-- 둘 다 없으면 [default-creator-manifest.json](/C:/www/game/blockhero_codex/tools/blockhero-creator/default-creator-manifest.json)을 불러와 draft를 자동 생성
+- draft가 있으면 draft를 우선 사용합니다.
+- draft가 없고 published release가 있으면 최신 published release를 불러옵니다.
+- 둘 다 없으면 기본 manifest를 로드해서 새 draft를 만들 수 있습니다.
 
-## 데이터 저장 위치
+## 서버 테이블
 - draft: `creator_draft`
 - release: `creator_releases`
 - 배경 자산: `ui_assets`
 
-## 권장 운영 흐름
-1. PC Creator에서 draft 수정
-2. publish 메모 작성
+## 권장 운영 순서
+1. Creator에서 draft 수정
+2. 배포 메모 작성
 3. Draft 저장
 4. Publish
-5. 폰에서 실제 레벨/레이드 한 번씩 열어 최종 검수
+5. 폰 앱에서 실제 화면 검수

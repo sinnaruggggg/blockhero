@@ -13,11 +13,12 @@
           <p class="eyebrow">BlockHero Creator</p>
           <h1>콘텐츠 제작 스튜디오</h1>
           <p class="subtitle">
-            현재 게임 데이터를 자동으로 불러와서 레벨, 레이드, 적 템플릿, 배경을 수정하고 draft/publish 할 수 있습니다.
+            현재 게임의 레벨, 레이드, 적 템플릿, 배경 설정을 불러와서 초안으로 수정하고
+            배포할 수 있습니다.
           </p>
         </div>
         <div class="topbar-meta">
-          <div class="status-pill" id="connectionStatus">연결 안 됨</div>
+          <div class="status-pill" id="connectionStatus">연결 대기</div>
           <div class="status-pill" id="manifestStatus">manifest 없음</div>
         </div>
       </header>
@@ -26,7 +27,10 @@
         <div class="panel-header">
           <div>
             <h2>관리자 로그인</h2>
-            <p>Supabase 연결값은 자동으로 채워집니다. 관리자 계정으로 로그인하면 draft/published 데이터를 바로 불러옵니다.</p>
+            <p>
+              Supabase 연결 정보는 자동으로 채워집니다. 관리자 계정으로 로그인하면 draft와
+              최신 배포본을 바로 불러옵니다.
+            </p>
           </div>
         </div>
         <div class="form-grid two">
@@ -44,12 +48,12 @@
           </label>
           <label>
             <span>비밀번호</span>
-            <input id="adminPassword" type="password" placeholder="••••••••" />
+            <input id="adminPassword" type="password" placeholder="비밀번호 입력" />
           </label>
         </div>
         <div class="button-row">
           <button id="loginButton" class="primary">로그인하고 불러오기</button>
-          <button id="restoreButton" class="ghost">저장된 세션 복원</button>
+          <button id="restoreButton" class="ghost">이전 세션 복원</button>
         </div>
       </section>
 
@@ -58,16 +62,16 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <h2>프로젝트</h2>
-                <p>현재 draft와 published 버전을 확인합니다.</p>
+                <h2>프로젝트 상태</h2>
+                <p>현재 로그인 계정과 draft/published 버전을 확인합니다.</p>
               </div>
               <button id="logoutButton" class="small ghost">로그아웃</button>
             </div>
             <div class="key-value">
               <div><span>관리자</span><strong id="userEmail">-</strong></div>
-              <div><span>draft 기준</span><strong id="draftVersion">-</strong></div>
+              <div><span>draft 버전</span><strong id="draftVersion">-</strong></div>
               <div><span>published</span><strong id="publishedVersion">-</strong></div>
-              <div><span>자산 수</span><strong id="assetCount">0</strong></div>
+              <div><span>배경 자산 수</span><strong id="assetCount">0</strong></div>
             </div>
             <div class="button-row wrap">
               <button id="refreshButton" class="ghost">새로고침</button>
@@ -76,7 +80,10 @@
             </div>
             <label>
               <span>배포 메모</span>
-              <textarea id="publishNotes" rows="3" placeholder="이번 배포에서 바뀐 점을 기록합니다."></textarea>
+              <textarea
+                id="publishNotes"
+                rows="3"
+                placeholder="이번 배포에서 바뀐 내용을 적습니다."></textarea>
             </label>
           </section>
 
@@ -102,7 +109,9 @@
             <div class="panel-header">
               <div>
                 <h2 id="editorTitle">항목을 선택하세요</h2>
-                <p id="editorSubtitle">좌측 트리에서 레벨, 레이드, 적 템플릿 중 하나를 고르면 상세 편집기가 열립니다.</p>
+                <p id="editorSubtitle">
+                  좌측 트리에서 레벨, 레이드, 적 템플릿 중 하나를 고르면 상세 편집기가 열립니다.
+                </p>
               </div>
               <div class="button-row wrap">
                 <button id="cloneButton" class="ghost small">복제</button>
@@ -121,11 +130,11 @@
             <div class="panel-header">
               <div>
                 <h2>상세 편집</h2>
-                <p>현재 게임 데이터에서 바로 불러온 값들을 수정합니다.</p>
+                <p>현재 게임 데이터에서 가져온 값을 수정합니다.</p>
               </div>
             </div>
             <div id="editorForm" class="editor-form empty-state">
-              <p>왼쪽에서 항목을 선택하면 여기에서 세부 수치를 편집할 수 있습니다.</p>
+              <p>왼쪽에서 항목을 선택하면 여기에서 수치를 수정할 수 있습니다.</p>
             </div>
           </section>
 
@@ -133,7 +142,7 @@
             <div class="panel-header">
               <div>
                 <h2>Manifest 원본</h2>
-                <p>전체 JSON을 복사하거나 외부에서 수정한 manifest를 붙여넣어 덮어쓸 수 있습니다.</p>
+                <p>전체 JSON을 복사하거나, 외부에서 수정한 manifest를 붙여 넣어 적용할 수 있습니다.</p>
               </div>
               <div class="button-row">
                 <button id="copyJsonButton" class="ghost small">JSON 복사</button>
@@ -149,7 +158,7 @@
             <div class="panel-header">
               <div>
                 <h2>메뉴 설명</h2>
-                <p>선택한 항목이 실제 게임에서 어떤 역할을 하는지 바로 읽을 수 있게 정리했습니다.</p>
+                <p>선택한 항목의 역할과 수정 팁을 빠르게 확인합니다.</p>
               </div>
             </div>
             <div id="helpPanel" class="help-panel"></div>
@@ -159,12 +168,12 @@
             <div class="panel-header">
               <div>
                 <h2>배경 자산 라이브러리</h2>
-                <p>레벨/레이드 배경에서 사용하는 assetKey를 여기서 관리합니다.</p>
+                <p>레벨/레이드 배경에 연결할 assetKey를 관리합니다.</p>
               </div>
             </div>
             <div class="form-grid">
               <label>
-                <span>신규 asset key</span>
+                <span>새 asset key</span>
                 <input id="assetKeyInput" type="text" placeholder="level_world_1_bg" />
               </label>
               <label>
@@ -182,7 +191,7 @@
             <div class="panel-header">
               <div>
                 <h2>릴리즈 이력</h2>
-                <p>과거 배포본을 불러오거나 rollback할 수 있습니다.</p>
+                <p>과거 배포본을 다시 불러오거나 rollback할 수 있습니다.</p>
               </div>
             </div>
             <div id="releaseHistory" class="release-history"></div>
@@ -191,6 +200,6 @@
       </section>
     </div>
 
-    <script type="module" src="./creator.js"></script>
+    <script src="./creator.bundle.js"></script>
   </body>
 </html>
