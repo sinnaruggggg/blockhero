@@ -9,8 +9,13 @@ import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import VisualElementView, {
+  buildVisualElementStyle,
+} from '../components/VisualElementView';
 import {flushPlayerStateNow} from '../services/playerState';
 import {submitEndlessLeaderboard} from '../services/rankingService';
+import {useVisualConfig} from '../hooks/useVisualConfig';
+import {getVisualElementRule} from '../game/visualConfig';
 import {useDragDrop} from '../game/useDragDrop';
 import {
   LEVEL_THRESHOLDS,
@@ -76,6 +81,7 @@ import {
 } from '../game/piecePlacementEffect';
 
 export default function EndlessScreen({navigation}: any) {
+  const {manifest: visualManifest} = useVisualConfig();
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
   const [score, setScore] = useState(0);
@@ -739,10 +745,16 @@ export default function EndlessScreen({navigation}: any) {
 
   const nextMilestone = ENDLESS_GOLD_MILESTONES[nextMilestoneIdx];
   const comboGaugeMaxMs = COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
+  const comboGaugeRule = getVisualElementRule(
+    visualManifest,
+    'endless',
+    'combo_gauge',
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <GameHeader
+      <VisualElementView screenId="endless" elementId="header">
+        <GameHeader
         score={score}
         combo={combo}
         linesCleared={linesCleared}
@@ -760,7 +772,8 @@ export default function EndlessScreen({navigation}: any) {
         }}
         feverActive={feverActive}
         feverGauge={feverGauge}
-      />
+        />
+      </VisualElementView>
 
       <Animated.View
         style={[
@@ -793,23 +806,31 @@ export default function EndlessScreen({navigation}: any) {
 
       <BattleNoticeOverlay message={battleNoticeMessage} bottom={148} />
 
-      <View style={styles.goldBar}>
+      <VisualElementView screenId="endless" elementId="status_bar">
+        <View style={styles.goldBar}>
         <Text style={styles.goldBarText}>이번 판 획득 골드: {goldEarned}</Text>
         {nextMilestone && (
           <Text style={styles.goldBarNext}>
             다음: {nextMilestone.score.toLocaleString()}점
           </Text>
         )}
-      </View>
+        </View>
+      </VisualElementView>
 
-      {skillEffectsRef.current.previewCountBonus > 0 && nextPieces.length > 0 && (
-        <NextPiecePreview
-          pieces={nextPieces.slice(0, Math.min(3, skillEffectsRef.current.previewCountBonus))}
-        />
-      )}
+      <VisualElementView screenId="endless" elementId="next_preview">
+        {skillEffectsRef.current.previewCountBonus > 0 && nextPieces.length > 0 && (
+          <NextPiecePreview
+            pieces={nextPieces.slice(
+              0,
+              Math.min(3, skillEffectsRef.current.previewCountBonus),
+            )}
+          />
+        )}
+      </VisualElementView>
 
-      {activeSkinIdRef.current > 0 && (
-        <View style={styles.summonCard}>
+      <VisualElementView screenId="endless" elementId="summon_panel">
+        {activeSkinIdRef.current > 0 && (
+          <View style={styles.summonCard}>
           <View style={styles.summonHeader}>
             <Text style={styles.summonTitle}>소환수</Text>
             <Text style={styles.summonMeta}>
@@ -845,41 +866,51 @@ export default function EndlessScreen({navigation}: any) {
               <Text style={styles.summonBtnText}>{summonActive ? '회수' : '소환'}</Text>
             </TouchableOpacity>
           </View>
+          </View>
+        )}
+      </VisualElementView>
+
+      <VisualElementView screenId="endless" elementId="board" style={styles.visualWrapper}>
+        <View style={styles.boardContainer} onLayout={handleBoardLayout}>
+          {comboGaugeRule.visible && (
+            <ComboGaugeOverlay
+              combo={combo}
+              comboRemainingMs={comboRemainingMs}
+              comboMaxMs={comboGaugeMaxMs}
+              style={buildVisualElementStyle(comboGaugeRule)}
+            />
+          )}
+          <Board
+            ref={boardRef}
+            board={board}
+            backgroundColor={skinBoardBg}
+            compact={useCompactLayout}
+            previewCells={dragDrop.previewCells}
+            invalidPreview={dragDrop.invalidPreview}
+            clearGuideCells={dragDrop.clearGuideCells}
+          />
         </View>
-      )}
+      </VisualElementView>
 
-      <View style={styles.boardContainer} onLayout={handleBoardLayout}>
-        <ComboGaugeOverlay
-          combo={combo}
-          comboRemainingMs={comboRemainingMs}
-          comboMaxMs={comboGaugeMaxMs}
-        />
-        <Board
-          ref={boardRef}
-          board={board}
-          backgroundColor={skinBoardBg}
+      <VisualElementView screenId="endless" elementId="piece_tray">
+        <PieceSelector
+          pieces={pieces}
+          onDragStart={dragDrop.onDragStart}
+          onDragMove={dragDrop.onDragMove}
+          onDragEnd={dragDrop.onDragEnd}
+          onDragCancel={dragDrop.onDragCancel}
           compact={useCompactLayout}
-          previewCells={dragDrop.previewCells}
-          invalidPreview={dragDrop.invalidPreview}
-          clearGuideCells={dragDrop.clearGuideCells}
         />
-      </View>
-
-      <PieceSelector
-        pieces={pieces}
-        onDragStart={dragDrop.onDragStart}
-        onDragMove={dragDrop.onDragMove}
-        onDragEnd={dragDrop.onDragEnd}
-        onDragCancel={dragDrop.onDragCancel}
-        compact={useCompactLayout}
-      />
+      </VisualElementView>
       {gameData && (
-        <ItemBar
-          items={gameData.items}
-          selectedItem={selectedItem}
-          onSelectItem={handleItemSelect}
-          showAddTurns={false}
-        />
+        <VisualElementView screenId="endless" elementId="item_bar">
+          <ItemBar
+            items={gameData.items}
+            selectedItem={selectedItem}
+            onSelectItem={handleItemSelect}
+            showAddTurns={false}
+          />
+        </VisualElementView>
       )}
     </SafeAreaView>
   );
@@ -891,6 +922,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a1628',
     paddingTop: MODE_VERTICAL_GUTTER,
     paddingBottom: MODE_VERTICAL_GUTTER,
+  },
+  visualWrapper: {
+    alignSelf: 'stretch',
   },
   boardContainer: {
     flex: 1,

@@ -593,6 +593,14 @@ function AdminScreenContent({
                 관리자 전용 비주얼 조정 화면으로 이동합니다.
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.toolCard}
+              onPress={() => navigation.navigate('UiStudio')}>
+              <Text style={styles.toolCardTitle}>UI/UX 스튜디오</Text>
+              <Text style={styles.toolCardDescription}>
+                게임 화면 배치와 배경을 실시간으로 조정합니다.
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 

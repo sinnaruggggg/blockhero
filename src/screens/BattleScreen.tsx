@@ -6,6 +6,7 @@ import {submitBattleLeaderboard} from '../services/rankingService';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import VisualElementView from '../components/VisualElementView';
 import {useDragDrop} from '../game/useDragDrop';
 import {ATTACKS} from '../constants';
 import {
@@ -686,7 +687,7 @@ export default function BattleScreen({route, navigation}: any) {
   return (
     <SafeAreaView style={styles.container}>
       {!gameOver && (
-        <View style={styles.backButtonDock}>
+        <VisualElementView screenId="battle" elementId="back_button" style={styles.backButtonDock}>
           <BackImageButton
             onPress={() => {
               Alert.alert('대전 나가기', '지금 나가면 패배 처리됩니다. 나가시겠습니까?', [
@@ -709,13 +710,22 @@ export default function BattleScreen({route, navigation}: any) {
             }}
             size={42}
           />
-        </View>
+        </VisualElementView>
       )}
+      <VisualElementView
+        screenId="battle"
+        elementId="opponent_panel"
+        style={styles.visualWrapper}>
       <View style={styles.opponentSection}>
         <Text style={styles.opponentName}>상대 {opponentName}</Text>
         <Board board={opponentBoard} small />
       </View>
+      </VisualElementView>
 
+      <VisualElementView
+        screenId="battle"
+        elementId="attack_bar"
+        style={styles.visualWrapper}>
       <View style={styles.attackBar}>
         <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
         {ATTACKS.map((atk, i) => (
@@ -729,7 +739,9 @@ export default function BattleScreen({route, navigation}: any) {
           </TouchableOpacity>
         ))}
       </View>
+      </VisualElementView>
 
+      <VisualElementView screenId="battle" elementId="board" style={styles.visualWrapper}>
       <Animated.View
         style={[styles.boardContainer, {
           transform: [{translateX: shakeAnim}],
@@ -744,7 +756,9 @@ export default function BattleScreen({route, navigation}: any) {
           clearGuideCells={dragDrop.clearGuideCells}
         />
       </Animated.View>
+      </VisualElementView>
 
+      <VisualElementView screenId="battle" elementId="piece_tray">
       <PieceSelector
         pieces={pieces}
         onDragStart={dragDrop.onDragStart}
@@ -752,6 +766,7 @@ export default function BattleScreen({route, navigation}: any) {
         onDragEnd={dragDrop.onDragEnd}
         onDragCancel={dragDrop.onDragCancel}
       />
+      </VisualElementView>
 
       {placementEffect && (
         <PiecePlacementEffect
@@ -846,6 +861,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a0a3e',
     paddingTop: MODE_VERTICAL_GUTTER,
     paddingBottom: MODE_VERTICAL_GUTTER,
+  },
+  visualWrapper: {
+    alignSelf: 'stretch',
   },
   backButtonDock: {
     position: 'absolute',

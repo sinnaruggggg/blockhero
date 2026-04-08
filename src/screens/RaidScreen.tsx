@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   View, Text, StyleSheet, Alert, TouchableOpacity, Animated,
   Vibration, TextInput, ScrollView, KeyboardAvoidingView, Platform, Image, Dimensions,
+  ImageBackground,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Board from '../components/Board';
@@ -14,6 +15,9 @@ import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillBar from '../components/SkillBar';
 import KnightSprite from '../components/KnightSprite';
+import VisualElementView, {
+  buildVisualElementStyle,
+} from '../components/VisualElementView';
 import {RaidParticipant} from '../components/RaidParticipants';
 import {useDragDrop} from '../game/useDragDrop';
 import {COMBO_TIMEOUT_MS, FEVER_DURATION} from '../constants';
@@ -95,6 +99,12 @@ import {
   pushFloatingDamageHit,
   type FloatingDamageHit,
 } from '../game/floatingDamage';
+import {useVisualConfig} from '../hooks/useVisualConfig';
+import {
+  buildVisualTintColor,
+  getRaidBackgroundOverride,
+  getVisualElementRule,
+} from '../game/visualConfig';
 import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
@@ -207,6 +217,7 @@ function withTimeout<T>(
 export default function RaidScreen({route, navigation}: any) {
   const {instanceId, bossStage, isNormalRaid = false} = route.params;
   const boss = RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
+  const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
   const bossAttackStats = getRaidBossAttackStats(bossStage);
 
   const [board, setBoard] = useState<BoardType>(createBoard());
@@ -1714,8 +1725,34 @@ export default function RaidScreen({route, navigation}: any) {
 
   const comboGaugeMaxMs = COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
   const feverGaugeMaxMs = FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
+  const raidBackgroundOverride = getRaidBackgroundOverride(
+    visualManifest,
+    boss.stage,
+  );
+  const raidBackgroundSource =
+    raidBackgroundOverride?.removeImage === true
+      ? null
+      : raidBackgroundOverride?.assetKey &&
+          visualAssetUris[raidBackgroundOverride.assetKey]
+        ? {uri: visualAssetUris[raidBackgroundOverride.assetKey]}
+        : null;
+  const raidBackgroundTint = raidBackgroundOverride
+    ? buildVisualTintColor(
+        raidBackgroundOverride.tintColor,
+        raidBackgroundOverride.tintOpacity,
+      )
+    : 'transparent';
+  const raidComboGaugeRule = getVisualElementRule(
+    visualManifest,
+    'raid',
+    'combo_gauge',
+  );
 
   const renderBoardStatusDock = (compact: boolean) => {
+    if (!raidComboGaugeRule.visible) {
+      return null;
+    }
+
     return (
       <ComboGaugeOverlay
         combo={combo}
@@ -1725,6 +1762,7 @@ export default function RaidScreen({route, navigation}: any) {
         feverRemainingMs={feverRemainingMs}
         feverMaxMs={feverGaugeMaxMs}
         compact={compact}
+        style={buildVisualElementStyle(raidComboGaugeRule)}
       />
     );
 
@@ -1827,6 +1865,23 @@ export default function RaidScreen({route, navigation}: any) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {raidBackgroundSource ? (
+        <ImageBackground
+          source={raidBackgroundSource}
+          resizeMode="cover"
+          style={styles.visualBackgroundLayer}>
+          <View
+            pointerEvents="none"
+            style={[styles.visualBackgroundTintLayer, {backgroundColor: raidBackgroundTint}]}
+          />
+        </ImageBackground>
+      ) : raidBackgroundTint !== 'transparent' ? (
+        <View
+          pointerEvents="none"
+          style={[styles.visualBackgroundTintLayer, {backgroundColor: raidBackgroundTint}]}
+        />
+      ) : null}
+      <VisualElementView screenId="raid" elementId="top_panel" style={styles.visualWrapper}>
       {isNormalRaid ? (
         <>
           <View style={styles.normalRaidHeader}>
@@ -1940,6 +1995,7 @@ export default function RaidScreen({route, navigation}: any) {
           {renderTopStatusRow(false)}
         </>
       )}
+      </VisualElementView>
 
       {false && activeSkinIdRef.current > 0 && (
         <View style={[styles.summonCard, isNormalRaid && styles.summonCardCompact]}>
@@ -1983,23 +2039,27 @@ export default function RaidScreen({route, navigation}: any) {
 
       {/* Skill bar (hidden in spectator) */}
       {!spectatorMode && (
-        <SkillBar
-          currentGauge={skillGauge}
-          charges={skillCharges}
-          activeMultiplier={activeMultiplier}
-          skillLevels={raidSkillLevels}
-          onSelectSkill={handleSelectSkill}
-          disabled={gameOverRef.current}
-        />
+        <VisualElementView screenId="raid" elementId="skill_bar">
+          <SkillBar
+            currentGauge={skillGauge}
+            charges={skillCharges}
+            activeMultiplier={activeMultiplier}
+            skillLevels={raidSkillLevels}
+            onSelectSkill={handleSelectSkill}
+            disabled={gameOverRef.current}
+          />
+        </VisualElementView>
       )}
 
       {/* Damage info */}
+      <VisualElementView screenId="raid" elementId="info_bar" style={styles.visualWrapper}>
       <View style={[styles.infoBar, isNormalRaid && styles.infoBarCompact]}>
         <Text style={styles.infoText}>{t('raid.yourDamage', myTotalDamage)}</Text>
         <Text style={styles.infoText}>
           {spectatorMode ? '관전 모드' : `${t('raid.gauge')}: ${skillGauge}`}
         </Text>
       </View>
+      </VisualElementView>
 
       {/* Main content: Board or Spectator view */}
       {spectatorMode ? (
@@ -2058,6 +2118,7 @@ export default function RaidScreen({route, navigation}: any) {
       ) : (
         <>
           {/* Board */}
+        <VisualElementView screenId="raid" elementId="board" style={styles.visualWrapper}>
         <View
           style={[styles.boardContainer, isNormalRaid && styles.boardContainerCompact]}
           onLayout={handleBoardLayout}>
@@ -2072,8 +2133,10 @@ export default function RaidScreen({route, navigation}: any) {
             clearGuideCells={dragDrop.clearGuideCells}
           />
         </View>
+        </VisualElementView>
 
           {/* Piece Selector */}
+          <VisualElementView screenId="raid" elementId="piece_tray">
           <PieceSelector
             pieces={pieces}
             onDragStart={dragDrop.onDragStart}
@@ -2082,6 +2145,7 @@ export default function RaidScreen({route, navigation}: any) {
             onDragCancel={dragDrop.onDragCancel}
             compact
           />
+          </VisualElementView>
         </>
       )}
 
@@ -2152,6 +2216,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a0a3e',
     paddingTop: MODE_VERTICAL_GUTTER,
     paddingBottom: MODE_VERTICAL_GUTTER,
+  },
+  visualWrapper: {
+    alignSelf: 'stretch',
+  },
+  visualBackgroundLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  visualBackgroundTintLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   timerBar: {
     alignItems: 'center',

@@ -20,6 +20,15 @@ import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import VisualElementView, {
+  buildVisualElementStyle,
+} from '../components/VisualElementView';
+import {useVisualConfig} from '../hooks/useVisualConfig';
+import {
+  buildVisualTintColor,
+  getLevelBackgroundOverride,
+  getVisualElementRule,
+} from '../game/visualConfig';
 
 const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 import Board from '../components/Board';
@@ -321,6 +330,7 @@ export default function SingleGameScreen({route, navigation}: any) {
   const {levelId} = route.params;
   const levelData = LEVELS.find(l => l.id === levelId);
   const activeLevel = levelData ?? LEVELS[0];
+  const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
   const monster = activeLevel.goal;
   const maxMonsterHp = monster.monsterHp;
   const enemyStats = getLevelEnemyStats(levelId, activeLevel.world);
@@ -1707,8 +1717,29 @@ export default function SingleGameScreen({route, navigation}: any) {
     getMonsterPoseSource(monsterSpriteSet, monsterPose) ??
     getMonsterPoseSource(monsterSpriteSet, 'idle');
   const backgroundImage = WORLD_BACKGROUND_IMAGES[activeLevel.world] ?? null;
-  const backgroundTint =
-    WORLD_BACKGROUND_TINTS[activeLevel.world] ?? 'rgba(10, 10, 30, 0.72)';
+  const levelBackgroundOverride = getLevelBackgroundOverride(
+    visualManifest,
+    activeLevel.id,
+    activeLevel.world,
+  );
+  const backgroundTint = levelBackgroundOverride
+    ? buildVisualTintColor(
+        levelBackgroundOverride.tintColor,
+        levelBackgroundOverride.tintOpacity,
+      )
+    : WORLD_BACKGROUND_TINTS[activeLevel.world] ?? 'rgba(10, 10, 30, 0.72)';
+  const runtimeBackgroundImage =
+    levelBackgroundOverride?.removeImage === true
+      ? null
+      : levelBackgroundOverride?.assetKey &&
+          visualAssetUris[levelBackgroundOverride.assetKey]
+        ? {uri: visualAssetUris[levelBackgroundOverride.assetKey]}
+        : backgroundImage;
+  const comboGaugeRule = getVisualElementRule(
+    visualManifest,
+    'level',
+    'combo_gauge',
+  );
 
   useEffect(() => {
     setMonsterPose('idle');
@@ -1992,9 +2023,9 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {backgroundImage ? (
+      {runtimeBackgroundImage ? (
         <ImageBackground
-          source={backgroundImage}
+          source={runtimeBackgroundImage}
           resizeMode="cover"
           style={styles.screenBackground}>
           <View style={[styles.backgroundTint, {backgroundColor: backgroundTint}]}>
@@ -2005,25 +2036,35 @@ export default function SingleGameScreen({route, navigation}: any) {
                   transform: [{translateX: screenShakeX}, {translateY: screenShakeY}],
                 },
               ]}>
-              <View style={styles.header}>
+              <VisualElementView screenId="level" elementId="header" style={styles.header}>
                 <TouchableOpacity
                   onPress={() => setShowExitConfirm(true)}>
                 <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
               </TouchableOpacity>
               <Text style={styles.stageLabel}>{activeLevel.name}</Text>
               <View style={styles.headerSideSpacer} />
-            </View>
+              </VisualElementView>
 
-              {renderBattleLane()}
+              <VisualElementView
+                screenId="level"
+                elementId="battle_lane"
+                style={styles.visualWrapper}>
+                {renderBattleLane()}
+              </VisualElementView>
 
-              <View
+              <VisualElementView
+                screenId="level"
+                elementId="board"
                 style={styles.boardContainer}
                 onLayout={handleBoardLayout}>
-                <ComboGaugeOverlay
-                  combo={combo}
-                  comboRemainingMs={comboRemainingMs}
-                  comboMaxMs={comboGaugeMaxMs}
-                />
+                {comboGaugeRule.visible && (
+                  <ComboGaugeOverlay
+                    combo={combo}
+                    comboRemainingMs={comboRemainingMs}
+                    comboMaxMs={comboGaugeMaxMs}
+                    style={buildVisualElementStyle(comboGaugeRule)}
+                  />
+                )}
                 <Board
                   ref={boardRef}
                   board={board}
@@ -2033,7 +2074,7 @@ export default function SingleGameScreen({route, navigation}: any) {
                   clearGuideCells={dragDrop.clearGuideCells}
                   onCellPress={selectedItem ? handleBoardTapForItem : undefined}
                 />
-              </View>
+              </VisualElementView>
 
               {selectedItem && (
                 <View style={styles.itemHintRow}>
@@ -2050,14 +2091,19 @@ export default function SingleGameScreen({route, navigation}: any) {
 
               <View style={styles.bottomActionRow}>
                 <View style={styles.bottomPieceArea}>
-                  <PieceSelector
-                    pieces={pieces}
-                    onDragStart={dragDrop.onDragStart}
-                    onDragMove={dragDrop.onDragMove}
-                    onDragEnd={dragDrop.onDragEnd}
-                    onDragCancel={dragDrop.onDragCancel}
-                    compact={compactPieceTray}
-                  />
+                  <VisualElementView
+                    screenId="level"
+                    elementId="piece_tray"
+                    style={styles.visualWrapper}>
+                    <PieceSelector
+                      pieces={pieces}
+                      onDragStart={dragDrop.onDragStart}
+                      onDragMove={dragDrop.onDragMove}
+                      onDragEnd={dragDrop.onDragEnd}
+                      onDragCancel={dragDrop.onDragCancel}
+                      compact={compactPieceTray}
+                    />
+                  </VisualElementView>
                 </View>
                 {hasSidePreview && (
                   <NextPiecePreview pieces={previewPieces} variant="side" />
@@ -2065,12 +2111,17 @@ export default function SingleGameScreen({route, navigation}: any) {
               </View>
 
               {gameData && (
-                <ItemBar
-                  items={gameData.items}
-                  selectedItem={selectedItem}
-                  onSelectItem={handleItemSelect}
-                  showAddTurns={false}
-                />
+                <VisualElementView
+                  screenId="level"
+                  elementId="item_bar"
+                  style={styles.visualWrapper}>
+                  <ItemBar
+                    items={gameData.items}
+                    selectedItem={selectedItem}
+                    onSelectItem={handleItemSelect}
+                    showAddTurns={false}
+                  />
+                </VisualElementView>
               )}
             </Animated.View>
           </View>
@@ -2084,25 +2135,35 @@ export default function SingleGameScreen({route, navigation}: any) {
                 transform: [{translateX: screenShakeX}, {translateY: screenShakeY}],
               },
             ]}>
-        <View style={styles.header}>
+        <VisualElementView screenId="level" elementId="header" style={styles.header}>
           <TouchableOpacity
             onPress={() => setShowExitConfirm(true)}>
           <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
         </TouchableOpacity>
         <Text style={styles.stageLabel}>{activeLevel.name}</Text>
         <View style={styles.headerSideSpacer} />
-      </View>
+        </VisualElementView>
 
-        {renderBattleLane()}
+        <VisualElementView
+          screenId="level"
+          elementId="battle_lane"
+          style={styles.visualWrapper}>
+          {renderBattleLane()}
+        </VisualElementView>
 
-        <View
+        <VisualElementView
+          screenId="level"
+          elementId="board"
           style={styles.boardContainer}
           onLayout={handleBoardLayout}>
-          <ComboGaugeOverlay
-            combo={combo}
-            comboRemainingMs={comboRemainingMs}
-            comboMaxMs={comboGaugeMaxMs}
-          />
+          {comboGaugeRule.visible && (
+            <ComboGaugeOverlay
+              combo={combo}
+              comboRemainingMs={comboRemainingMs}
+              comboMaxMs={comboGaugeMaxMs}
+              style={buildVisualElementStyle(comboGaugeRule)}
+            />
+          )}
           <Board
             ref={boardRef}
             board={board}
@@ -2112,7 +2173,7 @@ export default function SingleGameScreen({route, navigation}: any) {
             clearGuideCells={dragDrop.clearGuideCells}
             onCellPress={selectedItem ? handleBoardTapForItem : undefined}
           />
-        </View>
+        </VisualElementView>
 
         {selectedItem && (
           <View style={styles.itemHintRow}>
@@ -2129,14 +2190,19 @@ export default function SingleGameScreen({route, navigation}: any) {
 
         <View style={styles.bottomActionRow}>
           <View style={styles.bottomPieceArea}>
-            <PieceSelector
-              pieces={pieces}
-              onDragStart={dragDrop.onDragStart}
-              onDragMove={dragDrop.onDragMove}
-              onDragEnd={dragDrop.onDragEnd}
-              onDragCancel={dragDrop.onDragCancel}
-              compact={compactPieceTray}
-            />
+            <VisualElementView
+              screenId="level"
+              elementId="piece_tray"
+              style={styles.visualWrapper}>
+              <PieceSelector
+                pieces={pieces}
+                onDragStart={dragDrop.onDragStart}
+                onDragMove={dragDrop.onDragMove}
+                onDragEnd={dragDrop.onDragEnd}
+                onDragCancel={dragDrop.onDragCancel}
+                compact={compactPieceTray}
+              />
+            </VisualElementView>
           </View>
           {hasSidePreview && (
             <NextPiecePreview pieces={previewPieces} variant="side" />
@@ -2144,12 +2210,17 @@ export default function SingleGameScreen({route, navigation}: any) {
         </View>
 
         {gameData && (
-          <ItemBar
-            items={gameData.items}
-            selectedItem={selectedItem}
-            onSelectItem={handleItemSelect}
-            showAddTurns={false}
-          />
+          <VisualElementView
+            screenId="level"
+            elementId="item_bar"
+            style={styles.visualWrapper}>
+            <ItemBar
+              items={gameData.items}
+              selectedItem={selectedItem}
+              onSelectItem={handleItemSelect}
+              showAddTurns={false}
+            />
+          </VisualElementView>
         )}
       </Animated.View>
         </View>
@@ -2467,6 +2538,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: MODE_VERTICAL_GUTTER,
     paddingBottom: MODE_VERTICAL_GUTTER,
+  },
+  visualWrapper: {
+    alignSelf: 'stretch',
   },
   missingContainer: {
     flex: 1,

@@ -19,6 +19,10 @@ import {
   showUpdateDialog,
 } from '../services/updateService';
 import {preloadGameStoreState} from '../stores/gameStore';
+import {
+  downloadPublishedVisualConfigIfNeeded,
+  loadCachedVisualConfigManifest,
+} from '../services/visualConfigService';
 import AdminScreen from '../screens/AdminScreen';
 import BattleScreen from '../screens/BattleScreen';
 import BossCodexScreen from '../screens/BossCodexScreen';
@@ -40,6 +44,7 @@ import ShopScreen from '../screens/ShopScreen';
 import SingleGameScreen from '../screens/SingleGameScreen';
 import SkillTreeScreen from '../screens/SkillTreeScreen';
 import SkinCollectionScreen from '../screens/SkinCollectionScreen';
+import UiStudioScreen from '../screens/UiStudioScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -154,6 +159,7 @@ export default function AppNavigator() {
     }
 
     void preloadGameStoreState();
+    void downloadPublishedVisualConfigIfNeeded().catch(() => {});
   }, [registerSession, scheduleUpdateCheck]);
 
   useEffect(() => {
@@ -168,6 +174,7 @@ export default function AppNavigator() {
         void registerSession(session.user.id);
         setAppState('app');
         void preloadGameStoreState();
+        void downloadPublishedVisualConfigIfNeeded().catch(() => {});
         scheduleUpdateCheck();
       } else {
         if (sessionCheckRef.current) {
@@ -201,6 +208,10 @@ export default function AppNavigator() {
       }
     };
   }, [appState, checkSession]);
+
+  useEffect(() => {
+    void loadCachedVisualConfigManifest();
+  }, []);
 
   useEffect(() => {
     const subscription = RNAppState.addEventListener('change', nextState => {
@@ -270,6 +281,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Levels" component={LevelsScreen} />
           <Stack.Screen name="Ranking" component={RankingScreen} />
           <Stack.Screen name="KnightSpriteTuner" component={KnightSpriteTunerScreen} />
+          <Stack.Screen name="UiStudio" component={UiStudioScreen} />
           <Stack.Screen name="SingleGame" component={SingleGameScreen} />
           <Stack.Screen name="Endless" component={EndlessScreen} />
           <Stack.Screen name="Lobby" component={LobbyScreen} />
