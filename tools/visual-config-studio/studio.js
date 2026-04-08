@@ -1,4 +1,8 @@
 const LOCAL_STORAGE_KEY = 'blockhero-ui-studio-v3';
+const DEFAULT_SUPABASE_URL = 'https://alhlmdhixmlmsdvgzhdu.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImFsaGxtZGhpeG1sbXNkdmd6aGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNTY4NTQsImV4cCI6MjA4ODYzMjg1NH0.lkTNn1jeXzkQdCRnmtNAjejezJN_RfC1n5HEhCbV_n8';
+const AUTH_STORAGE_KEY = 'blockhero-ui-studio-auth-v1';
 
 const DEFAULT_REFERENCE_VIEWPORT = {
   width: 412,
@@ -318,6 +322,13 @@ const state = {
   previewWorld: 1,
   previewLevel: 1,
   previewRaidStage: 1,
+  auth: {
+    accessToken: '',
+    refreshToken: '',
+    email: '',
+    userId: '',
+    isAdmin: false,
+  },
 };
 
 const byId = id => document.getElementById(id);
@@ -336,6 +347,33 @@ function formatElementLabel(screenId, elementId, includeId = true) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) {
+      return null;
+    }
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(normalized)
+        .split('')
+        .map(char => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+        .join(''),
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpired(token) {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) {
+    return true;
+  }
+  return payload.exp * 1000 <= Date.now() + 30_000;
 }
 
 function clamp(value, min, max) {
@@ -438,6 +476,55 @@ function ensureManifest(raw) {
   });
 
   return next;
+}
+
+function createDefaultManifestWithViewport(viewport = DEFAULT_REFERENCE_VIEWPORT) {
+  const manifest = createDefaultManifest();
+  manifest.referenceViewport = sanitizeViewport(viewport);
+  return manifest;
+}
+
+function persistAuthState() {
+  localStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({
+      accessToken: state.auth.accessToken,
+      refreshToken: state.auth.refreshToken,
+      email: state.auth.email,
+      userId: state.auth.userId,
+      isAdmin: state.auth.isAdmin,
+    }),
+  );
+}
+
+function clearAuthState() {
+  state.auth = {
+    accessToken: '',
+    refreshToken: '',
+    email: '',
+    userId: '',
+    isAdmin: false,
+  };
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  byId('admin-password').value = '';
+  byId('supabase-jwt').value = '';
+  updateAuthUi();
+}
+
+function updateAuthUi() {
+  const status = byId('auth-status');
+  if (state.auth.accessToken && state.auth.isAdmin) {
+    status.textContent = `관리자 로그인됨: ${state.auth.email || state.auth.userId}`;
+    status.style.color = 'var(--success)';
+    return;
+  }
+  if (state.auth.accessToken) {
+    status.textContent = `로그인됨 (관리자 아님): ${state.auth.email || state.auth.userId}`;
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  status.textContent = '로그인 필요';
+  status.style.color = 'var(--muted)';
 }
 
 function getViewport() {
@@ -568,24 +655,30 @@ function collectManifestAssetKeys(manifest) {
 }
 
 function getServerConfig() {
+  const manualJwt = byId('supabase-jwt').value.trim();
   return {
     url: byId('supabase-url').value.trim().replace(/\/$/, ''),
     anonKey: byId('supabase-anon').value.trim(),
-    jwt: byId('supabase-jwt').value.trim(),
+    jwt: manualJwt || state.auth.accessToken,
   };
 }
 
 async function fetchJson(path, options = {}) {
   const {url, anonKey, jwt} = getServerConfig();
-  if (!url || !anonKey || !jwt) {
-    throw new Error('Supabase URL, anon key, and admin JWT are required.');
+  if (!url || !anonKey) {
+    throw new Error('Supabase 주소와 익명 키가 필요합니다.');
+  }
+
+  const method = (options.method || 'GET').toUpperCase();
+  if (method !== 'GET' && !jwt) {
+    throw new Error('쓰기 작업에는 관리자 로그인이 필요합니다.');
   }
 
   const response = await fetch(`${url}/rest/v1/${path}`, {
     ...options,
     headers: {
       apikey: anonKey,
-      Authorization: `Bearer ${jwt}`,
+      ...(jwt ? {Authorization: `Bearer ${jwt}`} : {}),
       'Content-Type': 'application/json',
       Prefer: 'return=representation,resolution=merge-duplicates',
       ...(options.headers ?? {}),
@@ -632,7 +725,7 @@ function persistEditorPrefs() {
   const payload = {
     supabaseUrl: byId('supabase-url').value,
     supabaseAnon: byId('supabase-anon').value,
-    supabaseJwt: byId('supabase-jwt').value,
+    adminEmail: byId('admin-email').value,
     screenId: state.screenId,
     elementId: state.elementId,
     profileId: state.profileId,
@@ -650,15 +743,17 @@ function persistEditorPrefs() {
 
 function restoreEditorPrefs() {
   const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+  byId('supabase-url').value = DEFAULT_SUPABASE_URL;
+  byId('supabase-anon').value = DEFAULT_SUPABASE_ANON_KEY;
   if (!raw) {
     return;
   }
 
   try {
     const saved = JSON.parse(raw);
-    byId('supabase-url').value = saved.supabaseUrl ?? '';
-    byId('supabase-anon').value = saved.supabaseAnon ?? '';
-    byId('supabase-jwt').value = saved.supabaseJwt ?? '';
+    byId('supabase-url').value = saved.supabaseUrl ?? DEFAULT_SUPABASE_URL;
+    byId('supabase-anon').value = saved.supabaseAnon ?? DEFAULT_SUPABASE_ANON_KEY;
+    byId('admin-email').value = saved.adminEmail ?? '';
     state.screenId = saved.screenId && SCREEN_LABELS[saved.screenId] ? saved.screenId : 'level';
     state.elementId = saved.elementId || ELEMENT_DEFS[state.screenId][0].id;
     state.profileId = saved.profileId || 'galaxy-s23-ultra';
@@ -690,6 +785,135 @@ function setStatus(message, tone = 'muted') {
   status.style.color =
     tone === 'error' ? 'var(--danger)' : tone === 'success' ? 'var(--success)' : 'var(--muted)';
   line.style.color = status.style.color;
+}
+
+async function fetchProfileForToken(token, fallbackUserId = '') {
+  const {url, anonKey} = getServerConfig();
+  const payload = decodeJwtPayload(token);
+  const userId = payload?.sub || fallbackUserId;
+  if (!userId) {
+    throw new Error('로그인 토큰에서 사용자 정보를 읽지 못했습니다.');
+  }
+
+  const response = await fetch(
+    `${url}/rest/v1/profiles?select=id,nickname,is_admin&id=eq.${encodeURIComponent(userId)}&limit=1`,
+    {
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const rows = await response.json();
+  return rows?.[0] ?? null;
+}
+
+async function signInAdmin(email, password) {
+  const {url, anonKey} = getServerConfig();
+  if (!email || !password) {
+    throw new Error('관리자 이메일과 비밀번호를 입력하세요.');
+  }
+
+  const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({email, password}),
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const session = await response.json();
+  const accessToken = session.access_token || '';
+  const refreshToken = session.refresh_token || '';
+  const userId = session.user?.id || decodeJwtPayload(accessToken)?.sub || '';
+  const profile = await fetchProfileForToken(accessToken, userId);
+
+  if (!profile?.is_admin) {
+    throw new Error('이 계정은 관리자 권한이 없습니다.');
+  }
+
+  state.auth = {
+    accessToken,
+    refreshToken,
+    email,
+    userId,
+    isAdmin: true,
+  };
+  persistAuthState();
+  updateAuthUi();
+}
+
+async function tryRefreshAdminSession() {
+  const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!raw) {
+    updateAuthUi();
+    return false;
+  }
+
+  try {
+    const saved = JSON.parse(raw);
+    if (!saved?.refreshToken && !saved?.accessToken) {
+      updateAuthUi();
+      return false;
+    }
+
+    let accessToken = saved.accessToken || '';
+    let refreshToken = saved.refreshToken || '';
+    let userId = saved.userId || '';
+    let email = saved.email || '';
+
+    if (!accessToken || isJwtExpired(accessToken)) {
+      if (!refreshToken) {
+        clearAuthState();
+        return false;
+      }
+      const {url, anonKey} = getServerConfig();
+      const response = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: {
+          apikey: anonKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({refresh_token: refreshToken}),
+      });
+
+      if (!response.ok) {
+        clearAuthState();
+        return false;
+      }
+
+      const session = await response.json();
+      accessToken = session.access_token || '';
+      refreshToken = session.refresh_token || refreshToken;
+      userId = session.user?.id || decodeJwtPayload(accessToken)?.sub || userId;
+      email = session.user?.email || email;
+    }
+
+    const profile = await fetchProfileForToken(accessToken, userId);
+    state.auth = {
+      accessToken,
+      refreshToken,
+      email,
+      userId,
+      isAdmin: !!profile?.is_admin,
+    };
+    persistAuthState();
+    updateAuthUi();
+    return true;
+  } catch {
+    clearAuthState();
+    return false;
+  }
 }
 
 function updateTopbar() {
@@ -1308,7 +1532,7 @@ function nudgeSelected(dx, dy) {
 async function loadDraft() {
   const rows = await fetchJson('ui_config_draft?id=eq.1&select=*');
   if (!rows?.[0]?.config_json) {
-    throw new Error('드래프트가 없습니다.');
+    return seedCurrentLayoutDraft(true);
   }
 
   state.manifest = ensureManifest(rows[0].config_json);
@@ -1318,12 +1542,35 @@ async function loadDraft() {
   scheduleRender();
 }
 
+async function seedCurrentLayoutDraft(loadAfterSeed = false) {
+  const manifest = createDefaultManifestWithViewport(getViewport());
+  await fetchJson('ui_config_draft', {
+    method: 'POST',
+    body: JSON.stringify([{id: 1, config_json: manifest}]),
+  });
+  state.manifest = ensureManifest(manifest);
+  syncBackgroundForm();
+  updateManifestJson();
+  persistEditorPrefs();
+  setStatus(
+    loadAfterSeed
+      ? '초안이 없어 현재 게임 기본값으로 새 초안을 만들었습니다.'
+      : '현재 게임 기본값을 서버 초안으로 저장했습니다.',
+    'success',
+  );
+  scheduleRender();
+}
+
 async function loadLatestRelease() {
   const rows = await fetchJson(
     'ui_config_releases?select=version,config_json,created_at,notes&order=version.desc&limit=1',
   );
   if (!rows?.[0]?.config_json) {
-    throw new Error('배포 이력이 없습니다.');
+    state.manifest = createDefaultManifestWithViewport(getViewport());
+    syncBackgroundForm();
+    setStatus('배포 이력이 없어 현재 게임 기본값을 표시합니다.', 'success');
+    scheduleRender();
+    return;
   }
 
   state.manifest = ensureManifest(rows[0].config_json);
@@ -1378,6 +1625,24 @@ async function refreshReleaseHistory() {
   );
   state.releaseRows = rows ?? [];
   renderReleaseHistory();
+}
+
+async function autoLoadWorkspace() {
+  try {
+    if (state.auth.isAdmin || byId('supabase-jwt').value.trim()) {
+      await loadDraft();
+      await refreshReleaseHistory();
+      return;
+    }
+
+    await loadLatestRelease();
+    await refreshReleaseHistory().catch(() => {
+      state.releaseRows = [];
+      renderReleaseHistory();
+    });
+  } catch (error) {
+    setStatus(`자동 불러오기 실패: ${error.message}`, 'error');
+  }
 }
 
 function renderReleaseHistory() {
@@ -1579,6 +1844,24 @@ function applyZoom(nextZoom) {
 }
 
 function bindEvents() {
+  byId('admin-login').addEventListener('click', async () => {
+    try {
+      await signInAdmin(byId('admin-email').value.trim(), byId('admin-password').value);
+      setStatus('관리자 로그인에 성공했습니다. 현재 초안을 불러옵니다.', 'success');
+      await autoLoadWorkspace();
+    } catch (error) {
+      clearAuthState();
+      setStatus(`관리자 로그인 실패: ${error.message}`, 'error');
+    }
+  });
+
+  byId('admin-logout').addEventListener('click', () => {
+    clearAuthState();
+    state.releaseRows = [];
+    renderReleaseHistory();
+    setStatus('로그아웃했습니다.', 'success');
+  });
+
   byId('screen-id').addEventListener('change', event => {
     state.screenId = event.target.value;
     if (!ELEMENT_DEFS[state.screenId].some(item => item.id === state.elementId)) {
@@ -1802,6 +2085,16 @@ function bindEvents() {
   ['supabase-url', 'supabase-anon', 'supabase-jwt'].forEach(id => {
     byId(id).addEventListener('change', persistEditorPrefs);
   });
+
+  byId('seed-current-layout').addEventListener('click', async () => {
+    try {
+      await seedCurrentLayoutDraft(false);
+    } catch (error) {
+      setStatus(`현재 게임 기본값 저장 실패: ${error.message}`, 'error');
+    }
+  });
+
+  byId('admin-email').addEventListener('change', persistEditorPrefs);
 }
 
 async function bootstrap() {
@@ -1816,9 +2109,12 @@ async function bootstrap() {
   byId('snap-grid').checked = state.snapGrid;
   syncBackgroundForm();
   bindEvents();
+  updateAuthUi();
   updateTopbar();
   updateManifestJson();
   renderReleaseHistory();
+  await tryRefreshAdminSession();
+  await autoLoadWorkspace();
   scheduleRender();
 }
 

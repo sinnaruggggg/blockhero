@@ -46,17 +46,31 @@
                 <h2>서버 연결</h2>
               </div>
             </div>
+            <div class="info-banner">
+              <strong>자동 연결</strong>
+              <p>Supabase 주소와 익명 키는 기본값으로 자동 입력됩니다. 관리자 계정으로 로그인하면 현재 초안과 최신 배포를 바로 불러옵니다.</p>
+            </div>
             <label>Supabase 주소<input id="supabase-url" type="text" /></label>
             <label>익명 키<textarea id="supabase-anon" rows="3"></textarea></label>
-            <label>관리자 JWT<textarea id="supabase-jwt" rows="5"></textarea></label>
+            <label>관리자 이메일<input id="admin-email" type="email" placeholder="admin@example.com" /></label>
+            <label>관리자 비밀번호<input id="admin-password" type="password" placeholder="비밀번호 입력" /></label>
+            <label>직접 JWT 붙여넣기 (선택)<textarea id="supabase-jwt" rows="4" placeholder="로그인 대신 access token을 직접 넣을 때만 사용합니다."></textarea></label>
+            <div class="button-row">
+              <button id="admin-login">관리자 로그인</button>
+              <button id="admin-logout" class="secondary">로그아웃</button>
+            </div>
             <div class="button-row">
               <button id="load-draft">드래프트 불러오기</button>
               <button id="load-latest" class="secondary">최신 배포 불러오기</button>
             </div>
             <div class="button-row">
+              <button id="seed-current-layout" class="secondary">현재 게임 기본값 초안 생성</button>
+            </div>
+            <div class="button-row">
               <button id="refresh-history" class="secondary">배포 이력 새로고침</button>
               <button id="copy-json" class="secondary">JSON 복사</button>
             </div>
+            <small id="auth-status" class="muted">로그인 필요</small>
             <small id="server-status" class="muted">대기 중</small>
           </section>
 
@@ -115,7 +129,7 @@
             <div class="help-list">
               <article class="help-item">
                 <h3>서버 연결</h3>
-                <p>Supabase와 관리자 권한을 입력하는 영역입니다. 드래프트 저장, 최신 배포 불러오기, 배포 이력 조회가 여기서 시작됩니다.</p>
+                <p>기본 서버 주소는 자동으로 채워집니다. 관리자 계정으로 로그인하면 드래프트, 최신 배포, 배포 이력을 바로 불러오고 편집 결과를 서버에 저장할 수 있습니다.</p>
               </article>
               <article class="help-item">
                 <h3>기기 미리보기</h3>

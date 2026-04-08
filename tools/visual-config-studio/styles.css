@@ -230,6 +230,28 @@ textarea {
   flex: 1;
 }
 
+.info-banner {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(240, 183, 109, 0.2);
+  background: linear-gradient(180deg, rgba(56, 36, 12, 0.34), rgba(17, 18, 28, 0.8));
+}
+
+.info-banner strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #fff1c6;
+  font-size: 14px;
+}
+
+.info-banner p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 13px;
+}
+
 .help-list {
   display: flex;
   flex-direction: column;
