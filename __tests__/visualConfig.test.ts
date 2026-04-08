@@ -3,6 +3,7 @@ import {
   DEFAULT_VISUAL_CONFIG_MANIFEST,
   getLevelBackgroundOverride,
   getRaidBackgroundOverride,
+  resolveVisualOffset,
   sanitizeVisualConfigManifest,
 } from '../src/game/visualConfig';
 
@@ -108,5 +109,53 @@ describe('visualConfig helpers', () => {
       'raid-only-bg',
       'shared-bg',
     ]);
+  });
+
+  it('sanitizes and preserves reference viewport metadata', () => {
+    const manifest = sanitizeVisualConfigManifest({
+      version: 3,
+      referenceViewport: {
+        width: 430,
+        height: 932,
+        safeTop: 59,
+        safeBottom: 34,
+      },
+    });
+
+    expect(manifest.referenceViewport).toEqual({
+      width: 430,
+      height: 932,
+      safeTop: 59,
+      safeBottom: 34,
+    });
+  });
+
+  it('scales offsets against the reference viewport', () => {
+    expect(
+      resolveVisualOffset(
+        40,
+        60,
+        {width: 360, height: 800, safeTop: 28, safeBottom: 24},
+        {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+      ),
+    ).toEqual({
+      x: 35,
+      y: 52,
+    });
+  });
+
+  it('uses safe area aware height scaling when requested', () => {
+    expect(
+      resolveVisualOffset(
+        0,
+        100,
+        {width: 393, height: 852, safeTop: 59, safeBottom: 34},
+        {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+        true,
+      ),
+    ).toEqual({
+      x: 0,
+      y: 90,
+    });
   });
 });

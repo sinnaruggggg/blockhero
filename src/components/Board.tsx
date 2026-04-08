@@ -44,6 +44,7 @@ interface BoardProps {
   small?: boolean;
   compact?: boolean;
   backgroundColor?: string;
+  viewportWidth?: number;
 }
 
 const Cell = React.memo(function Cell({
@@ -129,11 +130,15 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
     small = false,
     compact = false,
     backgroundColor = '#0a0820',
+    viewportWidth,
   },
   ref,
 ) {
   const scale = small ? 0.4 : compact ? COMPACT_SCALE : 1;
-  const cellSize = CELL_SIZE * scale;
+  const baseBoardWidth = Math.min((viewportWidth ?? SCREEN_WIDTH) - 48, 388);
+  const baseCellSize =
+    (baseBoardWidth - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
+  const cellSize = baseCellSize * scale;
   const gap = CELL_GAP * scale;
   const padding = BOARD_PADDING * scale;
 

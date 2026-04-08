@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BlockHero Visual Config Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <header class="panel">
+          <p class="eyebrow">BlockHero</p>
+          <h1>Visual Config Studio</h1>
+          <p class="muted">
+            PC 편집기는 생산성 도구입니다. 최종 1:1 검수는 앱의 실기기 전체화면 프리뷰를 기준으로 하세요.
+          </p>
+        </header>
+
+        <section class="panel">
+          <h2>Server</h2>
+          <label>Supabase URL<input id="supabase-url" type="text" /></label>
+          <label>Anon Key<textarea id="supabase-anon" rows="3"></textarea></label>
+          <label>Admin JWT<textarea id="supabase-jwt" rows="4"></textarea></label>
+          <div class="row">
+            <button id="load-draft">Draft Load</button>
+            <button id="load-latest" class="secondary">Latest Load</button>
+          </div>
+          <div class="row">
+            <button id="save-draft">Draft Save</button>
+            <button id="publish-release" class="secondary">Publish</button>
+          </div>
+          <small id="server-status" class="muted">서버 연결 대기</small>
+        </section>
+
+        <section class="panel">
+          <h2>Preview Device</h2>
+          <label>Profile<select id="device-profile"></select></label>
+          <div class="grid two">
+            <label>Width<input id="viewport-width" type="number" /></label>
+            <label>Height<input id="viewport-height" type="number" /></label>
+            <label>Safe Top<input id="safe-top" type="number" /></label>
+            <label>Safe Bottom<input id="safe-bottom" type="number" /></label>
+          </div>
+          <small class="muted" id="viewport-meta"></small>
+        </section>
+
+        <section class="panel">
+          <h2>Selection</h2>
+          <label>Screen<select id="screen-id"></select></label>
+          <label>Element<select id="element-id"></select></label>
+          <div class="grid two">
+            <label>Offset X<input id="offset-x" type="number" /></label>
+            <label>Offset Y<input id="offset-y" type="number" /></label>
+            <label>Scale<input id="scale" type="number" step="0.05" /></label>
+            <label>Opacity<input id="opacity" type="number" step="0.05" min="0" max="1" /></label>
+            <label>Z Index<input id="z-index" type="number" /></label>
+          </div>
+          <div class="checkboxes">
+            <label><input id="visible" type="checkbox" /> Visible</label>
+            <label><input id="safe-aware" type="checkbox" /> Safe area aware</label>
+          </div>
+          <div class="row">
+            <button id="apply-element">Apply</button>
+            <button id="reset-element" class="secondary">Reset</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Manifest</h2>
+          <textarea id="manifest-json" rows="14"></textarea>
+          <div class="row">
+            <button id="apply-json">Apply JSON</button>
+            <button id="copy-json" class="secondary">Copy JSON</button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="panel workspace-panel">
+          <div class="workspace-header">
+            <div>
+              <p class="eyebrow">Preview</p>
+              <h2 id="workspace-title">level / header</h2>
+            </div>
+            <small class="muted">드래그 대신 수치 편집 중심. 해상도 프리셋과 JSON 전송을 PC에서 빠르게 검수합니다.</small>
+          </div>
+          <div class="preview-host">
+            <div id="device-frame" class="device-frame">
+              <div id="safe-top-overlay" class="safe-overlay top"></div>
+              <div id="safe-bottom-overlay" class="safe-overlay bottom"></div>
+              <div id="preview-canvas" class="preview-canvas"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./studio.js"></script>
+  </body>
+</html>

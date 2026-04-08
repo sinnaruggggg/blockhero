@@ -1,5 +1,18 @@
 export type VisualScreenId = 'level' | 'endless' | 'battle' | 'raid';
 
+export type VisualViewport = {
+  width: number;
+  height: number;
+  safeTop: number;
+  safeBottom: number;
+};
+
+export type VisualDeviceProfile = {
+  id: string;
+  label: string;
+  viewport: VisualViewport;
+};
+
 export type LevelElementId =
   | 'header'
   | 'battle_lane'
@@ -46,6 +59,7 @@ export type VisualElementRule = {
   opacity: number;
   visible: boolean;
   zIndex: number;
+  safeAreaAware: boolean;
 };
 
 export type VisualBackgroundOverride = {
@@ -80,6 +94,7 @@ export type RaidScreenVisualConfig = {
 
 export type VisualConfigManifest = {
   version: number;
+  referenceViewport: VisualViewport;
   screens: {
     level: LevelScreenVisualConfig;
     endless: EndlessScreenVisualConfig;
@@ -94,6 +109,56 @@ export const VISUAL_SCREEN_LABELS: Record<VisualScreenId, string> = {
   battle: '대전 모드',
   raid: '레이드 모드',
 };
+
+export const DEFAULT_VISUAL_REFERENCE_VIEWPORT: VisualViewport = {
+  width: 412,
+  height: 915,
+  safeTop: 34,
+  safeBottom: 34,
+};
+
+export const VISUAL_DEVICE_PROFILES: VisualDeviceProfile[] = [
+  {
+    id: 'current',
+    label: '현재 기기',
+    viewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
+  },
+  {
+    id: 'galaxy-s23-ultra',
+    label: 'Galaxy S23 Ultra',
+    viewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+  },
+  {
+    id: 'galaxy-a54',
+    label: 'Galaxy A54',
+    viewport: {width: 411, height: 891, safeTop: 32, safeBottom: 24},
+  },
+  {
+    id: 'galaxy-fold-cover',
+    label: 'Galaxy Fold Cover',
+    viewport: {width: 360, height: 780, safeTop: 30, safeBottom: 24},
+  },
+  {
+    id: 'iphone-15-pro',
+    label: 'iPhone 15 Pro',
+    viewport: {width: 393, height: 852, safeTop: 59, safeBottom: 34},
+  },
+  {
+    id: 'iphone-15-pro-max',
+    label: 'iPhone 15 Pro Max',
+    viewport: {width: 430, height: 932, safeTop: 59, safeBottom: 34},
+  },
+  {
+    id: 'small-android',
+    label: '소형 안드로이드',
+    viewport: {width: 360, height: 800, safeTop: 28, safeBottom: 24},
+  },
+  {
+    id: 'tablet-portrait',
+    label: '태블릿 세로',
+    viewport: {width: 800, height: 1280, safeTop: 24, safeBottom: 20},
+  },
+];
 
 export const VISUAL_ELEMENT_LABELS: Record<VisualScreenId, {id: string; label: string}[]> =
   {
@@ -139,6 +204,7 @@ export const DEFAULT_VISUAL_ELEMENT_RULE: VisualElementRule = {
   opacity: 1,
   visible: true,
   zIndex: 0,
+  safeAreaAware: false,
 };
 
 export const DEFAULT_VISUAL_BACKGROUND_OVERRIDE: VisualBackgroundOverride = {
@@ -161,6 +227,7 @@ function createRules<T extends string>(ids: T[]): Record<T, VisualElementRule> {
 
 export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
   version: 0,
+  referenceViewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
   screens: {
     level: {
       elements: createRules<LevelElementId>([
@@ -232,6 +299,25 @@ function sanitizeElementRule(
     opacity: clamp(Number(merged.opacity) || 1, 0, 1),
     visible: merged.visible !== false,
     zIndex: Math.round(clamp(Number(merged.zIndex) || 0, -20, 60)),
+    safeAreaAware: merged.safeAreaAware === true,
+  };
+}
+
+function sanitizeViewport(
+  value?: Partial<VisualViewport> | null,
+): VisualViewport {
+  const merged = {
+    ...DEFAULT_VISUAL_REFERENCE_VIEWPORT,
+    ...(value ?? {}),
+  };
+
+  return {
+    width: Math.round(clamp(Number(merged.width) || DEFAULT_VISUAL_REFERENCE_VIEWPORT.width, 280, 1600)),
+    height: Math.round(
+      clamp(Number(merged.height) || DEFAULT_VISUAL_REFERENCE_VIEWPORT.height, 480, 3200),
+    ),
+    safeTop: Math.round(clamp(Number(merged.safeTop) || 0, 0, 200)),
+    safeBottom: Math.round(clamp(Number(merged.safeBottom) || 0, 0, 200)),
   };
 }
 
@@ -286,6 +372,7 @@ export function sanitizeVisualConfigManifest(
 ): VisualConfigManifest {
   return {
     version: Math.max(0, Math.round(Number(value?.version) || 0)),
+    referenceViewport: sanitizeViewport(value?.referenceViewport),
     screens: {
       level: {
         elements: sanitizeElementMap(
@@ -408,4 +495,34 @@ export function buildVisualTintColor(color: string, opacity: number) {
   }
 
   return normalized;
+}
+
+export function resolveVisualOffset(
+  offsetX: number,
+  offsetY: number,
+  currentViewport: VisualViewport,
+  referenceViewport: VisualViewport,
+  safeAreaAware = false,
+) {
+  const safeWidthCurrent = Math.max(1, currentViewport.width);
+  const safeWidthReference = Math.max(1, referenceViewport.width);
+  const safeHeightCurrent = Math.max(
+    1,
+    currentViewport.height -
+      (safeAreaAware ? currentViewport.safeTop + currentViewport.safeBottom : 0),
+  );
+  const safeHeightReference = Math.max(
+    1,
+    referenceViewport.height -
+      (safeAreaAware ? referenceViewport.safeTop + referenceViewport.safeBottom : 0),
+  );
+
+  return {
+    x: Math.round(offsetX * (safeWidthCurrent / safeWidthReference)),
+    y: Math.round(offsetY * (safeHeightCurrent / safeHeightReference)),
+  };
+}
+
+export function getVisualDeviceProfile(profileId: string) {
+  return VISUAL_DEVICE_PROFILES.find(profile => profile.id === profileId) ?? null;
 }
