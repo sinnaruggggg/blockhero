@@ -6,6 +6,7 @@
     "android": "react-native run-android",
     "creator:bundle": "node scripts/build_blockhero_creator_desktop.mjs --bundle-only",
     "creator:exe": "node scripts/build_blockhero_creator_desktop.mjs && npm --prefix tools/blockhero-creator-desktop run dist",
+    "creator:smoke": "npx electron tools/blockhero-creator-desktop/smoke-main.js",
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "postinstall": "patch-package",

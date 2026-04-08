@@ -23465,39 +23465,39 @@ ${suffix}`;
   var PATTERN_OPTIONS = ["basic_auto", "burst_every_n", "phase_hp_threshold", "rage_after_time"];
   var HELP_TEXT = {
     level: {
-      title: "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD",
-      description: "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\u01E5, \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD/\uFFFD\uFFFD\uFFFD\uFFFD\u0121 \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.",
+      title: "\uB808\uBCA8 \uC2A4\uD14C\uC774\uC9C0",
+      description: "\uB808\uBCA8 \uBAA8\uB4DC\uC758 \uBAA9\uD45C, \uC801 \uC5F0\uACB0, \uACE8\uB4DC/\uACBD\uD5D8\uCE58 \uBCF4\uC0C1, \uBC30\uACBD\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.",
       tips: [
-        "enemyTemplateId\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD id\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u02F4\u03F4\uFFFD.",
-        "firstClearBonusGold\uFFFD\uFFFD repeatGold\uFFFD\uFFFD \uFFFD\u0438\uFFFD\uFFFD\u063C\uFFFD \xF9 \u016C\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u077A\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.",
-        "\uFFFD\uFFFD\uFFFD assetKey\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u06BB\uFFFD \uFFFD\uFFFD\uFFFD\u033A\uADEF\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u03B5\uFFFD\uFFFD\uFFFD \u0170\uFFFD\uFFFD \uFFFD\u05F4\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD."
+        "enemyTemplateId\uB294 \uC801 \uD15C\uD50C\uB9BF id\uC640 \uC5F0\uACB0\uB429\uB2C8\uB2E4.",
+        "firstClearBonusGold\uC640 repeatGold\uB97C \uBD84\uB9AC\uD574\uC11C \uCCAB \uD074\uB9AC\uC5B4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uB098\uB215\uB2C8\uB2E4.",
+        "\uBC30\uACBD assetKey\uB294 \uC6B0\uCE21 \uC790\uC0B0 \uB77C\uC774\uBE0C\uB7EC\uB9AC\uC5D0\uC11C \uC5C5\uB85C\uB4DC\uD55C \uD0A4\uB97C \uADF8\uB300\uB85C \uC0AC\uC6A9\uD569\uB2C8\uB2E4."
       ]
     },
     raidNormal: {
-      title: "\uFFFD\u03F9\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD",
-      description: "\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u03F9\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD\uFFFD\uFFFD \uFFFD\u0338\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\xF0\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.",
+      title: "\uC77C\uBC18 \uB808\uC774\uB4DC",
+      description: "\uC0C1\uC2DC \uB3C4\uC804 \uAC00\uB2A5\uD55C \uC77C\uBC18 \uB808\uC774\uB4DC\uC758 \uC774\uB984, \uBCF4\uC0C1, \uC2DC\uAC04 \uC81C\uD55C, \uBC30\uACBD\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.",
       tips: [
-        "timeLimitMs\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\xF0\uFFFD \uFFFD\uFFFD\uAFE1 \uFFFD\uFFFD\uFFFD\u02F4\u03F4\uFFFD.",
-        "repeatDiamondReward\uFFFD\uFFFD \uFFFD\u03F9\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\u077A\uFFFD \xF3\u0121 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0534\u03F4\uFFFD.",
-        "encounterOverrides\uFFFD\uFFFD \u01AF\uFFFD\uFFFD \uFFFD\u0730\u8E38 \xFC\uFFFD\uFFFD/\uFFFD\uFFFD\uFFFD\u0777\uFFFD/\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0672\uFFFD \uFFFD\uFFFD \uFFFD\u05BD\uFFFD\uFFFD\u03F4\uFFFD."
+        "timeLimitMs\uB294 \uC2E4\uC81C \uC2DC\uC791 \uC2DC \uC11C\uBC84 \uB9CC\uB8CC \uC2DC\uAC04 \uACC4\uC0B0\uC5D0 \uC0AC\uC6A9\uB429\uB2C8\uB2E4.",
+        "repeatDiamondReward\uB294 \uC77C\uBC18 \uB808\uC774\uB4DC \uBC18\uBCF5 \uCC98\uCE58 \uBCF4\uC0C1\uC785\uB2C8\uB2E4.",
+        "encounterOverrides\uB85C \uD2B9\uC815 \uB2E8\uACC4\uB9CC \uCCB4\uB825, \uACF5\uACA9\uB825, \uACF5\uACA9 \uAC04\uACA9\uC744 \uB530\uB85C \uBC14\uAFC0 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
       ]
     },
     raidBoss: {
-      title: "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD",
-      description: "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\u0730\u8EB0 \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0338\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u03BF\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD \xE2, \uFFFD\xF0\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.",
+      title: "\uBCF4\uC2A4 \uB808\uC774\uB4DC",
+      description: "\uBCF4\uC2A4 \uB808\uC774\uB4DC \uB2E8\uACC4\uBCC4 \uBCF4\uC2A4 \uC774\uB984, \uCC38\uAC00 \uC778\uC6D0, \uC785\uC7A5 \uCC3D, \uC2DC\uAC04 \uC81C\uD55C\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.",
       tips: [
-        "joinWindowMinutes\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\u5C21 \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\xF0\uFFFD\uFFFD\u0534\u03F4\uFFFD.",
-        "maxParticipants\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u047F\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u02F4\u03F4\uFFFD.",
-        "raidWindowHours\uFFFD\uFFFD UI \uFFFD\u0233\uFFFD\uFFFD\uFFFD \uFFFD\uEFF5 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u02F4\u03F4\uFFFD."
+        "joinWindowMinutes\uB294 \uBCF4\uC2A4 \uB808\uC774\uB4DC\uAC00 \uC5F4\uB9B0 \uB4A4 \uC785\uC7A5 \uAC00\uB2A5\uD55C \uC2DC\uAC04\uC785\uB2C8\uB2E4.",
+        "maxParticipants\uB294 \uC2E4\uC81C \uBCF4\uC2A4 \uB808\uC774\uB4DC \uCC38\uAC00 \uC81C\uD55C\uC5D0 \uC5F0\uACB0\uB429\uB2C8\uB2E4.",
+        "raidWindowHours\uB294 UI \uC548\uB0B4\uC640 \uC6B4\uC601 \uAE30\uC900\uC73C\uB85C \uAC19\uC774 \uC0AC\uC6A9\uB429\uB2C8\uB2E4."
       ]
     },
     encounter: {
-      title: "\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD",
-      description: "\uFFFD\uFFFD\uFFFD\uFFFD/\uFFFD\uFFFD\uFFFD\u0335\u5C21 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0534\u03F4\uFFFD.",
+      title: "\uC801 \uD15C\uD50C\uB9BF",
+      description: "\uB808\uBCA8\uACFC \uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uB294 \uC801 \uC6D0\uBCF8 \uB370\uC774\uD130\uC785\uB2C8\uB2E4.",
       tips: [
-        "\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD override\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u01F4\uFFFD \uFFFD\u2EBB\uFFFD\uFFFD\uFFFD\u0534\u03F4\uFFFD.",
-        "attackPattern\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0475\uFFFD enum\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.",
-        "id\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uEFB2\uFFFD\u2EB8\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u1E38 \uFFFD\u0672\u0674\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD."
+        "\uC2A4\uD14C\uC774\uC9C0\uBCC4 override\uBCF4\uB2E4 \uBA3C\uC800 \uC801\uC6A9\uB418\uB294 \uAE30\uBCF8\uAC12\uC785\uB2C8\uB2E4.",
+        "attackPattern\uC740 \uD604\uC7AC \uC81C\uD55C\uB41C enum\uB9CC \uD5C8\uC6A9\uD569\uB2C8\uB2E4.",
+        "id\uB97C \uB36E\uC5B4\uC4F0\uAE30\uBCF4\uB2E4 \uC0C8 \uD15C\uD50C\uB9BF\uC744 \uB9CC\uB4E4\uACE0 \uC5F0\uACB0\uB9CC \uBC14\uAFB8\uB294 \uD3B8\uC774 \uC548\uC804\uD569\uB2C8\uB2E4."
       ]
     }
   };
@@ -23545,6 +23545,8 @@ ${suffix}`;
   };
   var state = {
     supabase: null,
+    supabaseUrl: "",
+    supabaseKey: "",
     session: null,
     profile: null,
     manifest: null,
@@ -23603,7 +23605,7 @@ ${suffix}`;
     cursor[segments[segments.length - 1]] = value;
   }
   function getAssetOptions(selectedKey = "") {
-    const items = ['<option value="">\uFFFD\uFFFD\uFFFD\uFFFD</option>'];
+    const items = ['<option value="">\uC5C6\uC74C</option>'];
     state.assets.slice().sort((a, b) => a.asset_key.localeCompare(b.asset_key)).forEach((asset) => {
       items.push(`<option value="${asset.asset_key}" ${selectedKey === asset.asset_key ? "selected" : ""}>${asset.asset_key}</option>`);
     });
@@ -23612,63 +23614,63 @@ ${suffix}`;
   function renderHelpPanel() {
     const help = state.selected ? HELP_TEXT[state.selected.kind] ?? null : null;
     if (!help) {
-      elements.helpPanel.innerHTML = `<div class="help-card"><strong>\uFFFD\u07B4\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD \uFFFD\uFFFD</strong><p>\uFFFD\uFFFD\uFFFD\uFFFD \u01AE\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u05F8\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F8\uFFFD \uFFFD\u0634\uFFFD \uFFFD\u07B4\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u04B0\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u2FE1 \u01E5\uFFFD\xF5\u02F4\u03F4\uFFFD.</p></div>`;
+      elements.helpPanel.innerHTML = `<div class="help-card"><strong>\uBA54\uB274 \uC124\uBA85 \uB300\uAE30 \uC911</strong><p>\uC67C\uCABD \uD2B8\uB9AC\uC5D0\uC11C \uD56D\uBAA9\uC744 \uC120\uD0DD\uD558\uBA74 \uD574\uB2F9 \uBA54\uB274\uC758 \uC5ED\uD560\uACFC \uC218\uC815 \uD301\uC774 \uC5EC\uAE30\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4.</p></div>`;
       return;
     }
     elements.helpPanel.innerHTML = `<div class="help-card"><strong>${help.title}</strong><p>${help.description}</p><ul>${help.tips.map((item) => `<li>${item}</li>`).join("")}</ul></div>`;
   }
   function renderSummary(record) {
     if (!record || !state.selected) {
-      elements.selectionSummary.innerHTML = `<div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</span><strong>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD \uFFFD\u033C\uFFFD\uFFFD\uFFFD</strong></div>`;
+      elements.selectionSummary.innerHTML = `<div class="summary-card"><span>\uC120\uD0DD \uC5C6\uC74C</span><strong>\uD3B8\uC9D1 \uB300\uC0C1 \uBBF8\uC120\uD0DD</strong></div>`;
       return;
     }
     if (state.selected.kind === "level") {
       elements.selectionSummary.innerHTML = `
-      <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\uFFFD ID</span><strong>${record.levelId}</strong></div>
-      <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\uFFFD / \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD</span><strong>${record.worldId}-${record.stageNumberInWorld}</strong></div>
-      <div class="summary-card"><span>\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD</span><strong>${record.enemyTemplateId}</strong></div>
-      <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</span><strong>${record.enabled ? "\u0230\uFFFD\uFFFD" : "\uFFFD\uFFFD\u0230\uFFFD\uFFFD"}</strong></div>`;
+      <div class="summary-card"><span>\uB808\uBCA8 ID</span><strong>${record.levelId}</strong></div>
+      <div class="summary-card"><span>\uC6D4\uB4DC / \uC2A4\uD14C\uC774\uC9C0</span><strong>${record.worldId}-${record.stageNumberInWorld}</strong></div>
+      <div class="summary-card"><span>\uC801 \uD15C\uD50C\uB9BF</span><strong>${record.enemyTemplateId}</strong></div>
+      <div class="summary-card"><span>\uC0AC\uC6A9 \uC0C1\uD0DC</span><strong>${record.enabled ? "\uD65C\uC131" : "\uBE44\uD65C\uC131"}</strong></div>`;
       return;
     }
     if (state.selected.kind === "raidNormal" || state.selected.kind === "raidBoss") {
       elements.selectionSummary.innerHTML = `
-      <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</span><strong>${state.selected.kind === "raidNormal" ? "\uFFFD\u03F9\uFFFD" : "\uFFFD\uFFFD\uFFFD\uFFFD"}</strong></div>
-      <div class="summary-card"><span>\uFFFD\u0730\uFFFD</span><strong>${record.stage}</strong></div>
-      <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\xF8\uFFFD</span><strong>${record.encounterTemplateId}</strong></div>
-      <div class="summary-card"><span>\uFFFD\xF0\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</span><strong>${Math.round(record.timeLimitMs / 1e3)}\uFFFD\uFFFD</strong></div>`;
+      <div class="summary-card"><span>\uB808\uC774\uB4DC \uC885\uB958</span><strong>${state.selected.kind === "raidNormal" ? "\uC77C\uBC18" : "\uBCF4\uC2A4"}</strong></div>
+      <div class="summary-card"><span>\uB2E8\uACC4</span><strong>${record.stage}</strong></div>
+      <div class="summary-card"><span>\uD15C\uD50C\uB9BF</span><strong>${record.encounterTemplateId}</strong></div>
+      <div class="summary-card"><span>\uC2DC\uAC04 \uC81C\uD55C</span><strong>${Math.round(record.timeLimitMs / 1e3)}\uCD08</strong></div>`;
       return;
     }
     elements.selectionSummary.innerHTML = `
-    <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\xF8\uFFFD ID</span><strong>${record.id}</strong></div>
-    <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\uFFFD</span><strong>${record.kind === "level" ? "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD" : "\uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\uFFFD"}</strong></div>
-    <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u05B1\uFFFD</span><strong>${record.attackIntervalMs}ms</strong></div>
-    <div class="summary-card"><span>\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</span><strong>${record.enabled ? "\u0230\uFFFD\uFFFD" : "\uFFFD\uFFFD\u0230\uFFFD\uFFFD"}</strong></div>`;
+    <div class="summary-card"><span>\uD15C\uD50C\uB9BF ID</span><strong>${record.id}</strong></div>
+    <div class="summary-card"><span>\uC885\uB958</span><strong>${record.kind === "level" ? "\uB808\uBCA8 \uC801" : "\uB808\uC774\uB4DC \uC801"}</strong></div>
+    <div class="summary-card"><span>\uACF5\uACA9 \uC8FC\uAE30</span><strong>${record.attackIntervalMs}ms</strong></div>
+    <div class="summary-card"><span>\uC0AC\uC6A9 \uC0C1\uD0DC</span><strong>${record.enabled ? "\uD65C\uC131" : "\uBE44\uD65C\uC131"}</strong></div>`;
   }
   function backgroundFields(path, value = {}) {
     return `
     <div class="section-card">
-      <div><h3>\uFFFD\uFFFD\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD \uFFFD\u0339\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD ui_assets\uFFFD\uFFFD assetKey\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD. removeImage\uFFFD\uFFFD \uFFFD\u0478\uFFFD tint\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\u05BD\uFFFD\uFFFD\u03F4\uFFFD.</p></div>
+      <div><h3>\uBC30\uACBD</h3><p>\uBC30\uACBD \uC774\uBBF8\uC9C0\uB294 ui_assets\uC758 assetKey\uB97C \uC5F0\uACB0\uD569\uB2C8\uB2E4. removeImage\uB97C \uCF1C\uBA74 tint\uB9CC \uB0A8\uAE38 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p></div>
       <div class="field-grid">
         <label><span>assetKey</span><select data-path="${path}.background.assetKey">${getAssetOptions(value.assetKey ?? "")}</select></label>
         <label><span>tintColor</span><input data-path="${path}.background.tintColor" type="text" value="${value.tintColor ?? "#000000"}" /></label>
         <label><span>tintOpacity</span><input data-path="${path}.background.tintOpacity" type="number" step="0.05" min="0" max="1" value="${value.tintOpacity ?? 0}" /></label>
-        <label><span>\uFFFD\u0339\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</span><select data-path="${path}.background.removeImage"><option value="false" ${value.removeImage ? "" : "selected"}>\uFFFD\u01B4\u03FF\uFFFD</option><option value="true" ${value.removeImage ? "selected" : ""}>\uFFFD\uFFFD</option></select></label>
+        <label><span>\uC774\uBBF8\uC9C0 \uC81C\uAC70</span><select data-path="${path}.background.removeImage"><option value="false" ${value.removeImage ? "" : "selected"}>\uC544\uB2C8\uC624</option><option value="true" ${value.removeImage ? "selected" : ""}>\uC608</option></select></label>
       </div>
     </div>`;
   }
   function overrideFields(path, value = {}) {
     return `
     <div class="section-card">
-      <div><h3>\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0335\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD\xF8\uFFFD\uFFFD\uFFFD \uFFFD\u01F5\u5E2E\uFFFD\uFFFD \uFFFD\u02B0\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0678\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u05BD\uFFFD\uFFFD\u03F4\uFFFD. \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u2EBB \uFFFD\uFFFD\uFFFD\xF8\uFFFD\uFFFD\uFFFD \uFFFD\u05F4\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.</p></div>
+      <div><h3>\uC2A4\uD14C\uC774\uC9C0\uBCC4 \uC624\uBC84\uB77C\uC774\uB4DC</h3><p>\uD15C\uD50C\uB9BF\uC744 \uAC74\uB4DC\uB9AC\uC9C0 \uC54A\uACE0 \uC774 \uC2A4\uD14C\uC774\uC9C0\uC5D0\uC11C\uB9CC \uB2E4\uB974\uAC8C \uC801\uC6A9\uD560 \uAC12\uC744 \uB123\uC2B5\uB2C8\uB2E4. \uBE48 \uAC12\uC740 \uAE30\uBCF8 \uD15C\uD50C\uB9BF\uC744 \uADF8\uB300\uB85C \uC0AC\uC6A9\uD569\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
-        <label><span>\u01E5\uFFFD\uFFFD \uFFFD\u0338\uFFFD</span><input data-path="${path}.encounterOverrides.displayName" type="text" value="${value.displayName ?? ""}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0338\uFFFD</span><input data-path="${path}.encounterOverrides.monsterName" type="text" value="${value.monsterName ?? ""}" /></label>
-        <label><span>\uFFFD\u0338\uFFFD\uFFFD\uFFFD</span><input data-path="${path}.encounterOverrides.monsterEmoji" type="text" value="${value.monsterEmoji ?? ""}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD</span><input data-path="${path}.encounterOverrides.monsterColor" type="text" value="${value.monsterColor ?? ""}" /></label>
+        <label><span>\uD45C\uC2DC \uC774\uB984</span><input data-path="${path}.encounterOverrides.displayName" type="text" value="${value.displayName ?? ""}" /></label>
+        <label><span>\uBAAC\uC2A4\uD130 \uC774\uB984</span><input data-path="${path}.encounterOverrides.monsterName" type="text" value="${value.monsterName ?? ""}" /></label>
+        <label><span>\uC774\uBAA8\uC9C0</span><input data-path="${path}.encounterOverrides.monsterEmoji" type="text" value="${value.monsterEmoji ?? ""}" /></label>
+        <label><span>\uC0C9\uC0C1</span><input data-path="${path}.encounterOverrides.monsterColor" type="text" value="${value.monsterColor ?? ""}" /></label>
         <label><span>HP</span><input data-path="${path}.encounterOverrides.baseHp" type="number" value="${value.baseHp ?? ""}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\u0777\uFFFD</span><input data-path="${path}.encounterOverrides.baseAttack" type="number" value="${value.baseAttack ?? ""}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u05B1\uFFFD(ms)</span><input data-path="${path}.encounterOverrides.attackIntervalMs" type="number" value="${value.attackIntervalMs ?? ""}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD</span><select data-path="${path}.encounterOverrides.attackPattern"><option value="" ${(value.attackPattern ?? "") === "" ? "selected" : ""}>\uFFFD\u2EBB\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD</option>${PATTERN_OPTIONS.map((option) => `<option value="${option}" ${value.attackPattern === option ? "selected" : ""}>${option}</option>`).join("")}</select></label>
+        <label><span>\uACF5\uACA9\uB825</span><input data-path="${path}.encounterOverrides.baseAttack" type="number" value="${value.baseAttack ?? ""}" /></label>
+        <label><span>\uACF5\uACA9 \uC8FC\uAE30(ms)</span><input data-path="${path}.encounterOverrides.attackIntervalMs" type="number" value="${value.attackIntervalMs ?? ""}" /></label>
+        <label><span>\uD328\uD134</span><select data-path="${path}.encounterOverrides.attackPattern"><option value="" ${(value.attackPattern ?? "") === "" ? "selected" : ""}>\uAE30\uBCF8\uAC12 \uC0AC\uC6A9</option>${PATTERN_OPTIONS.map((option) => `<option value="${option}" ${value.attackPattern === option ? "selected" : ""}>${option}</option>`).join("")}</select></label>
       </div>
     </div>`;
   }
@@ -23676,32 +23678,32 @@ ${suffix}`;
     const path = `levels.${level.id}`;
     return `
     <div class="section-card">
-      <div><h3>\uFFFD\u2EBB \uFFFD\uFFFD\uFFFD\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\u0223, \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u03B8\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.</p></div>
+      <div><h3>\uAE30\uBCF8 \uC815\uBCF4</h3><p>\uB808\uBCA8 \uC774\uB984, \uC6D4\uB4DC, \uC2A4\uD14C\uC774\uC9C0 \uBC88\uD638, \uBAA9\uD45C \uC218\uCE58, \uC5F0\uACB0\uB41C \uC801 \uD15C\uD50C\uB9BF\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
         <label><span>id</span><input type="text" value="${level.id}" disabled /></label>
         <label><span>levelId</span><input data-path="${path}.levelId" type="number" value="${level.levelId}" /></label>
-        <label><span>\uFFFD\u0338\uFFFD</span><input data-path="${path}.name" type="text" value="${level.name}" /></label>
+        <label><span>\uC774\uB984</span><input data-path="${path}.name" type="text" value="${level.name}" /></label>
         <label><span>worldId</span><input data-path="${path}.worldId" type="number" value="${level.worldId}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\u0223</span><input data-path="${path}.stageNumberInWorld" type="number" value="${level.stageNumberInWorld}" /></label>
+        <label><span>\uC6D4\uB4DC \uB0B4 \uBC88\uD638</span><input data-path="${path}.stageNumberInWorld" type="number" value="${level.stageNumberInWorld}" /></label>
         <label><span>goalValue</span><input data-path="${path}.goalValue" type="number" value="${level.goalValue}" /></label>
         <label><span>enemyTemplateId</span><select data-path="${path}.enemyTemplateId">${Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)).map((encounter) => `<option value="${encounter.id}" ${encounter.id === level.enemyTemplateId ? "selected" : ""}>${encounter.id}</option>`).join("")}</select></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\u0631\uFFFD \uFFFD\u0730\uFFFD</span><input data-path="${path}.unlocksBossRaidStage" type="number" value="${level.unlocksBossRaidStage ?? ""}" /></label>
-        <label><span>\u0230\uFFFD\uFFFD\u022D</span><select data-path="${path}.enabled"><option value="true" ${level.enabled ? "selected" : ""}>\u0230\uFFFD\uFFFD</option><option value="false" ${level.enabled ? "" : "selected"}>\uFFFD\uFFFD\u0230\uFFFD\uFFFD</option></select></label>
+        <label><span>\uBCF4\uC2A4 \uB808\uC774\uB4DC \uD574\uAE08 \uB2E8\uACC4</span><input data-path="${path}.unlocksBossRaidStage" type="number" value="${level.unlocksBossRaidStage ?? ""}" /></label>
+        <label><span>\uD65C\uC131\uD654</span><select data-path="${path}.enabled"><option value="true" ${level.enabled ? "selected" : ""}>\uD65C\uC131</option><option value="false" ${level.enabled ? "" : "selected"}>\uBE44\uD65C\uC131</option></select></label>
       </div>
     </div>
-    <div class="section-card"><div><h3>\uFFFD\uFFFD\uFFFD\uFFFD</h3><p>\xF9 \u016C\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u077A\uFFFD \u016C\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0438\uFFFD\uFFFD\u063C\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.</p></div><div class="field-grid three"><label><span>repeatGold</span><input data-path="${path}.reward.repeatGold" type="number" value="${level.reward.repeatGold}" /></label><label><span>firstClearBonusGold</span><input data-path="${path}.reward.firstClearBonusGold" type="number" value="${level.reward.firstClearBonusGold}" /></label><label><span>characterExp</span><input data-path="${path}.reward.characterExp" type="number" value="${level.reward.characterExp}" /></label></div></div>
+    <div class="section-card"><div><h3>\uBCF4\uC0C1</h3><p>\uCCAB \uD074\uB9AC\uC5B4 \uBCF4\uB108\uC2A4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uB098\uB220\uC11C \uC870\uC815\uD569\uB2C8\uB2E4.</p></div><div class="field-grid three"><label><span>repeatGold</span><input data-path="${path}.reward.repeatGold" type="number" value="${level.reward.repeatGold}" /></label><label><span>firstClearBonusGold</span><input data-path="${path}.reward.firstClearBonusGold" type="number" value="${level.reward.firstClearBonusGold}" /></label><label><span>characterExp</span><input data-path="${path}.reward.characterExp" type="number" value="${level.reward.characterExp}" /></label></div></div>
     ${overrideFields(path, level.enemyOverrides)}
     ${backgroundFields(path, level.background)}
-    <div class="section-card"><div><h3>\uFFFD\uEFF5 \uFFFD\u07B8\uFFFD</h3><p>\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u07B8\uFFFD\uFFFD\u0534\u03F4\uFFFD.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${level.notes ?? ""}</textarea></label></div>`;
+    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC774 \uB808\uBCA8\uC5D0 \uB300\uD55C \uB0B4\uBD80 \uBA54\uBAA8\uB97C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${level.notes ?? ""}</textarea></label></div>`;
   }
   function renderRaidEditor(raid, scope) {
     const path = `raids.${scope}.${raid.id}`;
     return `
     <div class="section-card">
-      <div><h3>\uFFFD\u2EBB \uFFFD\uFFFD\uFFFD\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\u0338\uFFFD, \uFFFD\u0730\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD/\uFFFD\xF0\uFFFD \uFFFD\uFFFD\u0122\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.</p></div>
+      <div><h3>\uAE30\uBCF8 \uC815\uBCF4</h3><p>\uB808\uC774\uB4DC \uC774\uB984, \uB2E8\uACC4, \uC5F0\uACB0 \uD15C\uD50C\uB9BF, \uC2DC\uAC04 \uC81C\uD55C\uACFC \uCC38\uAC00 \uADDC\uCE59\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
         <label><span>id</span><input type="text" value="${raid.id}" disabled /></label>
-        <label><span>\uFFFD\u0338\uFFFD</span><input data-path="${path}.name" type="text" value="${raid.name}" /></label>
+        <label><span>\uC774\uB984</span><input data-path="${path}.name" type="text" value="${raid.name}" /></label>
         <label><span>stage</span><input data-path="${path}.stage" type="number" value="${raid.stage}" /></label>
         <label><span>worldId</span><input data-path="${path}.worldId" type="number" value="${raid.worldId ?? ""}" /></label>
         <label><span>timeLimitMs</span><input data-path="${path}.timeLimitMs" type="number" value="${raid.timeLimitMs}" /></label>
@@ -23709,35 +23711,35 @@ ${suffix}`;
         <label><span>joinWindowMinutes</span><input data-path="${path}.joinWindowMinutes" type="number" value="${raid.joinWindowMinutes}" /></label>
         <label><span>maxParticipants</span><input data-path="${path}.maxParticipants" type="number" value="${raid.maxParticipants}" /></label>
         <label><span>encounterTemplateId</span><select data-path="${path}.encounterTemplateId">${Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)).map((encounter) => `<option value="${encounter.id}" ${encounter.id === raid.encounterTemplateId ? "selected" : ""}>${encounter.id}</option>`).join("")}</select></label>
-        <label><span>\u0230\uFFFD\uFFFD\u022D</span><select data-path="${path}.enabled"><option value="true" ${raid.enabled ? "selected" : ""}>\u0230\uFFFD\uFFFD</option><option value="false" ${raid.enabled ? "" : "selected"}>\uFFFD\uFFFD\u0230\uFFFD\uFFFD</option></select></label>
+        <label><span>\uD65C\uC131\uD654</span><select data-path="${path}.enabled"><option value="true" ${raid.enabled ? "selected" : ""}>\uD65C\uC131</option><option value="false" ${raid.enabled ? "" : "selected"}>\uBE44\uD65C\uC131</option></select></label>
       </div>
     </div>
-    <div class="section-card"><div><h3>\uFFFD\uFFFD\uFFFD\uFFFD</h3><p>\xF9 \u016C\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u077A\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.</p></div><div class="field-grid"><label><span>firstClearDiamondReward</span><input data-path="${path}.reward.firstClearDiamondReward" type="number" value="${raid.reward.firstClearDiamondReward}" /></label><label><span>repeatDiamondReward</span><input data-path="${path}.reward.repeatDiamondReward" type="number" value="${raid.reward.repeatDiamondReward}" /></label></div></div>
+    <div class="section-card"><div><h3>\uBCF4\uC0C1</h3><p>\uCCAB \uD074\uB9AC\uC5B4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uBD84\uB9AC\uD574 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div><div class="field-grid"><label><span>firstClearDiamondReward</span><input data-path="${path}.reward.firstClearDiamondReward" type="number" value="${raid.reward.firstClearDiamondReward}" /></label><label><span>repeatDiamondReward</span><input data-path="${path}.reward.repeatDiamondReward" type="number" value="${raid.reward.repeatDiamondReward}" /></label></div></div>
     ${overrideFields(path, raid.encounterOverrides)}
     ${backgroundFields(path, raid.background)}
-    <div class="section-card"><div><h3>\uFFFD\uEFF5 \uFFFD\u07B8\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\uFFFD\u0239 \uFFFD\u07B8\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${raid.notes ?? ""}</textarea></label></div>`;
+    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uB808\uC774\uB4DC \uAE30\uD68D \uBA54\uBAA8\uB97C \uC815\uB9AC\uD569\uB2C8\uB2E4.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${raid.notes ?? ""}</textarea></label></div>`;
   }
   function renderEncounterEditor(encounter) {
     const path = `encounters.${encounter.id}`;
     return `
     <div class="section-card">
-      <div><h3>\uFFFD\uFFFD\uFFFD\xF8\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD\uFFFD/\uFFFD\uFFFD\uFFFD\u0335\u5C21 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0534\u03F4\uFFFD.</p></div>
+      <div><h3>\uD15C\uD50C\uB9BF \uC815\uBCF4</h3><p>\uB808\uBCA8\uACFC \uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uB294 \uC801 \uAE30\uBCF8 \uD15C\uD50C\uB9BF\uC785\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
         <label><span>id</span><input type="text" value="${encounter.id}" disabled /></label>
-        <label><span>\u01E5\uFFFD\uFFFD \uFFFD\u0338\uFFFD</span><input data-path="${path}.displayName" type="text" value="${encounter.displayName}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0338\uFFFD</span><input data-path="${path}.monsterName" type="text" value="${encounter.monsterName}" /></label>
-        <label><span>\uFFFD\u0338\uFFFD\uFFFD\uFFFD</span><input data-path="${path}.monsterEmoji" type="text" value="${encounter.monsterEmoji}" /></label>
-        <label><span>\uFFFD\uFFFD\uFFFD\uFFFD</span><input data-path="${path}.monsterColor" type="text" value="${encounter.monsterColor}" /></label>
+        <label><span>\uD45C\uC2DC \uC774\uB984</span><input data-path="${path}.displayName" type="text" value="${encounter.displayName}" /></label>
+        <label><span>\uBAAC\uC2A4\uD130 \uC774\uB984</span><input data-path="${path}.monsterName" type="text" value="${encounter.monsterName}" /></label>
+        <label><span>\uC774\uBAA8\uC9C0</span><input data-path="${path}.monsterEmoji" type="text" value="${encounter.monsterEmoji}" /></label>
+        <label><span>\uC0C9\uC0C1</span><input data-path="${path}.monsterColor" type="text" value="${encounter.monsterColor}" /></label>
         <label><span>tier</span><select data-path="${path}.tier">${["normal", "elite", "boss"].map((value) => `<option value="${value}" ${encounter.tier === value ? "selected" : ""}>${value}</option>`).join("")}</select></label>
         <label><span>baseHp</span><input data-path="${path}.baseHp" type="number" value="${encounter.baseHp}" /></label>
         <label><span>baseAttack</span><input data-path="${path}.baseAttack" type="number" value="${encounter.baseAttack}" /></label>
         <label><span>attackIntervalMs</span><input data-path="${path}.attackIntervalMs" type="number" value="${encounter.attackIntervalMs}" /></label>
         <label><span>attackPattern</span><select data-path="${path}.attackPattern">${PATTERN_OPTIONS.map((option) => `<option value="${option}" ${encounter.attackPattern === option ? "selected" : ""}>${option}</option>`).join("")}</select></label>
         <label><span>kind</span><select data-path="${path}.kind"><option value="level" ${encounter.kind === "level" ? "selected" : ""}>level</option><option value="raid" ${encounter.kind === "raid" ? "selected" : ""}>raid</option></select></label>
-        <label><span>\u0230\uFFFD\uFFFD\u022D</span><select data-path="${path}.enabled"><option value="true" ${encounter.enabled ? "selected" : ""}>\u0230\uFFFD\uFFFD</option><option value="false" ${encounter.enabled ? "" : "selected"}>\uFFFD\uFFFD\u0230\uFFFD\uFFFD</option></select></label>
+        <label><span>\uD65C\uC131\uD654</span><select data-path="${path}.enabled"><option value="true" ${encounter.enabled ? "selected" : ""}>\uD65C\uC131</option><option value="false" ${encounter.enabled ? "" : "selected"}>\uBE44\uD65C\uC131</option></select></label>
       </div>
     </div>
-    <div class="section-card"><div><h3>\uFFFD\uEFF5 \uFFFD\u07B8\uFFFD</h3><p>\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u01F5\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u07B8\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${encounter.notes ?? ""}</textarea></label></div>`;
+    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC801 \uBC38\uB7F0\uC2A4\uB098 \uAE30\uD68D \uC758\uB3C4\uB97C \uB0B4\uBD80 \uBA54\uBAA8\uB85C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${encounter.notes ?? ""}</textarea></label></div>`;
   }
   function renderTree() {
     if (!state.manifest) {
@@ -23750,22 +23752,22 @@ ${suffix}`;
       <div class="tree-items">
         ${items.map((item) => {
       const active = state.selected?.kind === kind && state.selected?.id === item.id ? "active" : "";
-      const label = kind === "level" ? `${item.levelId}. ${item.name}` : kind === "encounter" ? `${item.displayName} (${item.id})` : `${item.stage}\uFFFD\u0730\uFFFD ${item.name}`;
+      const label = kind === "level" ? `${item.levelId}. ${item.name}` : kind === "encounter" ? `${item.displayName} (${item.id})` : `${item.stage}\uB2E8\uACC4 ${item.name}`;
       return `<button class="tree-item ${active}" data-kind="${kind}" data-id="${item.id}">${label}</button>`;
     }).join("")}
       </div>
     </section>`;
     elements.contentTree.innerHTML = [
-      buildGroup("\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD", Object.values(state.manifest.levels).sort((a, b) => a.levelId - b.levelId), "level"),
-      buildGroup("\uFFFD\u03F9\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD", Object.values(state.manifest.raids.normal).sort((a, b) => a.stage - b.stage), "raidNormal"),
-      buildGroup("\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD", Object.values(state.manifest.raids.boss).sort((a, b) => a.stage - b.stage), "raidBoss"),
-      buildGroup("\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD", Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)), "encounter")
+      buildGroup("\uB808\uBCA8 \uC2A4\uD14C\uC774\uC9C0", Object.values(state.manifest.levels).sort((a, b) => a.levelId - b.levelId), "level"),
+      buildGroup("\uC77C\uBC18 \uB808\uC774\uB4DC", Object.values(state.manifest.raids.normal).sort((a, b) => a.stage - b.stage), "raidNormal"),
+      buildGroup("\uBCF4\uC2A4 \uB808\uC774\uB4DC", Object.values(state.manifest.raids.boss).sort((a, b) => a.stage - b.stage), "raidBoss"),
+      buildGroup("\uC801 \uD15C\uD50C\uB9BF", Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)), "encounter")
     ].join("");
   }
   function renderAssets() {
     elements.assetCount.textContent = String(state.assets.length);
     if (!state.assets.length) {
-      elements.assetLibrary.innerHTML = `<div class="asset-card"><strong>\uFFFD\uFFFD\u03F5\uFFFD \uFFFD\u06BB\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.</strong><p>\uFFFD\uFFFD\uFFFD \uFFFD\u0339\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u03B5\uFFFD\uFFFD\u03F8\uFFFD \uFFFD\uFFFD\uFFFD\u2F2D assetKey\uFFFD\uFFFD \u022E\uFFFD\uFFFD\uFFFD\u03F0\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD/\uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\uFFFD\u6FE1 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\u05BD\uFFFD\uFFFD\u03F4\uFFFD.</p></div>`;
+      elements.assetLibrary.innerHTML = `<div class="asset-card"><strong>\uB4F1\uB85D\uB41C \uC790\uC0B0\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uBC30\uACBD \uC774\uBBF8\uC9C0\uB97C \uC5C5\uB85C\uB4DC\uD558\uBA74 \uC5EC\uAE30\uC11C assetKey\uB97C \uD655\uC778\uD558\uACE0 \uB808\uBCA8/\uB808\uC774\uB4DC \uBC30\uACBD\uC5D0 \uC5F0\uACB0\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p></div>`;
       return;
     }
     elements.assetLibrary.innerHTML = state.assets.slice().sort((a, b) => a.asset_key.localeCompare(b.asset_key)).map((asset) => `
@@ -23777,14 +23779,14 @@ ${suffix}`;
   }
   function renderReleaseHistory() {
     if (!state.releaseHistory.length) {
-      elements.releaseHistory.innerHTML = `<div class="release-card"><strong>\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0337\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.</strong><p>\uFFFD\uFFFD\uFFFD\uFFFD creator publish\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0337\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u02BE\u04BD\uFFFD\uFFFD\u03F4\uFFFD.</p></div>`;
+      elements.releaseHistory.innerHTML = `<div class="release-card"><strong>\uBC30\uD3EC \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uC544\uC9C1 creator publish\uB97C \uD55C \uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</p></div>`;
       return;
     }
     elements.releaseHistory.innerHTML = state.releaseHistory.map((release) => `
     <div class="release-card">
       <strong>v${release.version}</strong>
-      <p>${release.notes || "\uFFFD\u07B8\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD"}</p>
-      <div class="release-meta"><span>${new Date(release.created_at).toLocaleString("ko-KR")}</span><button class="ghost small rollback-button" data-version="${release.version}">\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0479\uFFFD</button></div>
+      <p>${release.notes || "\uBA54\uBAA8 \uC5C6\uC74C"}</p>
+      <div class="release-meta"><span>${new Date(release.created_at).toLocaleString("ko-KR")}</span><button class="ghost small rollback-button" data-version="${release.version}">\uC774 \uBC84\uC804\uC73C\uB85C \uB864\uBC31</button></div>
     </div>`).join("");
   }
   function updateManifestTextarea() {
@@ -23795,29 +23797,29 @@ ${suffix}`;
     renderSummary(record);
     renderHelpPanel();
     if (!record || !state.selected) {
-      elements.editorTitle.textContent = "\uFFFD\u05F8\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03FC\uFFFD\uFFFD\uFFFD";
-      elements.editorSubtitle.textContent = "\uFFFD\uFFFD\uFFFD\uFFFD \u01AE\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD\u0335\uFFFD, \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD \uFFFD\uFFFD \uFFFD\u03F3\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u2C21 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.";
+      elements.editorTitle.textContent = "\uD56D\uBAA9\uC744 \uC120\uD0DD\uD558\uC138\uC694";
+      elements.editorSubtitle.textContent = "\uC67C\uCABD \uD2B8\uB9AC\uC5D0\uC11C \uB808\uBCA8, \uB808\uC774\uB4DC, \uC801 \uD15C\uD50C\uB9BF \uC911 \uD558\uB098\uB97C \uC120\uD0DD\uD558\uBA74 \uC0C1\uC138 \uD3B8\uC9D1\uAE30\uAC00 \uC5F4\uB9BD\uB2C8\uB2E4.";
       elements.editorForm.className = "editor-form empty-state";
-      elements.editorForm.innerHTML = "<p>\uFFFD\uFFFD\uFFFD\u02BF\uFFFD\uFFFD\uFFFD \uFFFD\u05F8\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F8\uFFFD \uFFFD\uFFFD\uFFFD\u2FE1\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\u0121\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\u05BD\uFFFD\uFFFD\u03F4\uFFFD.</p>";
+      elements.editorForm.innerHTML = "<p>\uC67C\uCABD\uC5D0\uC11C \uD56D\uBAA9\uC744 \uC120\uD0DD\uD558\uBA74 \uC5EC\uAE30\uC5D0\uC11C \uD604\uC7AC \uAC12\uC744 \uC218\uC815\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p>";
       return;
     }
     elements.editorForm.className = "editor-form";
     if (state.selected.kind === "level") {
-      elements.editorTitle.textContent = `\uFFFD\uFFFD\uFFFD\uFFFD ${record.levelId} \uFFFD\uFFFD\uFFFD\uFFFD`;
-      elements.editorSubtitle.textContent = "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u06B5\uFFFD \uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD draft\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uEFF5\uFFFD\uFFFD \uFFFD\uFFFD\u0121\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0574\u03F4\uFFFD.";
+      elements.editorTitle.textContent = `\uB808\uBCA8 ${record.levelId} \uD3B8\uC9D1`;
+      elements.editorSubtitle.textContent = "\uB808\uBCA8 \uBAA8\uB4DC\uC5D0 \uC2E4\uC81C\uB85C \uBC18\uC601\uB420 \uBAA9\uD45C, \uBCF4\uC0C1, \uC801 \uC5F0\uACB0, \uBC30\uACBD\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.";
       elements.editorForm.innerHTML = renderLevelEditor(record);
     } else if (state.selected.kind === "raidNormal" || state.selected.kind === "raidBoss") {
-      elements.editorTitle.textContent = `${state.selected.kind === "raidNormal" ? "\uFFFD\u03F9\uFFFD" : "\uFFFD\uFFFD\uFFFD\uFFFD"} \uFFFD\uFFFD\uFFFD\u0335\uFFFD ${record.stage}\uFFFD\u0730\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD`;
-      elements.editorSubtitle.textContent = "\uFFFD\uFFFD\uFFFD\u0335\uFFFD \uFFFD\u03BA\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \u022D\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0378\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0338\uFFFD, HP, \uFFFD\uFFFD\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u043D\uFFFD\uFFFD\u03F4\uFFFD.";
+      elements.editorTitle.textContent = `${state.selected.kind === "raidNormal" ? "\uC77C\uBC18" : "\uBCF4\uC2A4"} \uB808\uC774\uB4DC ${record.stage}\uB2E8\uACC4 \uD3B8\uC9D1`;
+      elements.editorSubtitle.textContent = "\uB808\uC774\uB4DC \uC885\uB958\uBCC4 \uB2E8\uACC4 \uC815\uBCF4\uC640 \uBCF4\uC0C1, \uC2DC\uAC04 \uC81C\uD55C, \uCC38\uAC00 \uADDC\uCE59\uC744 \uC218\uC815\uD569\uB2C8\uB2E4.";
       elements.editorForm.innerHTML = renderRaidEditor(record, state.selected.kind === "raidNormal" ? "normal" : "boss");
     } else {
-      elements.editorTitle.textContent = `\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD ${record.id}`;
-      elements.editorSubtitle.textContent = "\uFFFD\uFFFD\uFFFD\u2F2D \uFFFD\u0672\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD/\uFFFD\uFFFD\uFFFD\u0335\u5C21 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\u03F0\uFFFD, \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD override\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uCF31\uFFFD\u0574\u03F4\uFFFD.";
+      elements.editorTitle.textContent = `\uC801 \uD15C\uD50C\uB9BF ${record.id}`;
+      elements.editorSubtitle.textContent = "\uC5EC\uAE30\uC11C \uBC14\uAFBC \uAC12\uC740 \uB808\uBCA8/\uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uBA70, \uC2A4\uD14C\uC774\uC9C0\uBCC4 override\uBCF4\uB2E4 \uBA3C\uC800 \uC801\uC6A9\uB429\uB2C8\uB2E4.";
       elements.editorForm.innerHTML = renderEncounterEditor(record);
     }
   }
   function renderAll() {
-    setStatus(elements.manifestStatus, state.manifest ? `draft v${getManifestVersion(state.manifest)}` : "manifest \uFFFD\uFFFD\uFFFD\uFFFD");
+    setStatus(elements.manifestStatus, state.manifest ? `draft v${getManifestVersion(state.manifest)}` : "manifest \uC5C6\uC74C");
     elements.userEmail.textContent = state.profile?.email || state.session?.user?.email || "-";
     elements.draftVersion.textContent = state.manifest ? `v${getManifestVersion(state.manifest)}` : "-";
     elements.publishedVersion.textContent = state.publishedVersion ? `v${state.publishedVersion}` : "-";
@@ -23855,24 +23857,26 @@ ${suffix}`;
     elements.releaseHistory.querySelectorAll(".rollback-button").forEach((button) => {
       button.addEventListener("click", async () => {
         const version5 = Number(button.dataset.version);
-        if (!window.confirm(`v${version5} \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uEE26 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u0479\uFFFD\uFFFD\u04B1\uFFFD\uFFFD?`)) {
+        if (!window.confirm(`v${version5} \uB9B4\uB9AC\uC988\uB97C \uAE30\uC900\uC73C\uB85C \uC0C8 \uB864\uBC31 \uB9B4\uB9AC\uC988\uB97C \uB9CC\uB4E4\uAE4C\uC694?`)) {
           return;
         }
         try {
           await rollbackRelease(version5);
         } catch (error) {
-          showToast(error.message || "\uFFFD\u0479\u9FE1 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+          showToast(error.message || "\uB864\uBC31\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
         }
       });
     });
   }
   async function ensureClient() {
-    if (state.supabase) {
-      return state.supabase;
-    }
     const url = elements.supabaseUrl.value.trim() || DEFAULT_SUPABASE_URL;
     const key = elements.supabaseAnonKey.value.trim() || DEFAULT_SUPABASE_ANON_KEY;
+    if (state.supabase && state.supabaseUrl === url && state.supabaseKey === key) {
+      return state.supabase;
+    }
     state.supabase = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+    state.supabaseUrl = url;
+    state.supabaseKey = key;
     return state.supabase;
   }
   async function fetchProfile(userId) {
@@ -23922,7 +23926,7 @@ ${suffix}`;
   async function rollbackRelease(version5) {
     const { data, error } = await state.supabase.from("creator_releases").select("version, manifest_json").eq("version", version5).maybeSingle();
     if (error) throw error;
-    if (!data) throw new Error(`v${version5} \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uEE26 \xE3\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.`);
+    if (!data) throw new Error(`v${version5} \uB9B4\uB9AC\uC988\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.`);
     state.manifest = deepClone2(data.manifest_json);
     await saveDraft();
     elements.publishNotes.value = `Rollback to v${version5}`;
@@ -23937,7 +23941,7 @@ ${suffix}`;
       levelId: nextLevelId,
       worldId: Math.max(1, Math.ceil(nextLevelId / 30)),
       stageNumberInWorld: (nextLevelId - 1) % 30 + 1,
-      name: `\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD ${nextLevelId}`,
+      name: `\uC0C8 \uB808\uBCA8 ${nextLevelId}`,
       goalType: "defeat_enemy",
       goalValue: 1e3,
       enemyTemplateId: Object.keys(state.manifest.encounters)[0],
@@ -23957,7 +23961,7 @@ ${suffix}`;
       raidType: kind === "raidNormal" ? "normal" : "boss",
       stage: nextStage,
       worldId: kind === "raidBoss" ? nextStage : null,
-      name: `${kind === "raidNormal" ? "\uFFFD\u03F9\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD" : "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u0335\uFFFD"} ${nextStage}`,
+      name: `${kind === "raidNormal" ? "\uC77C\uBC18 \uB808\uC774\uB4DC" : "\uBCF4\uC2A4 \uB808\uC774\uB4DC"} ${nextStage}`,
       encounterTemplateId: Object.keys(state.manifest.encounters)[0],
       encounterOverrides: {},
       reward: { firstClearDiamondReward: 20, repeatDiamondReward: 2 },
@@ -23971,19 +23975,19 @@ ${suffix}`;
     state.selected = { kind, id };
   }
   function createEncounterEntry() {
-    const nextId = slugify(window.prompt("\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD id\uFFFD\uFFFD \uFFFD\u0537\uFFFD\uFFFD\u03FC\uFFFD\uFFFD\uFFFD.", "encounter_new") || "");
+    const nextId = slugify(window.prompt("\uC0C8 \uC801 \uD15C\uD50C\uB9BF id\uB97C \uC785\uB825\uD558\uC138\uC694.", "encounter_new") || "");
     if (!nextId) return;
     if (state.manifest.encounters[nextId]) {
-      showToast("\uFFFD\u0339\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD id\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\xF8\uFFFD\uFFFD\uFFFD \uFFFD\u05BD\uFFFD\uFFFD\u03F4\uFFFD.");
+      showToast("\uC774\uBBF8 \uAC19\uC740 id\uC758 \uD15C\uD50C\uB9BF\uC774 \uC788\uC2B5\uB2C8\uB2E4.");
       return;
     }
     state.manifest.encounters[nextId] = {
       id: nextId,
       kind: "level",
-      displayName: "\uFFFD\uFFFD \uFFFD\uFFFD",
+      displayName: "\uC0C8 \uC801",
       tier: "normal",
-      monsterName: "\uFFFD\uFFFD \uFFFD\uFFFD",
-      monsterEmoji: "??",
+      monsterName: "\uC0C8 \uC801",
+      monsterEmoji: "\u{1F47E}",
       monsterColor: "#60a5fa",
       baseHp: 1e3,
       baseAttack: 20,
@@ -23999,7 +24003,7 @@ ${suffix}`;
     if (state.selected.kind === "level") {
       const nextLevelId = Math.max(0, ...Object.values(state.manifest.levels).map((level) => level.levelId)) + 1;
       const id = `level_${nextLevelId}`;
-      state.manifest.levels[id] = { ...deepClone2(record), id, levelId: nextLevelId, name: `${record.name} \uFFFD\uFFFD\uFFFD\u7EBB` };
+      state.manifest.levels[id] = { ...deepClone2(record), id, levelId: nextLevelId, name: `${record.name} \uBCF5\uC0AC\uBCF8` };
       state.selected = { kind: "level", id };
       return;
     }
@@ -24007,16 +24011,16 @@ ${suffix}`;
       const scope = state.selected.kind === "raidNormal" ? state.manifest.raids.normal : state.manifest.raids.boss;
       const nextStage = Math.max(0, ...Object.values(scope).map((raid) => raid.stage)) + 1;
       const id = `${state.selected.kind === "raidNormal" ? "normal" : "boss"}_${nextStage}`;
-      scope[id] = { ...deepClone2(record), id, stage: nextStage, name: `${record.name} \uFFFD\uFFFD\uFFFD\u7EBB` };
+      scope[id] = { ...deepClone2(record), id, stage: nextStage, name: `${record.name} \uBCF5\uC0AC\uBCF8` };
       state.selected = { kind: state.selected.kind, id };
       return;
     }
     const nextId = `${record.id}_copy`;
-    state.manifest.encounters[nextId] = { ...deepClone2(record), id: nextId, displayName: `${record.displayName} \uFFFD\uFFFD\uFFFD\u7EBB` };
+    state.manifest.encounters[nextId] = { ...deepClone2(record), id: nextId, displayName: `${record.displayName} \uBCF5\uC0AC\uBCF8` };
     state.selected = { kind: "encounter", id: nextId };
   }
   function deleteSelected() {
-    if (!state.selected || !window.confirm("\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\u05F8\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u04B1\uFFFD\uFFFD?")) return;
+    if (!state.selected || !window.confirm("\uC120\uD0DD\uD55C \uD56D\uBAA9\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?")) return;
     if (state.selected.kind === "level") delete state.manifest.levels[state.selected.id];
     else if (state.selected.kind === "raidNormal") delete state.manifest.raids.normal[state.selected.id];
     else if (state.selected.kind === "raidBoss") delete state.manifest.raids.boss[state.selected.id];
@@ -24026,13 +24030,13 @@ ${suffix}`;
   async function uploadAsset() {
     const file = elements.assetFileInput.files?.[0];
     if (!file) {
-      showToast("\uFFFD\uFFFD\uFFFD\u03B5\uFFFD\uFFFD\uFFFD \uFFFD\u0339\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03FC\uFFFD\uFFFD\uFFFD.");
+      showToast("\uC5C5\uB85C\uB4DC\uD560 \uC774\uBBF8\uC9C0\uB97C \uBA3C\uC800 \uC120\uD0DD\uD558\uC138\uC694.");
       return;
     }
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error("\uFFFD\u0339\uFFFD\uFFFD\uFFFD \uFFFD\u0431\u2FE1 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD."));
+      reader.onerror = () => reject(new Error("\uC774\uBBF8\uC9C0\uB97C \uC77D\uB294 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4."));
       reader.readAsDataURL(file);
     });
     const assetKey = elements.assetKeyInput.value.trim() || slugify(file.name.replace(/\.[^.]+$/, "")) || `asset_${Date.now()}`;
@@ -24065,7 +24069,7 @@ ${suffix}`;
     await ensureClient();
     if (mode === "restore") {
       const { data } = await state.supabase.auth.getSession();
-      if (!data.session) throw new Error("\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u03F4\uFFFD.");
+      if (!data.session) throw new Error("\uC800\uC7A5\uB41C \uC138\uC158\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
       state.session = data.session;
     } else {
       const { data, error } = await state.supabase.auth.signInWithPassword({ email: elements.adminEmail.value.trim(), password: elements.adminPassword.value });
@@ -24073,21 +24077,59 @@ ${suffix}`;
       state.session = data.session;
     }
     state.profile = await fetchProfile(state.session.user.id);
-    if (!state.profile?.is_admin) throw new Error("\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u0534\u03F4\uFFFD.");
+    if (!state.profile?.is_admin) throw new Error("\uAD00\uB9AC\uC790 \uAD8C\uD55C\uC774 \uC788\uB294 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD574\uC57C \uD569\uB2C8\uB2E4.");
     localStorage.setItem(STORAGE_KEY2, JSON.stringify({ url: elements.supabaseUrl.value.trim(), key: elements.supabaseAnonKey.value.trim(), email: elements.adminEmail.value.trim() }));
   }
   async function initializeWorkspace(mode) {
     try {
-      setStatus(elements.connectionStatus, "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD...");
+      setStatus(elements.connectionStatus, "\uC5F0\uACB0 \uC911...");
       await login(mode);
       elements.loginCard.classList.add("hidden");
       elements.workspace.classList.remove("hidden");
-      setStatus(elements.connectionStatus, "\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD");
+      setStatus(elements.connectionStatus, "\uC5F0\uACB0\uB428");
       await loadWorkspace();
     } catch (error) {
       console.error(error);
-      setStatus(elements.connectionStatus, "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD");
-      showToast(error.message || "\uFFFD\u03B1\uFFFD\uFFFD\uFFFD \uFFFD\u01F4\uFFFD \uFFFD\u04B7\uFFFD\uFFFD\uFFFD\uFFFD\u2FE1 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+      setStatus(elements.connectionStatus, "\uC5F0\uACB0 \uC2E4\uD328");
+      showToast(error.message || "\uB85C\uADF8\uC778 \uB610\uB294 \uBD88\uB7EC\uC624\uAE30\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+    }
+  }
+  async function restoreWorkspaceIfPossible(showFeedback = false) {
+    try {
+      await ensureClient();
+      const { data, error } = await state.supabase.auth.getSession();
+      if (error) throw error;
+      if (!data.session) {
+        setStatus(elements.connectionStatus, "\uB85C\uADF8\uC778 \uD544\uC694");
+        if (showFeedback) {
+          showToast("\uBCF5\uC6D0\uD560 \uB85C\uADF8\uC778 \uC138\uC158\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
+        }
+        return false;
+      }
+      state.session = data.session;
+      state.profile = await fetchProfile(state.session.user.id);
+      if (!state.profile?.is_admin) {
+        await state.supabase.auth.signOut();
+        state.session = null;
+        state.profile = null;
+        setStatus(elements.connectionStatus, "\uAD00\uB9AC\uC790 \uB85C\uADF8\uC778 \uD544\uC694");
+        if (showFeedback) {
+          showToast("\uAD00\uB9AC\uC790 \uAD8C\uD55C\uC774 \uC788\uB294 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD574\uC57C \uD569\uB2C8\uB2E4.");
+        }
+        return false;
+      }
+      elements.loginCard.classList.add("hidden");
+      elements.workspace.classList.remove("hidden");
+      setStatus(elements.connectionStatus, "\uC138\uC158 \uBCF5\uC6D0\uB428");
+      await loadWorkspace();
+      return true;
+    } catch (error) {
+      console.error(error);
+      setStatus(elements.connectionStatus, "\uC138\uC158 \uBCF5\uC6D0 \uC2E4\uD328");
+      if (showFeedback) {
+        showToast(error.message || "\uC138\uC158 \uBCF5\uC6D0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+      }
+      return false;
     }
   }
   function applyManifestJson() {
@@ -24096,7 +24138,7 @@ ${suffix}`;
       renderAll();
       bindDynamicEvents();
     } catch (error) {
-      showToast(`JSON \uFFFD\u013D\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD: ${error.message}`);
+      showToast(`JSON \uD30C\uC2F1 \uC2E4\uD328: ${error.message}`);
     }
   }
   async function bootstrap() {
@@ -24107,24 +24149,24 @@ ${suffix}`;
     if (saved?.key) elements.supabaseAnonKey.value = saved.key;
     if (saved?.email) elements.adminEmail.value = saved.email;
     elements.loginButton.addEventListener("click", () => void initializeWorkspace("login"));
-    elements.restoreButton.addEventListener("click", () => void initializeWorkspace("restore"));
+    elements.restoreButton.addEventListener("click", () => void restoreWorkspaceIfPossible(true));
     elements.refreshButton.addEventListener("click", () => void loadWorkspace());
     elements.saveDraftButton.addEventListener("click", async () => {
       try {
         await saveDraft();
-        showToast("Draft\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+        showToast("Draft\uB97C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.");
         await loadWorkspace();
       } catch (error) {
-        showToast(error.message || "Draft \uFFFD\uFFFD\uFFFD\u5FE1 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+        showToast(error.message || "Draft \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
       }
     });
     elements.publishButton.addEventListener("click", async () => {
       try {
         await publishDraft();
-        showToast("\uFFFD\uFFFD creator release\uFFFD\uFFFD publish\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+        showToast("\uC0C8 creator release\uB97C \uBC30\uD3EC\uD588\uC2B5\uB2C8\uB2E4.");
         await loadWorkspace();
       } catch (error) {
-        showToast(error.message || "Publish\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+        showToast(error.message || "Publish\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
       }
     });
     elements.logoutButton.addEventListener("click", async () => {
@@ -24135,21 +24177,21 @@ ${suffix}`;
       state.selected = null;
       elements.workspace.classList.add("hidden");
       elements.loginCard.classList.remove("hidden");
-      setStatus(elements.connectionStatus, "\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD \uFFFD\uFFFD");
+      setStatus(elements.connectionStatus, "\uB85C\uADF8\uC778 \uD544\uC694");
     });
     elements.copyJsonButton.addEventListener("click", async () => {
       await navigator.clipboard.writeText(elements.manifestJson.value);
-      showToast("Manifest JSON\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+      showToast("Manifest JSON\uC744 \uBCF5\uC0AC\uD588\uC2B5\uB2C8\uB2E4.");
     });
     elements.applyJsonButton.addEventListener("click", applyManifestJson);
     elements.uploadAssetButton.addEventListener("click", async () => {
       try {
         await uploadAsset();
-        showToast("\uFFFD\u0339\uFFFD\uFFFD\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u03B5\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+        showToast("\uC774\uBBF8\uC9C0\uB97C \uC5C5\uB85C\uB4DC\uD588\uC2B5\uB2C8\uB2E4.");
         renderAll();
         bindDynamicEvents();
       } catch (error) {
-        showToast(error.message || "\uFFFD\u0339\uFFFD\uFFFD\uFFFD \uFFFD\uFFFD\uFFFD\u03B5\u5FE1 \uFFFD\uFFFD\uFFFD\uFFFD\uFFFD\u07FD\uFFFD\uFFFD\u03F4\uFFFD.");
+        showToast(error.message || "\uC774\uBBF8\uC9C0 \uC5C5\uB85C\uB4DC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
       }
     });
     elements.addLevelButton.addEventListener("click", () => {
@@ -24182,7 +24224,7 @@ ${suffix}`;
       renderAll();
       bindDynamicEvents();
     });
-    await initializeWorkspace("restore");
+    await restoreWorkspaceIfPossible(false);
   }
   void bootstrap();
 })();

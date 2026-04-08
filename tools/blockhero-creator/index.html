@@ -13,8 +13,7 @@
           <p class="eyebrow">BlockHero Creator</p>
           <h1>콘텐츠 제작 스튜디오</h1>
           <p class="subtitle">
-            현재 게임의 레벨, 레이드, 적 템플릿, 배경 설정을 불러와서 초안으로 수정하고
-            배포할 수 있습니다.
+            현재 게임의 레벨, 레이드, 적 템플릿, 배경 설정을 불러와 초안으로 수정하고 배포할 수 있습니다.
           </p>
         </div>
         <div class="topbar-meta">
@@ -28,8 +27,8 @@
           <div>
             <h2>관리자 로그인</h2>
             <p>
-              Supabase 연결 정보는 자동으로 채워집니다. 관리자 계정으로 로그인하면 draft와
-              최신 배포본을 바로 불러옵니다.
+              Supabase 연결 정보는 자동으로 채워집니다. 관리자 계정으로 로그인하면 draft와 최신 배포본을
+              바로 불러옵니다.
             </p>
           </div>
         </div>
@@ -53,7 +52,7 @@
         </div>
         <div class="button-row">
           <button id="loginButton" class="primary">로그인하고 불러오기</button>
-          <button id="restoreButton" class="ghost">이전 세션 복원</button>
+          <button id="restoreButton" class="ghost">저장된 세션 복원</button>
         </div>
       </section>
 
@@ -63,7 +62,7 @@
             <div class="panel-header">
               <div>
                 <h2>프로젝트 상태</h2>
-                <p>현재 로그인 계정과 draft/published 버전을 확인합니다.</p>
+                <p>현재 로그인 계정과 draft, published 버전을 확인합니다.</p>
               </div>
               <button id="logoutButton" class="small ghost">로그아웃</button>
             </div>
@@ -110,7 +109,7 @@
               <div>
                 <h2 id="editorTitle">항목을 선택하세요</h2>
                 <p id="editorSubtitle">
-                  좌측 트리에서 레벨, 레이드, 적 템플릿 중 하나를 고르면 상세 편집기가 열립니다.
+                  왼쪽 트리에서 레벨, 레이드, 적 템플릿 중 하나를 선택하면 상세 편집기가 열립니다.
                 </p>
               </div>
               <div class="button-row wrap">
@@ -134,7 +133,7 @@
               </div>
             </div>
             <div id="editorForm" class="editor-form empty-state">
-              <p>왼쪽에서 항목을 선택하면 여기에서 수치를 수정할 수 있습니다.</p>
+              <p>왼쪽에서 항목을 선택하면 여기에서 현재 값을 수정할 수 있습니다.</p>
             </div>
           </section>
 
@@ -142,7 +141,7 @@
             <div class="panel-header">
               <div>
                 <h2>Manifest 원본</h2>
-                <p>전체 JSON을 복사하거나, 외부에서 수정한 manifest를 붙여 넣어 적용할 수 있습니다.</p>
+                <p>전체 JSON을 복사하거나 외부에서 수정한 manifest를 붙여 넣어 적용할 수 있습니다.</p>
               </div>
               <div class="button-row">
                 <button id="copyJsonButton" class="ghost small">JSON 복사</button>
@@ -168,7 +167,7 @@
             <div class="panel-header">
               <div>
                 <h2>배경 자산 라이브러리</h2>
-                <p>레벨/레이드 배경에 연결할 assetKey를 관리합니다.</p>
+                <p>레벨과 레이드 배경에 연결할 assetKey를 관리합니다.</p>
               </div>
             </div>
             <div class="form-grid">
@@ -191,7 +190,7 @@
             <div class="panel-header">
               <div>
                 <h2>릴리즈 이력</h2>
-                <p>과거 배포본을 다시 불러오거나 rollback할 수 있습니다.</p>
+                <p>과거 배포본을 다시 불러오거나 롤백할 수 있습니다.</p>
               </div>
             </div>
             <div id="releaseHistory" class="release-history"></div>

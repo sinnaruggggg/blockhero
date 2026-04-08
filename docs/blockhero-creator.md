@@ -1,36 +1,66 @@
 # BlockHero Creator
 
 ## 목적
-- 현재 게임 코드의 기본 레벨/레이드/적 템플릿을 초안으로 불러옵니다.
+- 현재 게임 코드의 기본 레벨, 레이드, 적 템플릿, 배경 설정을 초안으로 불러옵니다.
 - 관리자 계정으로 수정한 내용을 `creator_draft`에 저장하고 `creator_releases`로 배포합니다.
-- 일반 유저 앱은 published creator manifest를 내려받아 로컬 캐시에 저장해 사용합니다.
+- 일반 유저 앱은 published creator manifest를 받아와 로컬 캐시에 저장한 뒤 사용합니다.
 
-## PC 실행 방법
-### 개발용 웹 실행
+## 실행 방법
+
+### 웹 편집기
 1. 루트에서 [run-blockhero-creator.bat](/C:/www/game/blockhero_codex/run-blockhero-creator.bat)을 실행합니다.
 2. 브라우저에서 `http://localhost:4273`이 열립니다.
 3. 관리자 계정으로 로그인하면 draft 또는 최신 배포본이 자동으로 불러와집니다.
 
-### Windows 실행 파일
-1. 루트에서 `npm run creator:exe`를 실행합니다.
-2. 빌드가 끝나면 `tools/blockhero-creator-desktop/dist` 아래에 `BlockHero Creator` 실행 파일이 생성됩니다.
-3. 생성된 `.exe`를 실행하면 브라우저 없이 데스크톱 앱으로 편집기를 사용할 수 있습니다.
-4. 이후에는 [run-blockhero-creator-exe.bat](/C:/www/game/blockhero_codex/run-blockhero-creator-exe.bat)을 더블클릭해 바로 실행할 수 있습니다.
-5. launcher는 portable exe가 있으면 그 파일을 우선 실행하고, 없으면 `win-unpacked`의 실행 파일로 자동 fallback 합니다.
+### exe 실행기
+1. 루트에서 [run-blockhero-creator-exe.bat](/C:/www/game/blockhero_codex/run-blockhero-creator-exe.bat)을 실행합니다.
+2. 또는 `tools/blockhero-creator-desktop/dist` 아래의 최신 `BlockHero Creator *.exe`를 직접 실행합니다.
+3. 실행 후 관리자 계정으로 로그인하면 같은 편집기가 데스크톱 창으로 열립니다.
 
-## 주요 기능
-- 레벨 / 일반 레이드 / 보스 레이드 / 적 템플릿 트리 편집
-- 항목별 상세 수치 편집
-- 배경 assetKey 업로드 및 연결
-- draft 저장
-- publish
-- 릴리즈 이력 확인 및 rollback
-- 전체 manifest JSON 복사 / 붙여넣기
+## 첫 사용 흐름
+1. 로그인
+2. draft 자동 불러오기
+3. draft가 없으면 최신 published release 불러오기
+4. published도 없으면 기본 manifest를 생성해서 draft로 저장
+5. 좌측 트리에서 편집할 항목 선택
+6. 우측에서 값 수정
+7. `Draft 저장`
+8. `Publish`
+
+## 편집 가능한 항목
+- 레벨 스테이지
+  - 이름
+  - 월드 / 스테이지 번호
+  - 목표 수치
+  - 적 템플릿 연결
+  - 보상
+  - 배경
+- 일반 레이드
+  - 이름
+  - 단계
+  - 시간 제한
+  - 참가 규칙
+  - 보상
+  - 배경
+- 보스 레이드
+  - 이름
+  - 단계
+  - 시간 제한
+  - 참가 인원
+  - 보상
+  - 배경
+- 적 템플릿
+  - 이름
+  - 이모지
+  - 색상
+  - HP / 공격력
+  - 공격 주기
+  - 패턴
 
 ## 자동 불러오기 규칙
 - draft가 있으면 draft를 우선 사용합니다.
 - draft가 없고 published release가 있으면 최신 published release를 불러옵니다.
-- 둘 다 없으면 기본 manifest를 로드해서 새 draft를 만들 수 있습니다.
+- 둘 다 없으면 기본 manifest를 로드해서 새 draft를 만듭니다.
 
 ## 서버 테이블
 - draft: `creator_draft`
@@ -38,8 +68,11 @@
 - 배경 자산: `ui_assets`
 
 ## 권장 운영 순서
-1. Creator에서 draft 수정
-2. 배포 메모 작성
-3. Draft 저장
-4. Publish
-5. 폰 앱에서 실제 화면 검수
+1. 항목 선택
+2. 값 수정
+3. `Draft 저장`
+4. 다른 항목 점검
+5. 배포 메모 작성
+6. `Publish`
+7. 앱에서 실제 반영 확인
+8. 문제 있으면 `릴리즈 이력`에서 롤백
