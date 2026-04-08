@@ -78,6 +78,7 @@ export default function UiStudioScreen({navigation}: any) {
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showFullPreview, setShowFullPreview] = useState(false);
+  const [previewInteracting, setPreviewInteracting] = useState(false);
   const [activeScreen, setActiveScreen] = useState<VisualScreenId>('level');
   const [selectedElementId, setSelectedElementId] = useState<VisualElementId>('header');
   const [previewProfileId, setPreviewProfileId] = useState('current');
@@ -255,9 +256,9 @@ export default function UiStudioScreen({navigation}: any) {
       return targetMap[targetKey] ?? DEFAULT_VISUAL_BACKGROUND_OVERRIDE;
     }
 
-    if (activeScreen === 'raid') {
+    if (activeScreen === 'raidNormal' || activeScreen === 'raidBoss') {
       return (
-        draftManifest.screens.raid.backgrounds.byBossStage[
+        draftManifest.screens[activeScreen].backgrounds.byBossStage[
           String(numericPreviewRaidStage)
         ] ?? DEFAULT_VISUAL_BACKGROUND_OVERRIDE
       );
@@ -381,9 +382,9 @@ export default function UiStudioScreen({navigation}: any) {
             ...(targetMap[targetKey] ?? DEFAULT_VISUAL_BACKGROUND_OVERRIDE),
             ...patch,
           };
-        } else if (activeScreen === 'raid') {
-          next.screens.raid.backgrounds.byBossStage[String(numericPreviewRaidStage)] = {
-            ...(next.screens.raid.backgrounds.byBossStage[
+        } else if (activeScreen === 'raidNormal' || activeScreen === 'raidBoss') {
+          next.screens[activeScreen].backgrounds.byBossStage[String(numericPreviewRaidStage)] = {
+            ...(next.screens[activeScreen].backgrounds.byBossStage[
               String(numericPreviewRaidStage)
             ] ?? DEFAULT_VISUAL_BACKGROUND_OVERRIDE),
             ...patch,
@@ -413,8 +414,8 @@ export default function UiStudioScreen({navigation}: any) {
             ? String(numericPreviewWorld)
             : String(numericPreviewLevelId);
         delete targetMap[targetKey];
-      } else if (activeScreen === 'raid') {
-        delete next.screens.raid.backgrounds.byBossStage[String(numericPreviewRaidStage)];
+      } else if (activeScreen === 'raidNormal' || activeScreen === 'raidBoss') {
+        delete next.screens[activeScreen].backgrounds.byBossStage[String(numericPreviewRaidStage)];
       }
     });
   }, [
@@ -626,6 +627,7 @@ export default function UiStudioScreen({navigation}: any) {
         title="UI Studio"
         subtitle="실기기 기준 프리뷰로 배치와 배경을 조정하고 전역 배포합니다."
         onBack={() => navigation.goBack()}
+        scrollEnabled={!previewInteracting}
         contentContainerStyle={styles.contentContainer}>
         <GamePanel>
           <Text style={styles.sectionTitle}>화면 선택</Text>
@@ -789,6 +791,7 @@ export default function UiStudioScreen({navigation}: any) {
                 })
               }
               onMeasureElement={handleMeasureElement}
+              onInteractionChange={setPreviewInteracting}
             />
           </ViewShot>
         </GamePanel>
@@ -971,7 +974,9 @@ export default function UiStudioScreen({navigation}: any) {
           </View>
         </GamePanel>
 
-        {(activeScreen === 'level' || activeScreen === 'raid') && (
+        {(activeScreen === 'level' ||
+          activeScreen === 'raidNormal' ||
+          activeScreen === 'raidBoss') && (
           <GamePanel>
             <Text style={styles.sectionTitle}>배경 편집</Text>
             {activeScreen === 'level' ? (
@@ -1183,6 +1188,7 @@ export default function UiStudioScreen({navigation}: any) {
               })
             }
             onMeasureElement={handleMeasureElement}
+            onInteractionChange={setPreviewInteracting}
           />
         </View>
       </Modal>

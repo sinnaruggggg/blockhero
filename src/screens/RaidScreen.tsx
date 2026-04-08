@@ -109,6 +109,7 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import {getBoardMetrics} from '../components/Board';
 
 const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 
@@ -218,7 +219,9 @@ export default function RaidScreen({route, navigation}: any) {
   const {instanceId, bossStage, isNormalRaid = false} = route.params;
   const boss = RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
   const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
+  const raidScreenId = isNormalRaid ? 'raidNormal' : 'raidBoss';
   const bossAttackStats = getRaidBossAttackStats(bossStage);
+  const raidBoardMetrics = getBoardMetrics(Dimensions.get('window').width, {compact: true});
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
@@ -1728,6 +1731,7 @@ export default function RaidScreen({route, navigation}: any) {
   const raidBackgroundOverride = getRaidBackgroundOverride(
     visualManifest,
     boss.stage,
+    isNormalRaid,
   );
   const raidBackgroundSource =
     raidBackgroundOverride?.removeImage === true
@@ -1744,7 +1748,7 @@ export default function RaidScreen({route, navigation}: any) {
     : 'transparent';
   const raidComboGaugeRule = getVisualElementRule(
     visualManifest,
-    'raid',
+    raidScreenId,
     'combo_gauge',
   );
 
@@ -1881,7 +1885,7 @@ export default function RaidScreen({route, navigation}: any) {
           style={[styles.visualBackgroundTintLayer, {backgroundColor: raidBackgroundTint}]}
         />
       ) : null}
-      <VisualElementView screenId="raid" elementId="top_panel" style={styles.visualWrapper}>
+      <VisualElementView screenId={raidScreenId} elementId="top_panel" style={styles.visualWrapper}>
       {isNormalRaid ? (
         <>
           <View style={styles.normalRaidHeader}>
@@ -2039,7 +2043,7 @@ export default function RaidScreen({route, navigation}: any) {
 
       {/* Skill bar (hidden in spectator) */}
       {!spectatorMode && (
-        <VisualElementView screenId="raid" elementId="skill_bar">
+        <VisualElementView screenId={raidScreenId} elementId="skill_bar">
           <SkillBar
             currentGauge={skillGauge}
             charges={skillCharges}
@@ -2052,7 +2056,7 @@ export default function RaidScreen({route, navigation}: any) {
       )}
 
       {/* Damage info */}
-      <VisualElementView screenId="raid" elementId="info_bar" style={styles.visualWrapper}>
+      <VisualElementView screenId={raidScreenId} elementId="info_bar" style={styles.visualWrapper}>
       <View style={[styles.infoBar, isNormalRaid && styles.infoBarCompact]}>
         <Text style={styles.infoText}>{t('raid.yourDamage', myTotalDamage)}</Text>
         <Text style={styles.infoText}>
@@ -2116,37 +2120,39 @@ export default function RaidScreen({route, navigation}: any) {
           </View>
         </KeyboardAvoidingView>
       ) : (
-        <>
-          {/* Board */}
-        <VisualElementView screenId="raid" elementId="board" style={styles.visualWrapper}>
-        <View
-          style={[styles.boardContainer, isNormalRaid && styles.boardContainerCompact]}
-          onLayout={handleBoardLayout}>
-          {renderBoardStatusDock(isNormalRaid)}
-          <Board
-            ref={boardRef}
-            board={board}
-            backgroundColor={skinBoardBg}
-              compact
-              previewCells={dragDrop.previewCells}
-            invalidPreview={dragDrop.invalidPreview}
-            clearGuideCells={dragDrop.clearGuideCells}
-          />
-        </View>
-        </VisualElementView>
-
-          {/* Piece Selector */}
-          <VisualElementView screenId="raid" elementId="piece_tray">
-          <PieceSelector
-            pieces={pieces}
-            onDragStart={dragDrop.onDragStart}
-            onDragMove={dragDrop.onDragMove}
-            onDragEnd={dragDrop.onDragEnd}
-            onDragCancel={dragDrop.onDragCancel}
-            compact
-          />
+        <View style={styles.playArea}>
+          <VisualElementView screenId={raidScreenId} elementId="board" style={styles.visualWrapper}>
+            <View
+              style={[
+                styles.boardContainer,
+                isNormalRaid && styles.boardContainerCompact,
+                {minHeight: raidBoardMetrics.boardSize + 18},
+              ]}
+              onLayout={handleBoardLayout}>
+              {renderBoardStatusDock(isNormalRaid)}
+              <Board
+                ref={boardRef}
+                board={board}
+                backgroundColor={skinBoardBg}
+                compact
+                previewCells={dragDrop.previewCells}
+                invalidPreview={dragDrop.invalidPreview}
+                clearGuideCells={dragDrop.clearGuideCells}
+              />
+            </View>
           </VisualElementView>
-        </>
+
+          <VisualElementView screenId={raidScreenId} elementId="piece_tray">
+            <PieceSelector
+              pieces={pieces}
+              onDragStart={dragDrop.onDragStart}
+              onDragMove={dragDrop.onDragMove}
+              onDragEnd={dragDrop.onDragEnd}
+              onDragCancel={dragDrop.onDragCancel}
+              compact
+            />
+          </VisualElementView>
+        </View>
       )}
 
       {placementEffect && (
@@ -2628,14 +2634,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  boardContainer: {
+  playArea: {
     flex: 1,
-    flexShrink: 1,
+    justifyContent: 'space-between',
     minHeight: 0,
+  },
+  boardContainer: {
     position: 'relative',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 8,
+    width: '100%',
+    paddingTop: 4,
     paddingBottom: 8,
   },
   boardContainerCompact: {

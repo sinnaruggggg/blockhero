@@ -7,7 +7,6 @@ const BLOCK_SIZE = 18;
 const COMPACT_BLOCK_SIZE = 16;
 const BOARD_CELL_STEP = CELL_SIZE + CELL_GAP;
 const DRAG_OFFSET_Y = -Math.round(BOARD_CELL_STEP * 2.5); // 2 board blocks above finger
-const DRAG_EXTRA = 0.05; // 5% extra movement distance
 const BEVEL = 2;
 const TRAY_SLOT_SIZE = 108;
 const TRAY_SLOT_SIZE_COMPACT = 96;
@@ -96,6 +95,8 @@ export default function DraggablePiece({
         onStartShouldSetPanResponder: () => !!pieceRef.current,
         onMoveShouldSetPanResponder: (_, gs) =>
           !!pieceRef.current && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5),
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: () => {
           pan.setValue({x: 0, y: DRAG_OFFSET_Y});
           Animated.spring(scale, {
@@ -107,17 +108,17 @@ export default function DraggablePiece({
         },
         onPanResponderMove: (evt, gs) => {
           pan.setValue({
-            x: gs.dx * (1 + DRAG_EXTRA),
-            y: gs.dy * (1 + DRAG_EXTRA) + DRAG_OFFSET_Y,
+            x: gs.dx,
+            y: gs.dy + DRAG_OFFSET_Y,
           });
           callbacksRef.current.onDragMove(
-            evt.nativeEvent.pageX + gs.dx * DRAG_EXTRA,
-            evt.nativeEvent.pageY + gs.dy * DRAG_EXTRA + DRAG_OFFSET_Y,
+            gs.moveX || evt.nativeEvent.pageX,
+            (gs.moveY || evt.nativeEvent.pageY) + DRAG_OFFSET_Y,
           );
         },
         onPanResponderRelease: (evt, gs) => {
-          const finalX = evt.nativeEvent.pageX + gs.dx * DRAG_EXTRA;
-          const finalY = evt.nativeEvent.pageY + gs.dy * DRAG_EXTRA + DRAG_OFFSET_Y;
+          const finalX = gs.moveX || evt.nativeEvent.pageX;
+          const finalY = (gs.moveY || evt.nativeEvent.pageY) + DRAG_OFFSET_Y;
           Animated.spring(scale, {
             toValue: 1,
             useNativeDriver: false,

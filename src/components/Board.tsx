@@ -15,6 +15,28 @@ const COMPACT_CELL_SIZE = CELL_SIZE * COMPACT_SCALE;
 const COMPACT_CELL_GAP = CELL_GAP * COMPACT_SCALE;
 const COMPACT_BOARD_PADDING = BOARD_PADDING * COMPACT_SCALE;
 
+export function getBoardMetrics(
+  viewportWidth = SCREEN_WIDTH,
+  options?: {small?: boolean; compact?: boolean},
+) {
+  const scale = options?.small ? 0.4 : options?.compact ? COMPACT_SCALE : 1;
+  const baseBoardWidth = Math.min(viewportWidth - 48, 388);
+  const baseCellSize =
+    (baseBoardWidth - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
+  const cellSize = baseCellSize * scale;
+  const gap = CELL_GAP * scale;
+  const padding = BOARD_PADDING * scale;
+  const boardSize = cellSize * COLS + gap * (COLS - 1) + padding * 2;
+
+  return {
+    scale,
+    cellSize,
+    gap,
+    padding,
+    boardSize,
+  };
+}
+
 // Voxel 3D helpers
 function hexToRgb(hex: string): {r: number; g: number; b: number} {
   const h = hex.replace('#', '');
@@ -134,13 +156,8 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
   },
   ref,
 ) {
-  const scale = small ? 0.4 : compact ? COMPACT_SCALE : 1;
-  const baseBoardWidth = Math.min((viewportWidth ?? SCREEN_WIDTH) - 48, 388);
-  const baseCellSize =
-    (baseBoardWidth - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
-  const cellSize = baseCellSize * scale;
-  const gap = CELL_GAP * scale;
-  const padding = BOARD_PADDING * scale;
+  const metrics = getBoardMetrics(viewportWidth ?? SCREEN_WIDTH, {small, compact});
+  const {cellSize, gap, padding} = metrics;
 
   const previewMap = useRef(new Map<string, string>());
   previewMap.current.clear();

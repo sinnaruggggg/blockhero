@@ -1,4 +1,9 @@
-export type VisualScreenId = 'level' | 'endless' | 'battle' | 'raid';
+export type VisualScreenId =
+  | 'level'
+  | 'endless'
+  | 'battle'
+  | 'raidNormal'
+  | 'raidBoss';
 
 export type VisualViewport = {
   width: number;
@@ -114,15 +119,17 @@ export type VisualConfigManifest = {
     level: LevelScreenVisualConfig;
     endless: EndlessScreenVisualConfig;
     battle: BattleScreenVisualConfig;
-    raid: RaidScreenVisualConfig;
+    raidNormal: RaidScreenVisualConfig;
+    raidBoss: RaidScreenVisualConfig;
   };
 };
 
 export const VISUAL_SCREEN_LABELS: Record<VisualScreenId, string> = {
-  level: '레벨 모드',
-  endless: '무한 모드',
-  battle: '대전 모드',
-  raid: '레이드 모드',
+  level: '?? ??',
+  endless: '?? ??',
+  battle: '?? ??',
+  raidNormal: '?? ??? ??',
+  raidBoss: '?? ??? ??',
 };
 
 export const DEFAULT_VISUAL_REFERENCE_VIEWPORT: VisualViewport = {
@@ -196,19 +203,27 @@ export const VISUAL_ELEMENT_LABELS: Record<VisualScreenId, {id: string; label: s
       {id: 'combo_gauge', label: '콤보 게이지'},
     ],
     battle: [
-      {id: 'back_button', label: '뒤로가기 버튼'},
-      {id: 'opponent_panel', label: '상대 패널'},
-      {id: 'attack_bar', label: '공격 바'},
-      {id: 'board', label: '보드'},
-      {id: 'piece_tray', label: '하단 블록 트레이'},
+      {id: 'back_button', label: '???? ??'},
+      {id: 'opponent_panel', label: '?? ??'},
+      {id: 'attack_bar', label: '?? ?'},
+      {id: 'board', label: '??'},
+      {id: 'piece_tray', label: '?? ?? ???'},
     ],
-    raid: [
-      {id: 'top_panel', label: '상단 보스 영역'},
-      {id: 'skill_bar', label: '스킬 바'},
-      {id: 'info_bar', label: '정보 바'},
-      {id: 'board', label: '보드'},
-      {id: 'piece_tray', label: '하단 블록 트레이'},
-      {id: 'combo_gauge', label: '콤보 게이지'},
+    raidNormal: [
+      {id: 'top_panel', label: '?? ??? ??'},
+      {id: 'skill_bar', label: '?? ?'},
+      {id: 'info_bar', label: '?? ?'},
+      {id: 'board', label: '??'},
+      {id: 'piece_tray', label: '?? ?? ???'},
+      {id: 'combo_gauge', label: '?? ???'},
+    ],
+    raidBoss: [
+      {id: 'top_panel', label: '?? ??? ??'},
+      {id: 'skill_bar', label: '?? ?'},
+      {id: 'info_bar', label: '?? ?'},
+      {id: 'board', label: '??'},
+      {id: 'piece_tray', label: '?? ?? ???'},
+      {id: 'combo_gauge', label: '?? ???'},
     ],
   };
 
@@ -269,8 +284,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'item_bar',
         'combo_gauge',
       ]),
-    },
-    battle: {
+    },    battle: {
       elements: createRules<BattleElementId>([
         'back_button',
         'opponent_panel',
@@ -279,7 +293,20 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'piece_tray',
       ]),
     },
-    raid: {
+    raidNormal: {
+      elements: createRules<RaidElementId>([
+        'top_panel',
+        'skill_bar',
+        'info_bar',
+        'board',
+        'piece_tray',
+        'combo_gauge',
+      ]),
+      backgrounds: {
+        byBossStage: {},
+      },
+    },
+    raidBoss: {
       elements: createRules<RaidElementId>([
         'top_panel',
         'skill_bar',
@@ -370,24 +397,18 @@ function sanitizeStudioSnapshots(
     >
   > | null,
 ) {
-  const result: Partial<
-    Record<
-      VisualScreenId,
-      {
-        assetKey: string | null;
-        capturedAt: string;
-        viewport: VisualViewport;
-        referenceViewport: VisualViewport;
-        elementFrames: Record<string, VisualElementFrame>;
-        elementRules: Record<string, VisualElementRule>;
-      }
-    >
-  > = {};
-
-  (Object.keys(VISUAL_SCREEN_LABELS) as VisualScreenId[]).forEach(screenId => {
-    const snapshot = value?.[screenId];
+  const sanitizeSnapshot = (
+    snapshot?: {
+      assetKey?: string | null;
+      capturedAt?: string;
+      viewport?: Partial<VisualViewport>;
+      referenceViewport?: Partial<VisualViewport>;
+      elementFrames?: Record<string, Partial<VisualElementFrame>>;
+      elementRules?: Record<string, Partial<VisualElementRule>>;
+    } | null,
+  ) => {
     if (!snapshot) {
-      return;
+      return null;
     }
 
     const elementFrames: Record<string, VisualElementFrame> = {};
@@ -400,7 +421,7 @@ function sanitizeStudioSnapshots(
       elementRules[elementId] = sanitizeElementRule(rule);
     });
 
-    result[screenId] = {
+    return {
       assetKey:
         typeof snapshot.assetKey === 'string' && snapshot.assetKey.trim().length > 0
           ? snapshot.assetKey.trim()
@@ -414,7 +435,41 @@ function sanitizeStudioSnapshots(
       elementFrames,
       elementRules,
     };
+  };
+
+  const result: Partial<
+    Record<
+      VisualScreenId,
+      {
+        assetKey: string | null;
+        capturedAt: string;
+        viewport: VisualViewport;
+        referenceViewport: VisualViewport;
+        elementFrames: Record<string, VisualElementFrame>;
+        elementRules: Record<string, VisualElementRule>;
+      }
+    >
+  > = {};
+  const legacyRaidSnapshot = (value as Record<string, any> | undefined)?.raid;
+
+  (Object.keys(VISUAL_SCREEN_LABELS) as VisualScreenId[]).forEach(screenId => {
+    const snapshot = value?.[screenId];
+    if (!snapshot) {
+      return;
+    }
+    const sanitizedSnapshot = sanitizeSnapshot(snapshot);
+    if (sanitizedSnapshot) {
+      result[screenId] = sanitizedSnapshot;
+    }
   });
+
+  if (legacyRaidSnapshot) {
+    const sanitizedLegacySnapshot = sanitizeSnapshot(legacyRaidSnapshot);
+    if (sanitizedLegacySnapshot) {
+      result.raidNormal = result.raidNormal ?? sanitizedLegacySnapshot;
+      result.raidBoss = result.raidBoss ?? sanitizedLegacySnapshot;
+    }
+  }
 
   return result;
 }
@@ -468,6 +523,8 @@ function sanitizeBackgroundMap(
 export function sanitizeVisualConfigManifest(
   value?: Partial<VisualConfigManifest> | null,
 ): VisualConfigManifest {
+  const legacyRaidScreen = (value?.screens as Record<string, any> | undefined)?.raid;
+
   return {
     version: Math.max(0, Math.round(Number(value?.version) || 0)),
     referenceViewport: sanitizeViewport(value?.referenceViewport),
@@ -501,16 +558,31 @@ export function sanitizeVisualConfigManifest(
             | undefined,
         ),
       },
-      raid: {
+      raidNormal: {
         elements: sanitizeElementMap(
-          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raid.elements,
-          value?.screens?.raid?.elements as
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidNormal.elements,
+          (value?.screens?.raidNormal?.elements ?? legacyRaidScreen?.elements) as
             | Partial<Record<RaidElementId, Partial<VisualElementRule>>>
             | undefined,
         ),
         backgrounds: {
           byBossStage: sanitizeBackgroundMap(
-            value?.screens?.raid?.backgrounds?.byBossStage,
+            value?.screens?.raidNormal?.backgrounds?.byBossStage ??
+              legacyRaidScreen?.backgrounds?.byBossStage,
+          ),
+        },
+      },
+      raidBoss: {
+        elements: sanitizeElementMap(
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidBoss.elements,
+          (value?.screens?.raidBoss?.elements ?? legacyRaidScreen?.elements) as
+            | Partial<Record<RaidElementId, Partial<VisualElementRule>>>
+            | undefined,
+        ),
+        backgrounds: {
+          byBossStage: sanitizeBackgroundMap(
+            value?.screens?.raidBoss?.backgrounds?.byBossStage ??
+              legacyRaidScreen?.backgrounds?.byBossStage,
           ),
         },
       },
@@ -539,8 +611,10 @@ export function getLevelBackgroundOverride(
 export function getRaidBackgroundOverride(
   manifest: VisualConfigManifest,
   bossStage: number,
+  isNormalRaid = false,
 ) {
-  return manifest.screens.raid.backgrounds.byBossStage[String(bossStage)] ?? null;
+  const raidScreen = isNormalRaid ? manifest.screens.raidNormal : manifest.screens.raidBoss;
+  return raidScreen.backgrounds.byBossStage[String(bossStage)] ?? null;
 }
 
 export function collectReferencedVisualAssetKeys(
@@ -557,7 +631,12 @@ export function collectReferencedVisualAssetKeys(
       keys.add(rule.assetKey);
     }
   });
-  Object.values(manifest.screens.raid.backgrounds.byBossStage).forEach(rule => {
+  Object.values(manifest.screens.raidNormal.backgrounds.byBossStage).forEach(rule => {
+    if (rule.assetKey) {
+      keys.add(rule.assetKey);
+    }
+  });
+  Object.values(manifest.screens.raidBoss.backgrounds.byBossStage).forEach(rule => {
     if (rule.assetKey) {
       keys.add(rule.assetKey);
     }

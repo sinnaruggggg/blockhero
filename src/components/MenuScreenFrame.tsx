@@ -19,18 +19,21 @@ export default function MenuScreenFrame({
   onBack,
   children,
   contentContainerStyle,
+  scrollEnabled = true,
 }: {
   title: string;
   subtitle?: string;
   onBack: () => void;
   children: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
+  scrollEnabled?: boolean;
 }) {
   return (
     <ImageBackground source={IMG_BG} resizeMode="cover" style={styles.background}>
       <View style={styles.scrim} />
       <SafeAreaView style={styles.safeArea}>
         <ScrollView
+          scrollEnabled={scrollEnabled}
           contentContainerStyle={[styles.content, contentContainerStyle]}
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>

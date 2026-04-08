@@ -104,6 +104,7 @@ function EditorFrame({
   onSelect,
   onMove,
   onMeasure,
+  onInteractionChange,
   style,
   children,
 }: {
@@ -123,6 +124,7 @@ function EditorFrame({
       rule: VisualElementRule;
     },
   ) => void;
+  onInteractionChange?: (active: boolean) => void;
   style?: any;
   children: React.ReactNode;
 }) {
@@ -141,8 +143,13 @@ function EditorFrame({
       PanResponder.create({
         onStartShouldSetPanResponder: () => selected,
         onMoveShouldSetPanResponder: () => selected,
+        onStartShouldSetPanResponderCapture: () => selected,
+        onMoveShouldSetPanResponderCapture: () => selected,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: () => {
           dragOriginRef.current = {x: rule.offsetX, y: rule.offsetY};
+          onInteractionChange?.(true);
         },
         onPanResponderMove: (_event, gestureState) => {
           onMove(
@@ -151,8 +158,22 @@ function EditorFrame({
             dragOriginRef.current.y + gestureState.dy / Math.max(displayScale, 0.001),
           );
         },
+        onPanResponderRelease: () => {
+          onInteractionChange?.(false);
+        },
+        onPanResponderTerminate: () => {
+          onInteractionChange?.(false);
+        },
       }),
-    [displayScale, elementId, onMove, rule.offsetX, rule.offsetY, selected],
+    [
+      displayScale,
+      elementId,
+      onInteractionChange,
+      onMove,
+      rule.offsetX,
+      rule.offsetY,
+      selected,
+    ],
   );
 
   if (!rule.visible) {
@@ -233,6 +254,7 @@ export default function VisualRuntimePreview({
   onSelectElement,
   onMoveElement,
   onMeasureElement,
+  onInteractionChange,
 }: {
   screenId: VisualScreenId;
   manifest: VisualConfigManifest;
@@ -253,6 +275,7 @@ export default function VisualRuntimePreview({
       rule: VisualElementRule;
     },
   ) => void;
+  onInteractionChange?: (active: boolean) => void;
 }) {
   const board = useMemo(() => buildPreviewBoard(), []);
   const enemyBoard = useMemo(() => buildSmallPreviewBoard(), []);
@@ -261,7 +284,16 @@ export default function VisualRuntimePreview({
     previewLevelId,
     previewWorld,
   );
-  const raidBackgroundOverride = getRaidBackgroundOverride(manifest, previewRaidStage);
+  const raidNormalBackgroundOverride = getRaidBackgroundOverride(
+    manifest,
+    previewRaidStage,
+    true,
+  );
+  const raidBossBackgroundOverride = getRaidBackgroundOverride(
+    manifest,
+    previewRaidStage,
+    false,
+  );
   const levelBackgroundSource =
     levelBackgroundOverride?.removeImage === true
       ? null
@@ -269,18 +301,22 @@ export default function VisualRuntimePreview({
           assetUris[levelBackgroundOverride.assetKey]
         ? {uri: assetUris[levelBackgroundOverride.assetKey]}
         : LEVEL_BG;
-  const raidBackgroundSource =
-    raidBackgroundOverride?.removeImage === true
+  const buildRaidBackgroundSource = (backgroundOverride: ReturnType<typeof getRaidBackgroundOverride>) =>
+    backgroundOverride?.removeImage === true
       ? null
-      : raidBackgroundOverride?.assetKey &&
-          assetUris[raidBackgroundOverride.assetKey]
-        ? {uri: assetUris[raidBackgroundOverride.assetKey]}
+      : backgroundOverride?.assetKey &&
+          assetUris[backgroundOverride.assetKey]
+        ? {uri: assetUris[backgroundOverride.assetKey]}
         : LEVEL_BG;
+  const raidNormalBackgroundSource = buildRaidBackgroundSource(raidNormalBackgroundOverride);
+  const raidBossBackgroundSource = buildRaidBackgroundSource(raidBossBackgroundOverride);
   const backgroundSource =
     screenId === 'level'
       ? levelBackgroundSource
-      : screenId === 'raid'
-        ? raidBackgroundSource
+      : screenId === 'raidNormal'
+        ? raidNormalBackgroundSource
+        : screenId === 'raidBoss'
+          ? raidBossBackgroundSource
         : null;
   const tintColor =
     screenId === 'level' && levelBackgroundOverride
@@ -288,10 +324,15 @@ export default function VisualRuntimePreview({
           levelBackgroundOverride.tintColor,
           levelBackgroundOverride.tintOpacity,
         )
-      : screenId === 'raid' && raidBackgroundOverride
+      : screenId === 'raidNormal' && raidNormalBackgroundOverride
         ? buildVisualTintColor(
-            raidBackgroundOverride.tintColor,
-            raidBackgroundOverride.tintOpacity,
+            raidNormalBackgroundOverride.tintColor,
+            raidNormalBackgroundOverride.tintOpacity,
+          )
+        : screenId === 'raidBoss' && raidBossBackgroundOverride
+          ? buildVisualTintColor(
+            raidBossBackgroundOverride.tintColor,
+            raidBossBackgroundOverride.tintOpacity,
           )
         : 'transparent';
 
@@ -303,7 +344,8 @@ export default function VisualRuntimePreview({
 
   const comboGaugeLevel = getVisualElementRule(manifest, 'level', 'combo_gauge');
   const comboGaugeEndless = getVisualElementRule(manifest, 'endless', 'combo_gauge');
-  const comboGaugeRaid = getVisualElementRule(manifest, 'raid', 'combo_gauge');
+  const comboGaugeRaidNormal = getVisualElementRule(manifest, 'raidNormal', 'combo_gauge');
+  const comboGaugeRaidBoss = getVisualElementRule(manifest, 'raidBoss', 'combo_gauge');
   const reportLevelMeasure = useMemo(
     () =>
       (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
@@ -322,10 +364,16 @@ export default function VisualRuntimePreview({
         onMeasureElement?.('battle', elementId, payload),
     [onMeasureElement],
   );
-  const reportRaidMeasure = useMemo(
+  const reportRaidNormalMeasure = useMemo(
     () =>
       (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
-        onMeasureElement?.('raid', elementId, payload),
+        onMeasureElement?.('raidNormal', elementId, payload),
+    [onMeasureElement],
+  );
+  const reportRaidBossMeasure = useMemo(
+    () =>
+      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+        onMeasureElement?.('raidBoss', elementId, payload),
     [onMeasureElement],
   );
 
@@ -689,22 +737,158 @@ export default function VisualRuntimePreview({
     </View>
   );
 
-  const renderRaid = () => (
+  const renderRaidNormal = () => (
     <View style={[styles.runtimeScreen, contentPadding]}>
       <EditorFrame
-        label="상단 보스 영역"
+        label="?? ??? ??"
         selected={selectedElementId === 'top_panel'}
         elementId="top_panel"
         viewport={viewport}
         displayScale={displayScale}
         manifest={manifest}
-        screenId="raid"
+        screenId="raidNormal"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportRaidMeasure}>
+        onMeasure={reportRaidNormalMeasure}
+        onInteractionChange={onInteractionChange}>
+        <View style={styles.raidNormalTopPanel}>
+          <View style={styles.raidPartyColumn}>
+            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
+            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
+          </View>
+          <View style={styles.raidNormalBossCard}>
+            <Text style={styles.raidNormalBossName}>????</Text>
+            <View style={styles.raidNormalBossOrb}>
+              <Text style={styles.raidNormalBossEmoji}>??</Text>
+            </View>
+            <View style={styles.raidNormalHpTrack}>
+              <View style={[styles.raidNormalHpFill, {width: '71%'}]} />
+            </View>
+            <Text style={styles.raidNormalHpText}>98,758 / 100,000</Text>
+          </View>
+          <View style={styles.raidPartyColumn}>
+            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
+            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
+          </View>
+        </View>
+      </EditorFrame>
+
+      <EditorFrame
+        label="?? ?"
+        selected={selectedElementId === 'skill_bar'}
+        elementId="skill_bar"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidNormal"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidNormalMeasure}
+        onInteractionChange={onInteractionChange}
+        style={styles.sectionGapSmall}>
+        <SkillBar
+          currentGauge={0}
+          charges={{3: 1, 7: 0, 12: 0, 20: 0, 50: 0}}
+          activeMultiplier={1}
+          skillLevels={{1: 1, 3: 2, 7: 0, 12: 0, 20: 0, 50: 0}}
+          onSelectSkill={() => undefined}
+          disabled={false}
+        />
+      </EditorFrame>
+
+      <EditorFrame
+        label="?? ?"
+        selected={selectedElementId === 'info_bar'}
+        elementId="info_bar"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidNormal"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidNormalMeasure}
+        onInteractionChange={onInteractionChange}
+        style={styles.sectionGapSmall}>
+        <View style={styles.statusBar}>
+          <Text style={styles.statusBarText}>? ?? ??? 1,242</Text>
+          <Text style={styles.statusBarSub}>??? 0</Text>
+        </View>
+      </EditorFrame>
+
+      <EditorFrame
+        label="??"
+        selected={selectedElementId === 'board'}
+        elementId="board"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidNormal"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidNormalMeasure}
+        onInteractionChange={onInteractionChange}
+        style={[styles.sectionGap, styles.centered]}>
+        <View>
+          <Board board={board} compact viewportWidth={viewport.width} />
+          {comboGaugeRaidNormal.visible ? (
+            <ComboGaugeOverlay
+              combo={1}
+              comboRemainingMs={6400}
+              comboMaxMs={7000}
+              compact
+              style={buildVisualElementStyle(
+                comboGaugeRaidNormal,
+                viewport,
+                manifest.referenceViewport,
+              )}
+            />
+          ) : null}
+        </View>
+      </EditorFrame>
+
+      <View style={styles.flexFill} />
+
+      <EditorFrame
+        label="?? ?? ???"
+        selected={selectedElementId === 'piece_tray'}
+        elementId="piece_tray"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidNormal"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidNormalMeasure}
+        onInteractionChange={onInteractionChange}>
+        <PieceSelector
+          pieces={SAMPLE_PIECES}
+          onDragStart={() => undefined}
+          onDragMove={() => undefined}
+          onDragEnd={() => undefined}
+          onDragCancel={() => undefined}
+          compact
+        />
+      </EditorFrame>
+    </View>
+  );
+
+  const renderRaidBoss = () => (
+    <View style={[styles.runtimeScreen, contentPadding]}>
+      <EditorFrame
+        label="?? ??? ??"
+        selected={selectedElementId === 'top_panel'}
+        elementId="top_panel"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidBoss"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidBossMeasure}
+        onInteractionChange={onInteractionChange}>
         <BossDisplay
-          bossName="킹슬라임"
-          bossEmoji="🟢"
+          bossName="????"
+          bossEmoji="??"
           bossColor="#4ade80"
           currentHp={8420}
           maxHp={14000}
@@ -718,16 +902,17 @@ export default function VisualRuntimePreview({
       </EditorFrame>
 
       <EditorFrame
-        label="스킬 바"
+        label="?? ?"
         selected={selectedElementId === 'skill_bar'}
         elementId="skill_bar"
         viewport={viewport}
         displayScale={displayScale}
         manifest={manifest}
-        screenId="raid"
+        screenId="raidBoss"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportRaidMeasure}
+        onMeasure={reportRaidBossMeasure}
+        onInteractionChange={onInteractionChange}
         style={styles.sectionGapSmall}>
         <SkillBar
           currentGauge={17}
@@ -740,38 +925,40 @@ export default function VisualRuntimePreview({
       </EditorFrame>
 
       <EditorFrame
-        label="정보 바"
+        label="?? ?"
         selected={selectedElementId === 'info_bar'}
         elementId="info_bar"
         viewport={viewport}
         displayScale={displayScale}
         manifest={manifest}
-        screenId="raid"
+        screenId="raidBoss"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportRaidMeasure}
+        onMeasure={reportRaidBossMeasure}
+        onInteractionChange={onInteractionChange}
         style={styles.sectionGapSmall}>
         <View style={styles.statusBar}>
-          <Text style={styles.statusBarText}>내 누적 대미지 8,420</Text>
-          <Text style={styles.statusBarSub}>게이지 17</Text>
+          <Text style={styles.statusBarText}>? ?? ??? 8,420</Text>
+          <Text style={styles.statusBarSub}>??? 17</Text>
         </View>
       </EditorFrame>
 
       <EditorFrame
-        label="보드"
+        label="??"
         selected={selectedElementId === 'board'}
         elementId="board"
         viewport={viewport}
         displayScale={displayScale}
         manifest={manifest}
-        screenId="raid"
+        screenId="raidBoss"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportRaidMeasure}
+        onMeasure={reportRaidBossMeasure}
+        onInteractionChange={onInteractionChange}
         style={[styles.sectionGap, styles.centered]}>
         <View>
           <Board board={board} compact viewportWidth={viewport.width} />
-          {comboGaugeRaid.visible ? (
+          {comboGaugeRaidBoss.visible ? (
             <ComboGaugeOverlay
               combo={9}
               comboRemainingMs={4700}
@@ -781,7 +968,7 @@ export default function VisualRuntimePreview({
               feverMaxMs={12000}
               compact
               style={buildVisualElementStyle(
-                comboGaugeRaid,
+                comboGaugeRaidBoss,
                 viewport,
                 manifest.referenceViewport,
               )}
@@ -793,16 +980,17 @@ export default function VisualRuntimePreview({
       <View style={styles.flexFill} />
 
       <EditorFrame
-        label="하단 블록 트레이"
+        label="?? ?? ???"
         selected={selectedElementId === 'piece_tray'}
         elementId="piece_tray"
         viewport={viewport}
         displayScale={displayScale}
         manifest={manifest}
-        screenId="raid"
+        screenId="raidBoss"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportRaidMeasure}>
+        onMeasure={reportRaidBossMeasure}
+        onInteractionChange={onInteractionChange}>
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -822,7 +1010,9 @@ export default function VisualRuntimePreview({
         ? renderEndless()
         : screenId === 'battle'
           ? renderBattle()
-          : renderRaid();
+          : screenId === 'raidNormal'
+            ? renderRaidNormal()
+            : renderRaidBoss();
 
   return (
     <View style={styles.previewHost}>
@@ -941,6 +1131,77 @@ const styles = StyleSheet.create({
   sectionGapSmall: {marginTop: 8},
   centered: {alignSelf: 'center'},
   flexFill: {flex: 1},
+  raidNormalTopPanel: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 8,
+  },
+  raidPartyColumn: {
+    width: 62,
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  raidPartySlot: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  raidPartySlotText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  raidNormalBossCard: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15, 10, 46, 0.55)',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  raidNormalBossName: {
+    color: '#4ade80',
+    fontSize: 14,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  raidNormalBossOrb: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34,197,94,0.14)',
+  },
+  raidNormalBossEmoji: {
+    fontSize: 28,
+  },
+  raidNormalHpTrack: {
+    width: '100%',
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#111827',
+    marginTop: 6,
+  },
+  raidNormalHpFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+  },
+  raidNormalHpText: {
+    color: '#e2e8f0',
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 3,
+  },
   levelHeader: {
     flexDirection: 'row',
     alignItems: 'center',

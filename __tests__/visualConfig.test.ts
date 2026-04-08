@@ -44,8 +44,8 @@ describe('visualConfig helpers', () => {
     const manifest = sanitizeVisualConfigManifest({
       screens: {
         ...DEFAULT_VISUAL_CONFIG_MANIFEST.screens,
-        raid: {
-          ...DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raid,
+        raidBoss: {
+          ...DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidBoss,
           backgrounds: {
             byBossStage: {
               '5': {
@@ -60,8 +60,8 @@ describe('visualConfig helpers', () => {
       },
     });
 
-    expect(getRaidBackgroundOverride(manifest, 5)?.assetKey).toBe('raid-bg');
-    expect(getRaidBackgroundOverride(manifest, 1)).toBeNull();
+    expect(getRaidBackgroundOverride(manifest, 5, false)?.assetKey).toBe('raid-bg');
+    expect(getRaidBackgroundOverride(manifest, 1, false)).toBeNull();
   });
 
   it('collects referenced asset keys without duplicates', () => {
@@ -111,8 +111,8 @@ describe('visualConfig helpers', () => {
             },
           },
         },
-        raid: {
-          ...DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raid,
+        raidNormal: {
+          ...DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidNormal,
           backgrounds: {
             byBossStage: {
               '2': {
@@ -134,10 +134,67 @@ describe('visualConfig helpers', () => {
     ]);
   });
 
-  it('sanitizes studio snapshot metadata', () => {
+  it('reuses legacy raid snapshot and backgrounds for split raid screens', () => {
     const manifest = sanitizeVisualConfigManifest({
       studioSnapshots: {
         raid: {
+          assetKey: 'legacy-raid-shot',
+          capturedAt: '2026-04-08T11:00:00.000Z',
+          viewport: {width: 430, height: 932, safeTop: 59, safeBottom: 34},
+          referenceViewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+          elementFrames: {
+            board: {x: 24, y: 320, width: 344, height: 345},
+          },
+          elementRules: {
+            board: {
+              offsetX: 12,
+              offsetY: -6,
+              scale: 1.1,
+              opacity: 0.9,
+              visible: true,
+              zIndex: 3,
+              safeAreaAware: false,
+            },
+          },
+        },
+      } as any,
+      screens: {
+        raid: {
+          elements: {
+            board: {
+              offsetX: 18,
+              offsetY: 9,
+              scale: 1,
+              opacity: 1,
+              visible: true,
+              zIndex: 0,
+              safeAreaAware: false,
+            },
+          },
+          backgrounds: {
+            byBossStage: {
+              '7': {
+                assetKey: 'legacy-raid-bg',
+                tintColor: '#123456',
+                tintOpacity: 0.4,
+                removeImage: false,
+              },
+            },
+          },
+        } as any,
+      } as any,
+    });
+
+    expect(manifest.studioSnapshots?.raidNormal?.assetKey).toBe('legacy-raid-shot');
+    expect(manifest.studioSnapshots?.raidBoss?.assetKey).toBe('legacy-raid-shot');
+    expect(getRaidBackgroundOverride(manifest, 7, true)?.assetKey).toBe('legacy-raid-bg');
+    expect(getRaidBackgroundOverride(manifest, 7, false)?.assetKey).toBe('legacy-raid-bg');
+  });
+
+  it('sanitizes studio snapshot metadata', () => {
+    const manifest = sanitizeVisualConfigManifest({
+      studioSnapshots: {
+        raidBoss: {
           assetKey: ' studio-shot ',
           capturedAt: '2026-04-08T11:00:00.000Z',
           viewport: {width: 430, height: 932, safeTop: 59, safeBottom: 34},
@@ -160,14 +217,14 @@ describe('visualConfig helpers', () => {
       },
     });
 
-    expect(manifest.studioSnapshots?.raid?.assetKey).toBe('studio-shot');
-    expect(manifest.studioSnapshots?.raid?.elementFrames.board).toEqual({
+    expect(manifest.studioSnapshots?.raidBoss?.assetKey).toBe('studio-shot');
+    expect(manifest.studioSnapshots?.raidBoss?.elementFrames.board).toEqual({
       x: 25,
       y: 320,
       width: 344,
       height: 345,
     });
-    expect(manifest.studioSnapshots?.raid?.elementRules.board.offsetX).toBe(12);
+    expect(manifest.studioSnapshots?.raidBoss?.elementRules.board.offsetX).toBe(12);
   });
 
   it('sanitizes and preserves reference viewport metadata', () => {

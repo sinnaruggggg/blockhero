@@ -55,6 +55,8 @@ const SCREEN_LABELS = {
   level: '레벨 모드',
   endless: '무한 모드',
   battle: '대전 모드',
+  raidNormal: '일반 레이드',
+  raidBoss: '보스 레이드',
   raid: '레이드 모드',
 };
 
@@ -83,6 +85,22 @@ const ELEMENT_DEFS = {
     {id: 'attack_bar', label: '공격 바'},
     {id: 'board', label: '블록 보드'},
     {id: 'piece_tray', label: '블록 트레이'},
+  ],
+  raidNormal: [
+    {id: 'top_panel', label: '보스 패널'},
+    {id: 'skill_bar', label: '스킬 바'},
+    {id: 'info_bar', label: '정보 바'},
+    {id: 'board', label: '블록 보드'},
+    {id: 'piece_tray', label: '블록 트레이'},
+    {id: 'combo_gauge', label: '콤보 게이지'},
+  ],
+  raidBoss: [
+    {id: 'top_panel', label: '보스 패널'},
+    {id: 'skill_bar', label: '스킬 바'},
+    {id: 'info_bar', label: '정보 바'},
+    {id: 'board', label: '블록 보드'},
+    {id: 'piece_tray', label: '블록 트레이'},
+    {id: 'combo_gauge', label: '콤보 게이지'},
   ],
   raid: [
     {id: 'top_panel', label: '보스 패널'},
@@ -213,6 +231,22 @@ const ELEMENT_HELP = {
       description: '대전 중 새 블록을 선택하는 영역입니다.',
       tips: ['채팅/재도전 모달이 떠도 조작이 막히지 않는 위치를 유지하세요.'],
     },
+  },
+  raidNormal: {
+    top_panel: {left: 12, top: 34, width: 388, height: 188},
+    skill_bar: {left: 20, top: 232, width: 372, height: 54},
+    info_bar: {left: 20, top: 294, width: 372, height: 50},
+    board: {left: 34, top: 372, width: 344, height: 344},
+    piece_tray: {left: 16, top: 746, width: 380, height: 126},
+    combo_gauge: {left: 106, top: 380, width: 200, height: 42},
+  },
+  raidBoss: {
+    top_panel: {left: 12, top: 34, width: 388, height: 188},
+    skill_bar: {left: 20, top: 232, width: 372, height: 54},
+    info_bar: {left: 20, top: 294, width: 372, height: 50},
+    board: {left: 34, top: 372, width: 344, height: 344},
+    piece_tray: {left: 16, top: 746, width: 380, height: 126},
+    combo_gauge: {left: 106, top: 380, width: 200, height: 42},
   },
   raid: {
     top_panel: {
@@ -401,6 +435,14 @@ function createDefaultManifest() {
       battle: {
         elements: Object.fromEntries(ELEMENT_DEFS.battle.map(({id}) => [id, clone(DEFAULT_RULE)])),
       },
+      raidNormal: {
+        elements: Object.fromEntries(ELEMENT_DEFS.raidNormal.map(({id}) => [id, clone(DEFAULT_RULE)])),
+        backgrounds: {byBossStage: {}},
+      },
+      raidBoss: {
+        elements: Object.fromEntries(ELEMENT_DEFS.raidBoss.map(({id}) => [id, clone(DEFAULT_RULE)])),
+        backgrounds: {byBossStage: {}},
+      },
       raid: {
         elements: Object.fromEntries(ELEMENT_DEFS.raid.map(({id}) => [id, clone(DEFAULT_RULE)])),
         backgrounds: {byBossStage: {}},
@@ -488,13 +530,18 @@ function sanitizeStudioSnapshot(snapshot) {
 function ensureManifest(raw) {
   const next = createDefaultManifest();
   const value = raw ?? {};
+  const legacyRaidElements = value?.screens?.raid?.elements ?? {};
   next.version = Math.max(0, Math.round(numberOr(value.version, 0)));
   next.referenceViewport = sanitizeViewport(value.referenceViewport);
 
   Object.keys(ELEMENT_DEFS).forEach(screenId => {
     ELEMENT_DEFS[screenId].forEach(({id}) => {
+      const legacyElementValue =
+        screenId === 'raidNormal' || screenId === 'raidBoss'
+          ? legacyRaidElements?.[id]
+          : undefined;
       next.screens[screenId].elements[id] = sanitizeRule(
-        value?.screens?.[screenId]?.elements?.[id],
+        value?.screens?.[screenId]?.elements?.[id] ?? legacyElementValue,
       );
     });
   });
@@ -508,9 +555,16 @@ function ensureManifest(raw) {
     next.screens.level.backgrounds.byLevel[key] = sanitizeBackgroundRule(background);
   });
 
-  const raidBackgrounds = value?.screens?.raid?.backgrounds?.byBossStage ?? {};
-  Object.entries(raidBackgrounds).forEach(([key, background]) => {
-    next.screens.raid.backgrounds.byBossStage[key] = sanitizeBackgroundRule(background);
+  const legacyRaidBackgrounds = value?.screens?.raid?.backgrounds?.byBossStage ?? {};
+  const raidNormalBackgrounds =
+    value?.screens?.raidNormal?.backgrounds?.byBossStage ?? legacyRaidBackgrounds;
+  const raidBossBackgrounds =
+    value?.screens?.raidBoss?.backgrounds?.byBossStage ?? legacyRaidBackgrounds;
+  Object.entries(raidNormalBackgrounds).forEach(([key, background]) => {
+    next.screens.raidNormal.backgrounds.byBossStage[key] = sanitizeBackgroundRule(background);
+  });
+  Object.entries(raidBossBackgrounds).forEach(([key, background]) => {
+    next.screens.raidBoss.backgrounds.byBossStage[key] = sanitizeBackgroundRule(background);
   });
 
   Object.entries(value?.studioSnapshots ?? {}).forEach(([screenId, snapshot]) => {
@@ -518,6 +572,15 @@ function ensureManifest(raw) {
       next.studioSnapshots[screenId] = sanitizeStudioSnapshot(snapshot);
     }
   });
+  if (value?.studioSnapshots?.raid) {
+    const sanitizedLegacyRaidSnapshot = sanitizeStudioSnapshot(value.studioSnapshots.raid);
+    if (sanitizedLegacyRaidSnapshot) {
+      next.studioSnapshots.raidNormal =
+        next.studioSnapshots.raidNormal ?? sanitizedLegacyRaidSnapshot;
+      next.studioSnapshots.raidBoss =
+        next.studioSnapshots.raidBoss ?? sanitizedLegacyRaidSnapshot;
+    }
+  }
 
   return next;
 }
@@ -689,6 +752,10 @@ function getRule(screenId, elementId) {
   return state.manifest.screens[screenId].elements[elementId];
 }
 
+function isRaidScreen(screenId) {
+  return screenId === 'raidNormal' || screenId === 'raidBoss' || screenId === 'raid';
+}
+
 function getBackgroundMode() {
   return state.screenId === 'level' ? byId('background-scope').value : 'bossStage';
 }
@@ -700,7 +767,7 @@ function getBackgroundKeyForCurrentContext() {
       : String(state.previewWorld);
   }
 
-  if (state.screenId === 'raid') {
+  if (isRaidScreen(state.screenId)) {
     return String(state.previewRaidStage);
   }
 
@@ -714,8 +781,8 @@ function getBackgroundStore() {
       : state.manifest.screens.level.backgrounds.byWorld;
   }
 
-  if (state.screenId === 'raid') {
-    return state.manifest.screens.raid.backgrounds.byBossStage;
+  if (isRaidScreen(state.screenId)) {
+    return state.manifest.screens[state.screenId].backgrounds.byBossStage;
   }
 
   return null;
@@ -732,8 +799,8 @@ function getActiveBackgroundRule() {
     );
   }
 
-  if (state.screenId === 'raid') {
-    return state.manifest.screens.raid.backgrounds.byBossStage[String(state.previewRaidStage)] ?? null;
+  if (isRaidScreen(state.screenId)) {
+    return state.manifest.screens[state.screenId].backgrounds.byBossStage[String(state.previewRaidStage)] ?? null;
   }
 
   return null;
@@ -751,7 +818,12 @@ function collectManifestAssetKeys(manifest) {
       keys.add(rule.assetKey);
     }
   });
-  Object.values(manifest.screens.raid.backgrounds.byBossStage).forEach(rule => {
+  Object.values(manifest.screens.raidNormal.backgrounds.byBossStage).forEach(rule => {
+    if (rule.assetKey) {
+      keys.add(rule.assetKey);
+    }
+  });
+  Object.values(manifest.screens.raidBoss.backgrounds.byBossStage).forEach(rule => {
     if (rule.assetKey) {
       keys.add(rule.assetKey);
     }
@@ -868,7 +940,7 @@ function restoreEditorPrefs() {
     byId('supabase-url').value = saved.supabaseUrl ?? DEFAULT_SUPABASE_URL;
     byId('supabase-anon').value = saved.supabaseAnon ?? DEFAULT_SUPABASE_ANON_KEY;
     byId('admin-email').value = saved.adminEmail ?? '';
-    state.screenId = saved.screenId && SCREEN_LABELS[saved.screenId] ? saved.screenId : 'level';
+    state.screenId = saved.screenId === 'raid' ? 'raidBoss' : saved.screenId && SCREEN_LABELS[saved.screenId] ? saved.screenId : 'level';
     state.elementId = saved.elementId || ELEMENT_DEFS[state.screenId][0].id;
     state.profileId = saved.profileId || 'galaxy-s23-ultra';
     state.zoom = clamp(numberOr(saved.zoom, 1), 0.35, 3);
@@ -1054,6 +1126,9 @@ function refreshScreenOptions() {
   const screenSelect = byId('screen-id');
   if (!screenSelect.childElementCount) {
     Object.entries(SCREEN_LABELS).forEach(([screenId, label]) => {
+      if (screenId === 'raid') {
+        return;
+      }
       const option = document.createElement('option');
       option.value = screenId;
       option.textContent = label;
@@ -1105,7 +1180,8 @@ function refreshInspectorFields() {
 
 function renderElementHelp() {
   const help =
-    ELEMENT_HELP[state.screenId]?.[state.elementId] ?? {
+    (ELEMENT_HELP[state.screenId]?.[state.elementId] ??
+      (isRaidScreen(state.screenId) ? ELEMENT_HELP.raid?.[state.elementId] : null)) ?? {
       title: formatElementLabel(state.screenId, state.elementId, false),
       description: '선택한 요소의 역할과 조정 팁이 여기에 표시됩니다.',
       tips: ['레이아웃 충돌과 안전영역 여부를 먼저 확인하세요.'],
@@ -1149,7 +1225,7 @@ function updateBackgroundScopeOptions() {
           {value: 'world', label: '월드 기본 배경'},
           {value: 'level', label: '특정 레벨 배경'},
         ]
-      : state.screenId === 'raid'
+      : isRaidScreen(state.screenId)
         ? [{value: 'bossStage', label: '레이드 단계 배경'}]
         : [];
 
@@ -1178,7 +1254,7 @@ function updateBackgroundScopeOptions() {
 function syncBackgroundForm() {
   updateBackgroundScopeOptions();
 
-  if (state.screenId !== 'level' && state.screenId !== 'raid') {
+  if (state.screenId !== 'level' && !isRaidScreen(state.screenId)) {
     byId('background-key').value = '';
     byId('background-asset-key').value = '';
     byId('background-tint-color').value = '#000000';
