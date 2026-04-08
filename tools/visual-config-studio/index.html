@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BlockHero UI Studio</title>
+    <title>BlockHero UI 스튜디오</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -11,29 +11,29 @@
       <header class="topbar">
         <div class="brand-block">
           <p class="eyebrow">BlockHero</p>
-          <h1>UI Studio</h1>
+          <h1>UI 스튜디오</h1>
           <p class="subtitle">
-            Precision editor for runtime visual config. Use phone preview as final truth, use this
-            page to iterate quickly like a scene editor.
+            실제 게임 화면 배치를 정교하게 조정하는 관리자용 편집기입니다. PC에서는 빠르게 조정하고,
+            최종 확인은 휴대폰 런타임 프리뷰를 기준으로 맞추세요.
           </p>
         </div>
         <div class="topbar-actions">
           <div class="stat-pill">
-            <span class="stat-label">Screen</span>
-            <strong id="topbar-screen-label">Level</strong>
+            <span class="stat-label">화면</span>
+            <strong id="topbar-screen-label">레벨 모드</strong>
           </div>
           <div class="stat-pill">
-            <span class="stat-label">Selected</span>
-            <strong id="topbar-selection-label">header</strong>
+            <span class="stat-label">선택 요소</span>
+            <strong id="topbar-selection-label">상단 헤더 (header)</strong>
           </div>
           <div class="stat-pill">
-            <span class="stat-label">Reference</span>
+            <span class="stat-label">기준 해상도</span>
             <strong id="topbar-reference-label">412 x 915</strong>
           </div>
-          <button id="fit-stage" class="toolbar-button secondary">Fit</button>
-          <button id="actual-size" class="toolbar-button secondary">100%</button>
-          <button id="save-draft" class="toolbar-button">Save Draft</button>
-          <button id="publish-release" class="toolbar-button gold">Publish</button>
+          <button id="fit-stage" class="toolbar-button secondary">화면맞춤</button>
+          <button id="actual-size" class="toolbar-button secondary">실제크기</button>
+          <button id="save-draft" class="toolbar-button">드래프트 저장</button>
+          <button id="publish-release" class="toolbar-button gold">배포</button>
         </div>
       </header>
 
@@ -42,46 +42,46 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Connection</p>
-                <h2>Server</h2>
+                <p class="eyebrow">연결</p>
+                <h2>서버 연결</h2>
               </div>
             </div>
-            <label>Supabase URL<input id="supabase-url" type="text" /></label>
-            <label>Anon Key<textarea id="supabase-anon" rows="3"></textarea></label>
-            <label>Admin JWT<textarea id="supabase-jwt" rows="5"></textarea></label>
+            <label>Supabase 주소<input id="supabase-url" type="text" /></label>
+            <label>익명 키<textarea id="supabase-anon" rows="3"></textarea></label>
+            <label>관리자 JWT<textarea id="supabase-jwt" rows="5"></textarea></label>
             <div class="button-row">
-              <button id="load-draft">Load Draft</button>
-              <button id="load-latest" class="secondary">Load Latest</button>
+              <button id="load-draft">드래프트 불러오기</button>
+              <button id="load-latest" class="secondary">최신 배포 불러오기</button>
             </div>
             <div class="button-row">
-              <button id="refresh-history" class="secondary">Refresh History</button>
-              <button id="copy-json" class="secondary">Copy JSON</button>
+              <button id="refresh-history" class="secondary">배포 이력 새로고침</button>
+              <button id="copy-json" class="secondary">JSON 복사</button>
             </div>
-            <small id="server-status" class="muted">Idle</small>
+            <small id="server-status" class="muted">대기 중</small>
           </section>
 
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Viewport</p>
-                <h2>Device Preview</h2>
+                <p class="eyebrow">미리보기</p>
+                <h2>기기 미리보기</h2>
               </div>
             </div>
-            <label>Screen<select id="screen-id"></select></label>
-            <label>Device Profile<select id="device-profile"></select></label>
+            <label>대상 화면<select id="screen-id"></select></label>
+            <label>기기 프리셋<select id="device-profile"></select></label>
             <div class="grid two">
-              <label>Width<input id="viewport-width" type="number" /></label>
-              <label>Height<input id="viewport-height" type="number" /></label>
-              <label>Safe Top<input id="safe-top" type="number" /></label>
-              <label>Safe Bottom<input id="safe-bottom" type="number" /></label>
+              <label>가로 폭<input id="viewport-width" type="number" /></label>
+              <label>세로 높이<input id="viewport-height" type="number" /></label>
+              <label>상단 안전영역<input id="safe-top" type="number" /></label>
+              <label>하단 안전영역<input id="safe-bottom" type="number" /></label>
             </div>
             <div class="grid two compact-toggle-grid">
-              <label class="toggle-row"><input id="show-grid" type="checkbox" checked /> Show grid</label>
-              <label class="toggle-row"><input id="snap-grid" type="checkbox" checked /> Snap</label>
+              <label class="toggle-row"><input id="show-grid" type="checkbox" checked /> 그리드 표시</label>
+              <label class="toggle-row"><input id="snap-grid" type="checkbox" checked /> 그리드 스냅</label>
             </div>
             <div class="grid two">
               <label>
-                Grid Size
+                그리드 간격
                 <select id="grid-size">
                   <option value="4">4 px</option>
                   <option value="8">8 px</option>
@@ -92,51 +92,78 @@
                 </select>
               </label>
               <label>
-                Zoom
+                확대 배율
                 <input id="zoom-range" type="range" min="0.35" max="3" step="0.05" value="1" />
               </label>
             </div>
             <div class="grid two">
-              <label>Preview World<input id="preview-world" type="number" min="1" value="1" /></label>
-              <label>Preview Level<input id="preview-level" type="number" min="1" value="1" /></label>
-              <label>Preview Raid<input id="preview-raid-stage" type="number" min="1" value="1" /></label>
-              <label>Zoom Value<input id="zoom-value" type="number" step="0.05" value="1" /></label>
+              <label>미리보기 월드<input id="preview-world" type="number" min="1" value="1" /></label>
+              <label>미리보기 레벨<input id="preview-level" type="number" min="1" value="1" /></label>
+              <label>미리보기 레이드<input id="preview-raid-stage" type="number" min="1" value="1" /></label>
+              <label>배율 수치<input id="zoom-value" type="number" step="0.05" value="1" /></label>
             </div>
-            <small id="viewport-meta" class="muted">412 x 915, safe 34 / 34</small>
+            <small id="viewport-meta" class="muted">412 x 915, 안전영역 34 / 34</small>
+          </section>
+
+          <section class="panel help-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">설명</p>
+                <h2>메뉴 설명</h2>
+              </div>
+            </div>
+            <div class="help-list">
+              <article class="help-item">
+                <h3>서버 연결</h3>
+                <p>Supabase와 관리자 권한을 입력하는 영역입니다. 드래프트 저장, 최신 배포 불러오기, 배포 이력 조회가 여기서 시작됩니다.</p>
+              </article>
+              <article class="help-item">
+                <h3>기기 미리보기</h3>
+                <p>화면 종류와 휴대폰 해상도를 고릅니다. 안전영역까지 포함해서 실제 폰 비율에 가깝게 미리보기를 맞추는 메뉴입니다.</p>
+              </article>
+              <article class="help-item">
+                <h3>배경 설정</h3>
+                <p>레벨 월드별, 특정 레벨별, 레이드 단계별 배경을 바꾸는 메뉴입니다. 이미지 키, 틴트, 제거 여부를 설정하고 바로 무대에 반영됩니다.</p>
+              </article>
+              <article class="help-item">
+                <h3>배포 메모 / 이력</h3>
+                <p>이번 배포에서 무엇을 바꿨는지 적고, 이전 배포본을 다시 불러오거나 롤백 배포를 만드는 메뉴입니다.</p>
+              </article>
+            </div>
           </section>
 
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Background</p>
-                <h2>Scene Backdrop</h2>
+                <p class="eyebrow">배경</p>
+                <h2>배경 설정</h2>
               </div>
             </div>
-            <label>Scope<select id="background-scope"></select></label>
-            <label>Key<input id="background-key" type="text" placeholder="world 1 / level 12 / stage 3" /></label>
-            <label>Asset Key<input id="background-asset-key" type="text" placeholder="bg_world_1" /></label>
+            <label>적용 범위<select id="background-scope"></select></label>
+            <label>대상 키<input id="background-key" type="text" placeholder="월드 1 / 레벨 12 / 레이드 3" /></label>
+            <label>에셋 키<input id="background-asset-key" type="text" placeholder="bg_world_1" /></label>
             <div class="grid two">
-              <label>Tint<input id="background-tint-color" type="color" value="#000000" /></label>
-              <label>Tint Opacity<input id="background-tint-opacity" type="number" min="0" max="1" step="0.05" value="0" /></label>
+              <label>틴트 색상<input id="background-tint-color" type="color" value="#000000" /></label>
+              <label>틴트 강도<input id="background-tint-opacity" type="number" min="0" max="1" step="0.05" value="0" /></label>
             </div>
             <label class="toggle-row">
               <input id="background-remove-image" type="checkbox" />
-              Remove image
+              이미지 제거
             </label>
             <div class="button-row">
-              <button id="apply-background">Apply</button>
-              <button id="clear-background" class="secondary">Clear</button>
+              <button id="apply-background">배경 적용</button>
+              <button id="clear-background" class="secondary">배경 초기화</button>
             </div>
-            <label>Upload Asset<input id="asset-file" type="file" accept="image/*" /></label>
+            <label>에셋 업로드<input id="asset-file" type="file" accept="image/*" /></label>
             <div class="button-row">
-              <button id="upload-asset" class="secondary">Upload Asset</button>
-              <button id="load-asset-preview" class="secondary">Preview Asset</button>
+              <button id="upload-asset" class="secondary">업로드</button>
+              <button id="load-asset-preview" class="secondary">미리보기</button>
             </div>
             <div id="background-preview-card" class="background-preview-card">
               <div id="background-preview-image" class="background-preview-image"></div>
               <div class="background-preview-meta">
-                <strong id="background-preview-title">No asset preview</strong>
-                <small id="background-preview-meta" class="muted">Select an asset key or upload an image.</small>
+                <strong id="background-preview-title">에셋 미리보기 없음</strong>
+                <small id="background-preview-meta" class="muted">에셋 키를 넣거나 이미지를 업로드하면 여기서 확인할 수 있습니다.</small>
               </div>
             </div>
           </section>
@@ -144,22 +171,22 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Publish</p>
-                <h2>Release Notes</h2>
+                <p class="eyebrow">배포</p>
+                <h2>배포 메모</h2>
               </div>
             </div>
-            <label>Notes<textarea id="publish-notes" rows="4" placeholder="Describe what changed in this visual release."></textarea></label>
+            <label>이번 배포 메모<textarea id="publish-notes" rows="4" placeholder="이번 비주얼 배포에서 무엇을 바꿨는지 적어두세요."></textarea></label>
             <div class="button-row">
-              <button id="apply-json" class="secondary">Apply JSON</button>
-              <button id="reset-element" class="secondary">Reset Selected</button>
+              <button id="apply-json" class="secondary">JSON 적용</button>
+              <button id="reset-element" class="secondary">선택 요소 초기화</button>
             </div>
           </section>
 
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Release</p>
-                <h2>History</h2>
+                <p class="eyebrow">이력</p>
+                <h2>배포 이력</h2>
               </div>
             </div>
             <div id="release-history" class="release-history"></div>
@@ -170,23 +197,23 @@
           <section class="panel stage-panel">
             <div class="stage-toolbar">
               <div class="toolbar-group">
-                <span class="toolbar-label">Mode</span>
-                <strong id="stage-screen-pill">level</strong>
+                <span class="toolbar-label">화면</span>
+                <strong id="stage-screen-pill">레벨 모드</strong>
               </div>
               <div class="toolbar-group">
-                <span class="toolbar-label">Selection</span>
-                <strong id="stage-selection-pill">header</strong>
+                <span class="toolbar-label">선택</span>
+                <strong id="stage-selection-pill">상단 헤더</strong>
               </div>
               <div class="toolbar-group">
-                <span class="toolbar-label">Offset</span>
+                <span class="toolbar-label">오프셋</span>
                 <strong id="stage-offset-pill">0, 0</strong>
               </div>
               <div class="toolbar-group">
-                <span class="toolbar-label">Scale</span>
+                <span class="toolbar-label">배율</span>
                 <strong id="stage-scale-pill">1.00x</strong>
               </div>
               <div class="toolbar-group">
-                <span class="toolbar-label">Grid</span>
+                <span class="toolbar-label">그리드</span>
                 <strong id="stage-grid-pill">16 px</strong>
               </div>
             </div>
@@ -206,10 +233,10 @@
 
             <div class="stage-footer">
               <small class="muted">
-                Drag directly on the stage. Arrow keys move by 1 px, Shift + Arrow moves by 10 px.
-                Snap follows the selected grid size.
+                무대에서 바로 드래그해 위치를 조정하세요. 방향키는 1px, Shift+방향키는 10px 이동입니다.
+                스냅을 켜면 선택한 그리드 간격에 맞춰 달라붙습니다.
               </small>
-              <small id="status-line" class="muted status-line">Ready</small>
+              <small id="status-line" class="muted status-line">준비됨</small>
             </div>
           </section>
         </main>
@@ -218,8 +245,8 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Hierarchy</p>
-                <h2>Layers</h2>
+                <p class="eyebrow">레이어</p>
+                <h2>레이어 목록</h2>
               </div>
             </div>
             <div id="layer-list" class="layer-list"></div>
@@ -228,38 +255,52 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Inspector</p>
-                <h2>Transform</h2>
+                <p class="eyebrow">속성</p>
+                <h2>속성 편집</h2>
               </div>
             </div>
-            <label>Element<select id="element-id"></select></label>
+            <label>요소 선택<select id="element-id"></select></label>
             <div class="grid two">
-              <label>Offset X<input id="offset-x" type="number" /></label>
-              <label>Offset Y<input id="offset-y" type="number" /></label>
-              <label>Scale<input id="scale" type="number" step="0.05" /></label>
-              <label>Opacity<input id="opacity" type="number" step="0.05" min="0" max="1" /></label>
-              <label>Z Index<input id="z-index" type="number" /></label>
+              <label>X 오프셋<input id="offset-x" type="number" /></label>
+              <label>Y 오프셋<input id="offset-y" type="number" /></label>
+              <label>배율<input id="scale" type="number" step="0.05" /></label>
+              <label>투명도<input id="opacity" type="number" step="0.05" min="0" max="1" /></label>
+              <label>Z 인덱스<input id="z-index" type="number" /></label>
             </div>
             <div class="grid two compact-toggle-grid">
-              <label class="toggle-row"><input id="visible" type="checkbox" /> Visible</label>
-              <label class="toggle-row"><input id="safe-aware" type="checkbox" /> Safe area aware</label>
+              <label class="toggle-row"><input id="visible" type="checkbox" /> 표시</label>
+              <label class="toggle-row"><input id="safe-aware" type="checkbox" /> 안전영역 기준</label>
             </div>
             <div class="nudge-pad">
-              <button id="nudge-up" class="secondary nudge-button">Up</button>
+              <button id="nudge-up" class="secondary nudge-button">위</button>
               <div class="nudge-row">
-                <button id="nudge-left" class="secondary nudge-button">Left</button>
-                <button id="apply-element">Apply</button>
-                <button id="nudge-right" class="secondary nudge-button">Right</button>
+                <button id="nudge-left" class="secondary nudge-button">왼쪽</button>
+                <button id="apply-element">속성 적용</button>
+                <button id="nudge-right" class="secondary nudge-button">오른쪽</button>
               </div>
-              <button id="nudge-down" class="secondary nudge-button">Down</button>
+              <button id="nudge-down" class="secondary nudge-button">아래</button>
             </div>
           </section>
 
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="eyebrow">Manifest</p>
-                <h2>Raw JSON</h2>
+                <p class="eyebrow">도움말</p>
+                <h2>선택 요소 설명</h2>
+              </div>
+            </div>
+            <div id="element-help-card" class="element-help-card">
+              <strong id="element-help-title">상단 헤더</strong>
+              <p id="element-help-description" class="muted">선택한 요소의 역할과 조정 팁이 여기에 표시됩니다.</p>
+              <ul id="element-help-tips" class="element-help-tips"></ul>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">JSON</p>
+                <h2>원본 JSON</h2>
               </div>
             </div>
             <textarea id="manifest-json" rows="28"></textarea>

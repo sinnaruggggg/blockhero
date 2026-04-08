@@ -230,6 +230,32 @@ textarea {
   flex: 1;
 }
 
+.help-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.help-item {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.help-item h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #fff4d6;
+}
+
+.help-item p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 13px;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -655,6 +681,39 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.element-help-card {
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(240, 183, 109, 0.2);
+  background:
+    linear-gradient(180deg, rgba(44, 32, 18, 0.32), rgba(16, 14, 19, 0.7)),
+    rgba(255, 255, 255, 0.02);
+}
+
+.element-help-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #fff0c3;
+  font-size: 16px;
+}
+
+.element-help-card p {
+  margin: 0 0 12px;
+}
+
+.element-help-tips {
+  margin: 0;
+  padding-left: 18px;
+  color: #d9e4f5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.element-help-tips li {
+  line-height: 1.5;
 }
 
 .release-history {

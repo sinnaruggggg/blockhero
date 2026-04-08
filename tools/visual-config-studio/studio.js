@@ -12,82 +12,239 @@ const DEFAULT_BACKGROUND_URL = '../../src/assets/ui/grassland_bg.jpg';
 const DEVICE_PROFILES = [
   {
     id: 'galaxy-s23-ultra',
-    label: 'Galaxy S23 Ultra',
+    label: '갤럭시 S23 울트라',
     viewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
   },
   {
     id: 'galaxy-a54',
-    label: 'Galaxy A54',
+    label: '갤럭시 A54',
     viewport: {width: 411, height: 891, safeTop: 32, safeBottom: 24},
   },
   {
     id: 'galaxy-fold-cover',
-    label: 'Galaxy Fold Cover',
+    label: '갤럭시 폴드 커버',
     viewport: {width: 360, height: 780, safeTop: 30, safeBottom: 24},
   },
   {
     id: 'iphone-15-pro',
-    label: 'iPhone 15 Pro',
+    label: '아이폰 15 Pro',
     viewport: {width: 393, height: 852, safeTop: 59, safeBottom: 34},
   },
   {
     id: 'iphone-15-pro-max',
-    label: 'iPhone 15 Pro Max',
+    label: '아이폰 15 Pro Max',
     viewport: {width: 430, height: 932, safeTop: 59, safeBottom: 34},
   },
   {
     id: 'tablet-portrait',
-    label: 'Tablet Portrait',
+    label: '태블릿 세로',
     viewport: {width: 800, height: 1280, safeTop: 24, safeBottom: 20},
   },
   {
     id: 'custom',
-    label: 'Custom',
+    label: '직접 입력',
     viewport: DEFAULT_REFERENCE_VIEWPORT,
   },
 ];
 
 const SCREEN_LABELS = {
-  level: 'Level',
-  endless: 'Endless',
-  battle: 'Battle',
-  raid: 'Raid',
+  level: '레벨 모드',
+  endless: '무한 모드',
+  battle: '대전 모드',
+  raid: '레이드 모드',
 };
 
 const ELEMENT_DEFS = {
   level: [
-    {id: 'header', label: 'Header'},
-    {id: 'battle_lane', label: 'Combat HUD'},
-    {id: 'board', label: 'Board'},
-    {id: 'piece_tray', label: 'Piece Tray'},
-    {id: 'item_bar', label: 'Item Bar'},
-    {id: 'combo_gauge', label: 'Combo Gauge'},
+    {id: 'header', label: '상단 헤더'},
+    {id: 'battle_lane', label: '전투 HUD'},
+    {id: 'board', label: '블록 보드'},
+    {id: 'piece_tray', label: '블록 트레이'},
+    {id: 'item_bar', label: '아이템 바'},
+    {id: 'combo_gauge', label: '콤보 게이지'},
   ],
   endless: [
-    {id: 'header', label: 'Header'},
-    {id: 'status_bar', label: 'Status Bar'},
-    {id: 'summon_panel', label: 'Summon Panel'},
-    {id: 'next_preview', label: 'Next Preview'},
-    {id: 'board', label: 'Board'},
-    {id: 'piece_tray', label: 'Piece Tray'},
-    {id: 'item_bar', label: 'Item Bar'},
-    {id: 'combo_gauge', label: 'Combo Gauge'},
+    {id: 'header', label: '상단 헤더'},
+    {id: 'status_bar', label: '상태 바'},
+    {id: 'summon_panel', label: '소환 패널'},
+    {id: 'next_preview', label: '다음 블록 패널'},
+    {id: 'board', label: '블록 보드'},
+    {id: 'piece_tray', label: '블록 트레이'},
+    {id: 'item_bar', label: '아이템 바'},
+    {id: 'combo_gauge', label: '콤보 게이지'},
   ],
   battle: [
-    {id: 'back_button', label: 'Back Button'},
-    {id: 'opponent_panel', label: 'Opponent Panel'},
-    {id: 'attack_bar', label: 'Attack Bar'},
-    {id: 'board', label: 'Board'},
-    {id: 'piece_tray', label: 'Piece Tray'},
+    {id: 'back_button', label: '뒤로 버튼'},
+    {id: 'opponent_panel', label: '상대 패널'},
+    {id: 'attack_bar', label: '공격 바'},
+    {id: 'board', label: '블록 보드'},
+    {id: 'piece_tray', label: '블록 트레이'},
   ],
   raid: [
-    {id: 'top_panel', label: 'Boss Panel'},
-    {id: 'skill_bar', label: 'Skill Bar'},
-    {id: 'info_bar', label: 'Info Bar'},
-    {id: 'board', label: 'Board'},
-    {id: 'piece_tray', label: 'Piece Tray'},
-    {id: 'combo_gauge', label: 'Combo Gauge'},
+    {id: 'top_panel', label: '보스 패널'},
+    {id: 'skill_bar', label: '스킬 바'},
+    {id: 'info_bar', label: '정보 바'},
+    {id: 'board', label: '블록 보드'},
+    {id: 'piece_tray', label: '블록 트레이'},
+    {id: 'combo_gauge', label: '콤보 게이지'},
   ],
+};
+
+const ELEMENT_HELP = {
+  level: {
+    header: {
+      title: '상단 헤더',
+      description: '하트, 골드, 다이아처럼 플레이 시작 전후 항상 눈에 보여야 하는 정보 묶음입니다.',
+      tips: [
+        '상단 안전영역을 켠 상태에서 노치와 겹치지 않게 맞추세요.',
+        '보드와 가까우면 답답해 보이니 세로 간격을 조금 남겨두는 편이 안전합니다.',
+      ],
+    },
+    battle_lane: {
+      title: '전투 HUD',
+      description: '내 캐릭터, 몬스터, 체력 바가 들어가는 전투 핵심 영역입니다.',
+      tips: [
+        '블록 보드와 겹치면 전투 연출이 답답해집니다.',
+        '캐릭터와 몬스터가 잘리지 않게 좌우 여백을 함께 확인하세요.',
+      ],
+    },
+    board: {
+      title: '블록 보드',
+      description: '실제 조작이 이루어지는 8x8 보드입니다. 가장 중요한 기준 요소입니다.',
+      tips: [
+        '보드는 가능하면 중앙 기준으로 두고, 다른 UI를 여기에 맞춰 배치하세요.',
+        '상단 HUD와 하단 트레이를 동시에 침범하지 않도록 확인하세요.',
+      ],
+    },
+    piece_tray: {
+      title: '블록 트레이',
+      description: '새 블록 3개가 놓이는 하단 선택 영역입니다.',
+      tips: [
+        '엄지손가락 조작을 고려해 하단 안전영역과 너무 붙지 않게 두세요.',
+        '큰 조각이 나와도 보드가 밀리지 않는지 함께 확인하세요.',
+      ],
+    },
+    item_bar: {
+      title: '아이템 바',
+      description: '폭탄, 새로고침 같은 아이템을 빠르게 누르는 버튼 영역입니다.',
+      tips: [
+        '트레이와 너무 가까우면 오터치가 납니다.',
+        '전투 HUD보다 시선 우선순위가 낮으므로 크기를 과하게 키울 필요는 없습니다.',
+      ],
+    },
+    combo_gauge: {
+      title: '콤보 게이지',
+      description: '콤보 유지 시간을 얇게 보여주는 보조 오버레이입니다.',
+      tips: [
+        '보드 내부 상단에 반투명하게 두는 구성이 가장 안정적입니다.',
+        '대미지 숫자나 전투 연출과 겹치지 않는지 꼭 확인하세요.',
+      ],
+    },
+  },
+  endless: {
+    header: {
+      title: '상단 헤더',
+      description: '점수와 재화처럼 무한 모드 전반 정보를 보여주는 상단 요약 영역입니다.',
+      tips: ['길게 늘이지 말고 가독성이 먼저 보이게 정리하세요.'],
+    },
+    status_bar: {
+      title: '상태 바',
+      description: '현재 점수, 레벨, 진행 상태를 빠르게 읽는 바입니다.',
+      tips: ['보드와 너무 붙으면 화면이 눌려 보이므로 완급을 주세요.'],
+    },
+    summon_panel: {
+      title: '소환 패널',
+      description: '소환 관련 정보와 버프 상태가 들어가는 보조 패널입니다.',
+      tips: ['상태 바보다 낮은 우선순위이므로 보드 침범을 피하세요.'],
+    },
+    next_preview: {
+      title: '다음 블록 패널',
+      description: '다음에 등장할 블록 흐름을 미리 읽게 해주는 영역입니다.',
+      tips: ['가시성이 중요하지만 보드를 밀 정도로 크게 둘 필요는 없습니다.'],
+    },
+    board: {
+      title: '블록 보드',
+      description: '무한 모드 핵심 조작 영역입니다. 다른 요소 배치는 항상 보드 기준으로 맞춥니다.',
+      tips: ['화면 중심과 시선 흐름을 동시에 맞추는 기준 요소로 보세요.'],
+    },
+    piece_tray: {
+      title: '블록 트레이',
+      description: '실제 블록을 집는 영역입니다.',
+      tips: ['하단 제스처 영역과 겹치지 않게 여유를 남기세요.'],
+    },
+    item_bar: {
+      title: '아이템 바',
+      description: '즉시 사용형 보조 버튼 영역입니다.',
+      tips: ['트레이 위에 떠 있는 느낌으로 두되, 조작 가림은 피하세요.'],
+    },
+    combo_gauge: {
+      title: '콤보 게이지',
+      description: '무한 모드 콤보 유지 시간을 보여주는 얇은 보조 바입니다.',
+      tips: ['점수 숫자보다 덜 튀게, 그러나 보일 만큼은 확보하세요.'],
+    },
+  },
+  battle: {
+    back_button: {
+      title: '뒤로 버튼',
+      description: '대전 모드에서 빠르게 이탈할 수 있는 버튼입니다.',
+      tips: ['상단 안전영역을 켜고, 한 손으로도 누르기 쉬운 위치인지 보세요.'],
+    },
+    opponent_panel: {
+      title: '상대 패널',
+      description: '상대 아바타, 체력, 상태를 보여주는 핵심 대전 정보 패널입니다.',
+      tips: ['보드보다 우선순위는 낮지만, 읽기 어려우면 대전성이 떨어집니다.'],
+    },
+    attack_bar: {
+      title: '공격 바',
+      description: '대전의 공격 압박감과 흐름을 전달하는 상태 바입니다.',
+      tips: ['보드와의 간격을 충분히 두면 더 안정적으로 보입니다.'],
+    },
+    board: {
+      title: '블록 보드',
+      description: '대전 모드 실조작 영역입니다.',
+      tips: ['공격 바와 하단 트레이 사이의 중심축을 유지하세요.'],
+    },
+    piece_tray: {
+      title: '블록 트레이',
+      description: '대전 중 새 블록을 선택하는 영역입니다.',
+      tips: ['채팅/재도전 모달이 떠도 조작이 막히지 않는 위치를 유지하세요.'],
+    },
+  },
+  raid: {
+    top_panel: {
+      title: '보스 패널',
+      description: '보스 스프라이트, HP, 핵심 레이드 정보가 들어가는 영역입니다.',
+      tips: [
+        '보드보다 위에 있으면서도 과도하게 커지지 않게 조절하세요.',
+        '보스 이미지가 잘리거나 뒤 배경 상자가 보이지 않는지 확인하세요.',
+      ],
+    },
+    skill_bar: {
+      title: '스킬 바',
+      description: '레이드 전용 스킬과 즉시 사용 UI가 들어가는 라인입니다.',
+      tips: ['보드 시작선과 간섭이 없게 세로 여백을 확보하세요.'],
+    },
+    info_bar: {
+      title: '정보 바',
+      description: '보조 지표를 표시하는 좁은 정보 영역입니다.',
+      tips: ['설명 텍스트를 많이 넣기보다 핵심 수치 위주로 배치하는 것이 안정적입니다.'],
+    },
+    board: {
+      title: '블록 보드',
+      description: '레이드 조작 중심 영역입니다.',
+      tips: ['콤보 게이지, 대미지 숫자, 보스 패널과 동시 충돌 여부를 꼭 확인하세요.'],
+    },
+    piece_tray: {
+      title: '블록 트레이',
+      description: '레이드에서 다음 수를 고르는 하단 조작 영역입니다.',
+      tips: ['콤보 게이지가 이 영역을 가리지 않도록 유지하세요.'],
+    },
+    combo_gauge: {
+      title: '콤보 게이지',
+      description: '레이드에서도 공통으로 쓰는 보드 상단 반투명 콤보 바입니다.',
+      tips: ['대미지 숫자 위가 아니라 보드 상단 내부에 얇게 두는 구성이 가장 안전합니다.'],
+    },
+  },
 };
 
 const DEFAULT_RULE = {
@@ -164,6 +321,18 @@ const state = {
 };
 
 const byId = id => document.getElementById(id);
+
+function getElementMeta(screenId, elementId) {
+  return ELEMENT_DEFS[screenId]?.find(item => item.id === elementId) ?? null;
+}
+
+function formatElementLabel(screenId, elementId, includeId = true) {
+  const meta = getElementMeta(screenId, elementId);
+  if (!meta) {
+    return elementId;
+  }
+  return includeId ? `${meta.label} (${meta.id})` : meta.label;
+}
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -291,7 +460,7 @@ function syncViewportFields(viewport) {
   byId('safe-top').value = String(viewport.safeTop);
   byId('safe-bottom').value = String(viewport.safeBottom);
   byId('viewport-meta').textContent =
-    `${viewport.width} x ${viewport.height}, safe ${viewport.safeTop} / ${viewport.safeBottom}`;
+    `${viewport.width} x ${viewport.height}, 안전영역 ${viewport.safeTop} / ${viewport.safeBottom}`;
 }
 
 function resolveVisualOffset(offsetX, offsetY, currentViewport, referenceViewport, safeAreaAware) {
@@ -527,11 +696,11 @@ function updateTopbar() {
   const viewport = getViewport();
   const rule = getRule(state.screenId, state.elementId);
   byId('topbar-screen-label').textContent = SCREEN_LABELS[state.screenId];
-  byId('topbar-selection-label').textContent = state.elementId;
+  byId('topbar-selection-label').textContent = formatElementLabel(state.screenId, state.elementId);
   byId('topbar-reference-label').textContent =
     `${state.manifest.referenceViewport.width} x ${state.manifest.referenceViewport.height}`;
-  byId('stage-screen-pill').textContent = state.screenId;
-  byId('stage-selection-pill').textContent = state.elementId;
+  byId('stage-screen-pill').textContent = SCREEN_LABELS[state.screenId];
+  byId('stage-selection-pill').textContent = formatElementLabel(state.screenId, state.elementId, false);
   byId('stage-offset-pill').textContent = `${rule.offsetX}, ${rule.offsetY}`;
   byId('stage-scale-pill').textContent = `${rule.scale.toFixed(2)}x`;
   byId('stage-grid-pill').textContent = `${state.gridSize} px`;
@@ -596,6 +765,26 @@ function refreshInspectorFields() {
   byId('safe-aware').checked = !!rule.safeAreaAware;
 }
 
+function renderElementHelp() {
+  const help =
+    ELEMENT_HELP[state.screenId]?.[state.elementId] ?? {
+      title: formatElementLabel(state.screenId, state.elementId, false),
+      description: '선택한 요소의 역할과 조정 팁이 여기에 표시됩니다.',
+      tips: ['레이아웃 충돌과 안전영역 여부를 먼저 확인하세요.'],
+    };
+
+  byId('element-help-title').textContent = help.title;
+  byId('element-help-description').textContent = help.description;
+
+  const tipsHost = byId('element-help-tips');
+  tipsHost.innerHTML = '';
+  (help.tips || []).forEach(tip => {
+    const item = document.createElement('li');
+    item.textContent = tip;
+    tipsHost.appendChild(item);
+  });
+}
+
 function updateRuleFromInspector() {
   const rule = getRule(state.screenId, state.elementId);
   const updated = sanitizeRule({
@@ -619,17 +808,17 @@ function updateBackgroundScopeOptions() {
   const options =
     state.screenId === 'level'
       ? [
-          {value: 'world', label: 'Level World'},
-          {value: 'level', label: 'Specific Level'},
+          {value: 'world', label: '월드 기본 배경'},
+          {value: 'level', label: '특정 레벨 배경'},
         ]
       : state.screenId === 'raid'
-        ? [{value: 'bossStage', label: 'Raid Stage'}]
+        ? [{value: 'bossStage', label: '레이드 단계 배경'}]
         : [];
 
   if (!options.length) {
     const option = document.createElement('option');
     option.value = 'none';
-    option.textContent = 'No background override for this screen';
+    option.textContent = '이 화면은 배경 오버라이드를 지원하지 않습니다';
     select.appendChild(option);
     select.disabled = true;
     byId('background-key').value = '';
@@ -738,7 +927,7 @@ function renderElementBody(screenId, elementId) {
   if (elementId === 'battle_lane' || elementId === 'top_panel' || elementId === 'opponent_panel') {
     const chips = document.createElement('div');
     chips.className = 'preview-chip-row';
-    ['HP', 'ATK', 'Combo'].forEach(label => {
+    ['체력', '공격', '콤보'].forEach(label => {
       const chip = document.createElement('div');
       chip.className = 'preview-chip';
       chip.textContent = label;
@@ -753,7 +942,7 @@ function renderElementBody(screenId, elementId) {
   if (elementId === 'header' || elementId === 'status_bar' || elementId === 'info_bar') {
     const chips = document.createElement('div');
     chips.className = 'preview-chip-row';
-    ['Gold', 'Dia', 'Heart'].forEach(label => {
+    ['골드', '다이아', '하트'].forEach(label => {
       const chip = document.createElement('div');
       chip.className = 'preview-chip';
       chip.textContent = label;
@@ -792,7 +981,7 @@ function renderElementBody(screenId, elementId) {
   if (elementId === 'back_button') {
     const chip = document.createElement('div');
     chip.className = 'preview-chip';
-    chip.textContent = 'Back';
+    chip.textContent = '뒤로';
     wrapper.appendChild(chip);
     return wrapper;
   }
@@ -873,6 +1062,7 @@ function renderLayerList() {
       state.elementId = id;
       refreshElementOptions();
       refreshInspectorFields();
+      renderElementHelp();
       updateTopbar();
       scheduleRender();
     });
@@ -904,8 +1094,8 @@ function renderBackgroundPreviewCard(asset) {
   const meta = byId('background-preview-meta');
   if (!asset) {
     previewImage.style.backgroundImage = `linear-gradient(180deg, rgba(4, 9, 18, 0.16), rgba(4, 9, 18, 0.54)), url("${DEFAULT_BACKGROUND_URL}")`;
-    title.textContent = 'No asset preview';
-    meta.textContent = 'Select a saved asset key or upload a new background.';
+    title.textContent = '에셋 미리보기 없음';
+    meta.textContent = '저장된 에셋 키를 넣거나 새 배경 이미지를 업로드하세요.';
     return;
   }
 
@@ -1026,6 +1216,7 @@ async function renderPreview() {
   renderRulers(viewport, state.displayScale);
   renderLayerList();
   refreshInspectorFields();
+  renderElementHelp();
   updateTopbar();
   updateManifestJson();
   persistEditorPrefs();
@@ -1063,7 +1254,7 @@ function beginDrag(event, elementId) {
   };
 
   document.body.classList.add('dragging-stage');
-  setStatus(`Dragging ${elementId}`, 'success');
+  setStatus(`${formatElementLabel(state.screenId, elementId, false)} 이동 중`, 'success');
   scheduleRender();
 }
 
@@ -1097,7 +1288,7 @@ function handlePointerUp() {
     return;
   }
   document.body.classList.remove('dragging-stage');
-  setStatus(`Placed ${state.drag.elementId}`, 'success');
+  setStatus(`${formatElementLabel(state.screenId, state.drag.elementId, false)} 위치 적용`, 'success');
   state.drag = null;
   persistEditorPrefs();
   scheduleRender();
@@ -1117,13 +1308,13 @@ function nudgeSelected(dx, dy) {
 async function loadDraft() {
   const rows = await fetchJson('ui_config_draft?id=eq.1&select=*');
   if (!rows?.[0]?.config_json) {
-    throw new Error('No draft row found.');
+    throw new Error('드래프트가 없습니다.');
   }
 
   state.manifest = ensureManifest(rows[0].config_json);
   await preloadManifestAssets();
   syncBackgroundForm();
-  setStatus('Draft loaded.', 'success');
+  setStatus('드래프트를 불러왔습니다.', 'success');
   scheduleRender();
 }
 
@@ -1132,14 +1323,14 @@ async function loadLatestRelease() {
     'ui_config_releases?select=version,config_json,created_at,notes&order=version.desc&limit=1',
   );
   if (!rows?.[0]?.config_json) {
-    throw new Error('No release rows found.');
+    throw new Error('배포 이력이 없습니다.');
   }
 
   state.manifest = ensureManifest(rows[0].config_json);
   byId('publish-notes').value = rows[0].notes || '';
   await preloadManifestAssets();
   syncBackgroundForm();
-  setStatus(`Loaded release v${rows[0].version}.`, 'success');
+  setStatus(`배포본 v${rows[0].version}을 불러왔습니다.`, 'success');
   scheduleRender();
 }
 
@@ -1151,7 +1342,7 @@ async function saveDraft() {
     body: JSON.stringify([{id: 1, config_json: state.manifest}]),
   });
   persistEditorPrefs();
-  setStatus('Draft saved.', 'success');
+  setStatus('드래프트를 저장했습니다.', 'success');
 }
 
 async function publishManifestWithNotes(manifest, notes) {
@@ -1164,12 +1355,12 @@ async function publishManifestWithNotes(manifest, notes) {
       {
         version: nextVersion,
         config_json: manifest,
-        notes: notes || `PC studio publish ${new Date().toISOString()}`,
+        notes: notes || `PC 스튜디오 배포 ${new Date().toISOString()}`,
       },
     ]),
   });
   state.manifest = ensureManifest(manifest);
-  setStatus(`Published visual config v${nextVersion}.`, 'success');
+  setStatus(`비주얼 설정 v${nextVersion}을 배포했습니다.`, 'success');
   await refreshReleaseHistory();
   scheduleRender();
 }
@@ -1196,7 +1387,7 @@ function renderReleaseHistory() {
   if (!state.releaseRows.length) {
     const empty = document.createElement('div');
     empty.className = 'release-empty';
-    empty.textContent = 'No release history loaded yet.';
+    empty.textContent = '불러온 배포 이력이 없습니다.';
     host.appendChild(empty);
     return;
   }
@@ -1214,7 +1405,7 @@ function renderReleaseHistory() {
 
     const notes = document.createElement('p');
     notes.className = 'muted';
-    notes.textContent = row.notes || 'No notes';
+    notes.textContent = row.notes || '메모 없음';
     card.appendChild(notes);
 
     const actions = document.createElement('div');
@@ -1222,22 +1413,22 @@ function renderReleaseHistory() {
 
     const loadButton = document.createElement('button');
     loadButton.className = 'secondary';
-    loadButton.textContent = 'Load';
+    loadButton.textContent = '이 버전 열기';
     loadButton.addEventListener('click', async () => {
       state.manifest = ensureManifest(row.config_json);
       await preloadManifestAssets();
       byId('publish-notes').value = row.notes || '';
       syncBackgroundForm();
-      setStatus(`Loaded release v${row.version}.`, 'success');
+      setStatus(`배포본 v${row.version}을 불러왔습니다.`, 'success');
       scheduleRender();
     });
 
     const rollbackButton = document.createElement('button');
     rollbackButton.className = 'secondary';
-    rollbackButton.textContent = 'Rollback -> Publish';
+    rollbackButton.textContent = '이 버전으로 롤백 배포';
     rollbackButton.addEventListener('click', async () => {
       const approved = window.confirm(
-        `Create a new published release by copying v${row.version}?`,
+        `v${row.version} 설정을 복사해서 새 배포본으로 올릴까요?`,
       );
       if (!approved) {
         return;
@@ -1246,10 +1437,10 @@ function renderReleaseHistory() {
       try {
         await publishManifestWithNotes(
           ensureManifest(row.config_json),
-          `Rollback to v${row.version} on ${new Date().toISOString()}`,
+          `v${row.version} 기준 롤백 배포 ${new Date().toISOString()}`,
         );
       } catch (error) {
-        setStatus(`Rollback failed: ${error.message}`, 'error');
+        setStatus(`롤백 배포 실패: ${error.message}`, 'error');
       }
     });
 
@@ -1264,7 +1455,7 @@ async function loadAssetPreviewByInput() {
   const assetKey = byId('background-asset-key').value.trim();
   if (!assetKey) {
     renderBackgroundPreviewCard(null);
-    setStatus('Enter an asset key to preview.', 'error');
+    setStatus('미리볼 에셋 키를 먼저 입력하세요.', 'error');
     return;
   }
 
@@ -1272,12 +1463,12 @@ async function loadAssetPreviewByInput() {
     const asset = await ensureAssetLoaded(assetKey);
     renderBackgroundPreviewCard(asset);
     setStatus(
-      asset ? `Loaded asset ${assetKey}.` : `Asset ${assetKey} not found.`,
+      asset ? `에셋 ${assetKey}를 불러왔습니다.` : `에셋 ${assetKey}를 찾지 못했습니다.`,
       asset ? 'success' : 'error',
     );
   } catch (error) {
     renderBackgroundPreviewCard(null);
-    setStatus(`Asset preview failed: ${error.message}`, 'error');
+    setStatus(`에셋 미리보기 실패: ${error.message}`, 'error');
   }
 }
 
@@ -1285,7 +1476,7 @@ function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error('Failed to read file.'));
+    reader.onerror = () => reject(reader.error || new Error('파일을 읽지 못했습니다.'));
     reader.readAsDataURL(file);
   });
 }
@@ -1295,7 +1486,7 @@ async function uploadAsset() {
   const file = byId('asset-file').files?.[0] ?? null;
 
   if (!assetKey || !file) {
-    throw new Error('Asset key and image file are required.');
+    throw new Error('에셋 키와 이미지 파일이 모두 필요합니다.');
   }
 
   const dataUrl = await readFileAsDataUrl(file);
@@ -1314,19 +1505,19 @@ async function uploadAsset() {
   const stored = rows?.[0] ?? payload;
   state.assetCache.set(assetKey, stored);
   renderBackgroundPreviewCard(stored);
-  setStatus(`Uploaded asset ${assetKey}.`, 'success');
+  setStatus(`에셋 ${assetKey}를 업로드했습니다.`, 'success');
 }
 
 function applyBackgroundRuleFromForm() {
   const store = getBackgroundStore();
   if (!store) {
-    setStatus('This screen does not support background overrides.', 'error');
+    setStatus('이 화면은 배경 오버라이드를 지원하지 않습니다.', 'error');
     return;
   }
 
   const key = byId('background-key').value.trim();
   if (!key) {
-    setStatus('Background key is required.', 'error');
+    setStatus('배경 대상 키가 필요합니다.', 'error');
     return;
   }
 
@@ -1340,7 +1531,7 @@ function applyBackgroundRuleFromForm() {
   updateManifestJson();
   persistEditorPrefs();
   scheduleRender();
-  setStatus(`Background override saved for key ${key}.`, 'success');
+  setStatus(`배경 ${key} 설정을 저장했습니다.`, 'success');
 }
 
 function clearBackgroundRuleFromForm() {
@@ -1359,20 +1550,20 @@ function clearBackgroundRuleFromForm() {
   updateManifestJson();
   persistEditorPrefs();
   scheduleRender();
-  setStatus(`Background override cleared for key ${key}.`, 'success');
+  setStatus(`배경 ${key} 설정을 초기화했습니다.`, 'success');
 }
 
 async function applyManifestJson() {
   state.manifest = ensureManifest(JSON.parse(byId('manifest-json').value));
   await preloadManifestAssets();
   syncBackgroundForm();
-  setStatus('Applied raw JSON to editor state.', 'success');
+  setStatus('원본 JSON을 에디터 상태에 반영했습니다.', 'success');
   scheduleRender();
 }
 
 async function copyManifestJson() {
   await navigator.clipboard.writeText(byId('manifest-json').value);
-  setStatus('Manifest JSON copied.', 'success');
+  setStatus('원본 JSON을 복사했습니다.', 'success');
 }
 
 function setProfileFromManualViewport() {
@@ -1401,6 +1592,7 @@ function bindEvents() {
   byId('element-id').addEventListener('change', event => {
     state.elementId = event.target.value;
     refreshInspectorFields();
+    renderElementHelp();
     scheduleRender();
   });
 
@@ -1464,14 +1656,15 @@ function bindEvents() {
 
   byId('apply-element').addEventListener('click', () => {
     updateRuleFromInspector();
-    setStatus(`Applied inspector values to ${state.elementId}.`, 'success');
+    setStatus(`${formatElementLabel(state.screenId, state.elementId, false)} 속성을 적용했습니다.`, 'success');
     scheduleRender();
   });
 
   byId('reset-element').addEventListener('click', () => {
     state.manifest.screens[state.screenId].elements[state.elementId] = clone(DEFAULT_RULE);
     refreshInspectorFields();
-    setStatus(`Reset ${state.elementId}.`, 'success');
+    renderElementHelp();
+    setStatus(`${formatElementLabel(state.screenId, state.elementId, false)} 값을 초기화했습니다.`, 'success');
     scheduleRender();
   });
 
@@ -1500,7 +1693,7 @@ function bindEvents() {
     try {
       await uploadAsset();
     } catch (error) {
-      setStatus(`Asset upload failed: ${error.message}`, 'error');
+      setStatus(`에셋 업로드 실패: ${error.message}`, 'error');
     }
   });
 
@@ -1508,13 +1701,13 @@ function bindEvents() {
     try {
       await copyManifestJson();
     } catch (error) {
-      setStatus(`Copy failed: ${error.message}`, 'error');
+      setStatus(`복사 실패: ${error.message}`, 'error');
     }
   });
 
   byId('apply-json').addEventListener('click', () => {
     applyManifestJson().catch(error => {
-      setStatus(`Apply JSON failed: ${error.message}`, 'error');
+      setStatus(`JSON 적용 실패: ${error.message}`, 'error');
     });
   });
 
@@ -1522,7 +1715,7 @@ function bindEvents() {
     try {
       await loadDraft();
     } catch (error) {
-      setStatus(`Draft load failed: ${error.message}`, 'error');
+      setStatus(`드래프트 불러오기 실패: ${error.message}`, 'error');
     }
   });
 
@@ -1530,7 +1723,7 @@ function bindEvents() {
     try {
       await loadLatestRelease();
     } catch (error) {
-      setStatus(`Latest load failed: ${error.message}`, 'error');
+      setStatus(`최신 배포 불러오기 실패: ${error.message}`, 'error');
     }
   });
 
@@ -1538,7 +1731,7 @@ function bindEvents() {
     try {
       await saveDraft();
     } catch (error) {
-      setStatus(`Draft save failed: ${error.message}`, 'error');
+      setStatus(`드래프트 저장 실패: ${error.message}`, 'error');
     }
   });
 
@@ -1546,16 +1739,16 @@ function bindEvents() {
     try {
       await publishRelease();
     } catch (error) {
-      setStatus(`Publish failed: ${error.message}`, 'error');
+      setStatus(`배포 실패: ${error.message}`, 'error');
     }
   });
 
   byId('refresh-history').addEventListener('click', async () => {
     try {
       await refreshReleaseHistory();
-      setStatus('Release history refreshed.', 'success');
+      setStatus('배포 이력을 새로고침했습니다.', 'success');
     } catch (error) {
-      setStatus(`History refresh failed: ${error.message}`, 'error');
+      setStatus(`배포 이력 새로고침 실패: ${error.message}`, 'error');
     }
   });
 
@@ -1577,7 +1770,7 @@ function bindEvents() {
       try {
         await saveDraft();
       } catch (error) {
-        setStatus(`Draft save failed: ${error.message}`, 'error');
+        setStatus(`드래프트 저장 실패: ${error.message}`, 'error');
       }
       return;
     }
@@ -1617,6 +1810,7 @@ async function bootstrap() {
   refreshDeviceOptions();
   refreshElementOptions();
   refreshInspectorFields();
+  renderElementHelp();
   byId('grid-size').value = String(state.gridSize);
   byId('show-grid').checked = state.showGrid;
   byId('snap-grid').checked = state.snapGrid;

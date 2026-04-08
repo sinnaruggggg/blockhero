@@ -1,34 +1,114 @@
-# UI Studio PC Editor
+# UI 스튜디오 PC 편집기
 
-The PC editor lives in `tools/visual-config-studio/` and is the fast iteration companion to the in-app runtime studio.
+PC 편집기는 `tools/visual-config-studio/` 아래에 있는 관리자용 비주얼 배치 도구입니다.  
+휴대폰의 런타임 프리뷰와 같은 설정 JSON을 쓰지만, 큰 화면에서 더 빠르게 손볼 수 있게 만든 보조 편집기입니다.
 
-## What it does
+## 이 편집기로 할 수 있는 일
 
-- Lets admins edit `level`, `endless`, `battle`, and `raid` visual layouts.
-- Supports direct drag on the stage, inspector edits, nudge controls, grid snapping, zoom, and safe-area preview.
-- Can load the latest published visual config, save draft, publish a new release, and rollback by cloning an older release.
-- Supports background override editing for:
-  - `level -> world`
-  - `level -> level`
-  - `raid -> bossStage`
-- Supports image upload to `ui_assets` and previewing those assets in the editor.
+- `레벨`, `무한`, `대전`, `레이드` 화면의 주요 UI 요소 위치를 조정합니다.
+- 무대 위 요소를 직접 드래그해서 옮깁니다.
+- 인스펙터에서 `X/Y 오프셋`, `배율`, `투명도`, `Z 인덱스`, `표시 여부`, `안전영역 기준`을 수정합니다.
+- 그리드와 스냅, 확대/축소, 방향키 미세 이동으로 정교하게 맞춥니다.
+- 월드/레벨/레이드 단계별 배경 이미지를 바꾸거나 제거합니다.
+- 드래프트 저장, 최신 배포본 불러오기, 새 배포, 이전 버전 롤백 배포를 처리합니다.
 
-## Why it is not the final source of truth
+## 화면별 메뉴 설명
 
-This editor is intentionally close to a scene editor, but it still runs in a browser. The final pixel validation must happen in the app runtime preview because:
+### 서버 연결
 
-- React Native font metrics differ from browser metrics.
-- Native safe-area handling is not identical to CSS.
-- Android/iOS rendering and browser rendering handle scaling differently.
+- `Supabase 주소`: 비주얼 설정과 배경 에셋이 저장된 서버 주소입니다.
+- `익명 키`: 읽기/쓰기 API 호출에 필요한 Anon Key입니다.
+- `관리자 JWT`: 드래프트 저장, 배포, 롤백 같은 관리자 작업에 필요합니다.
+- `드래프트 불러오기`: 현재 초안 상태를 가져옵니다.
+- `최신 배포 불러오기`: 실사용 중인 최신 배포본을 가져옵니다.
+- `배포 이력 새로고침`: 최근 배포 목록을 다시 읽습니다.
+- `JSON 복사`: 현재 설정 JSON을 복사합니다.
 
-Use the PC editor to move quickly. Use the in-app `UI Studio` fullscreen preview to sign off.
+### 기기 미리보기
 
-## Recommended workflow
+- `대상 화면`: 레벨/무한/대전/레이드 중 어느 화면을 편집할지 고릅니다.
+- `기기 프리셋`: 자주 쓰는 해상도와 안전영역 조합을 고릅니다.
+- `가로 폭 / 세로 높이`: 직접 해상도를 입력할 때 씁니다.
+- `상단 안전영역 / 하단 안전영역`: 노치, 상태바, 하단 제스처 영역을 반영합니다.
+- `그리드 표시`: 무대 위에 보조선이 보입니다.
+- `그리드 스냅`: 드래그 시 그리드에 맞춰 달라붙습니다.
+- `그리드 간격`: 스냅 단위를 정합니다.
+- `확대 배율`: 화면을 확대/축소합니다.
+- `미리보기 월드 / 레벨 / 레이드`: 배경 오버라이드가 있는 경우 어떤 구간을 보여줄지 고릅니다.
 
-1. Open the PC editor.
-2. Load draft or latest release.
-3. Pick a target device preset or custom viewport.
-4. Adjust layout with drag, arrow keys, inspector, and grid snap.
-5. Save draft.
-6. Publish when ready.
-7. Open the app runtime preview on a real phone and verify the published version.
+### 메뉴 설명
+
+- 왼쪽 설명 패널은 각 메뉴가 무슨 용도인지 빠르게 읽기 위한 요약 가이드입니다.
+- 처음 쓰는 관리자는 이 패널을 한 번 읽고 작업을 시작하는 것을 권장합니다.
+
+### 배경 설정
+
+- `적용 범위`: 월드 기본 배경, 특정 레벨 배경, 레이드 단계 배경 중 하나를 고릅니다.
+- `대상 키`: 예를 들어 월드 `1`, 레벨 `12`, 레이드 `3` 같은 대상 번호입니다.
+- `에셋 키`: 업로드한 배경 이미지의 식별자입니다.
+- `틴트 색상 / 틴트 강도`: 배경 위에 얹을 색감과 강도입니다.
+- `이미지 제거`: 배경 이미지를 숨기고 색상/오버레이만 쓸 때 켭니다.
+- `배경 적용`: 현재 폼 값을 설정에 저장합니다.
+- `배경 초기화`: 해당 키의 배경 오버라이드를 지웁니다.
+- `에셋 업로드`: 새 배경 이미지를 서버에 저장합니다.
+- `미리보기`: 에셋 키에 연결된 이미지를 아래 카드에서 확인합니다.
+
+### 배포 메모
+
+- 이번 배포에서 무엇을 바꿨는지 적는 영역입니다.
+- 이후 이력에서 버전을 볼 때 어떤 수정이 들어갔는지 빠르게 파악할 수 있습니다.
+- `JSON 적용`: 오른쪽 JSON 편집 값을 현재 에디터 상태에 반영합니다.
+- `선택 요소 초기화`: 현재 선택한 요소만 기본값으로 되돌립니다.
+
+### 배포 이력
+
+- 최근 비주얼 설정 버전 목록입니다.
+- `이 버전 열기`: 특정 버전을 현재 편집기에 불러옵니다.
+- `이 버전으로 롤백 배포`: 해당 버전을 복사해서 새 배포본으로 올립니다.
+
+### 레이어 목록
+
+- 현재 화면에서 조정 가능한 요소들이 위에서 아래 순서로 보입니다.
+- 체크박스로 개별 요소 표시/숨김을 바로 바꿀 수 있습니다.
+- 요소를 클릭하면 무대와 인스펙터가 동시에 그 요소로 이동합니다.
+
+### 속성 편집
+
+- `X/Y 오프셋`: 기준 위치에서 얼마나 이동할지 정합니다.
+- `배율`: 요소 크기를 키우거나 줄입니다.
+- `투명도`: 요소를 반투명하게 만들 때 씁니다.
+- `Z 인덱스`: 겹칠 때 어느 것이 위로 올라올지 정합니다.
+- `표시`: 요소를 숨기지 않고 유지할지 선택합니다.
+- `안전영역 기준`: 안전영역을 기준으로 오프셋을 계산할지 정합니다.
+- `위/아래/왼쪽/오른쪽`: 픽셀 단위로 미세 이동합니다.
+
+### 선택 요소 설명
+
+- 현재 고른 요소가 실제 게임에서 어떤 역할을 하는지 설명합니다.
+- 위치를 옮길 때 주의할 점, 다른 UI와 겹치지 않게 보는 팁이 같이 표시됩니다.
+
+### 원본 JSON
+
+- 최종 비주얼 설정 원본입니다.
+- 대량 수정이나 외부 비교가 필요할 때 직접 편집할 수 있습니다.
+- 잘못된 JSON을 넣으면 레이아웃이 크게 틀어질 수 있으니 배포 전 드래프트 저장을 권장합니다.
+
+## 왜 이것만으로 최종 확정하면 안 되는가
+
+이 편집기는 브라우저에서 돌아가므로, 실제 React Native 런타임과 완전히 같지는 않습니다.
+
+- 폰트 렌더링이 다를 수 있습니다.
+- 안전영역 계산이 브라우저와 기기에서 다를 수 있습니다.
+- 그림자, 배경 스케일, 이미지 비율 처리도 다를 수 있습니다.
+
+그래서 **PC 편집기는 빠른 작업용**, **휴대폰 런타임 프리뷰는 최종 검수용**으로 써야 합니다.
+
+## 추천 작업 순서
+
+1. 드래프트 또는 최신 배포본을 불러옵니다.
+2. 대상 화면과 기기 프리셋을 고릅니다.
+3. 무대에서 직접 드래그하고, 인스펙터로 미세 조정합니다.
+4. 필요한 배경을 교체합니다.
+5. 드래프트 저장을 합니다.
+6. 휴대폰 런타임 프리뷰로 확인합니다.
+7. 이상 없으면 배포합니다.
