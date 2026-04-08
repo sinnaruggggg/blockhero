@@ -1,99 +1,271 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BlockHero Visual Config Studio</title>
+    <title>BlockHero UI Studio</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="shell">
-      <aside class="sidebar">
-        <header class="panel">
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
           <p class="eyebrow">BlockHero</p>
-          <h1>Visual Config Studio</h1>
-          <p class="muted">
-            PC 편집기는 생산성 도구입니다. 최종 1:1 검수는 앱의 실기기 전체화면 프리뷰를 기준으로 하세요.
+          <h1>UI Studio</h1>
+          <p class="subtitle">
+            Precision editor for runtime visual config. Use phone preview as final truth, use this
+            page to iterate quickly like a scene editor.
           </p>
-        </header>
+        </div>
+        <div class="topbar-actions">
+          <div class="stat-pill">
+            <span class="stat-label">Screen</span>
+            <strong id="topbar-screen-label">Level</strong>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Selected</span>
+            <strong id="topbar-selection-label">header</strong>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Reference</span>
+            <strong id="topbar-reference-label">412 x 915</strong>
+          </div>
+          <button id="fit-stage" class="toolbar-button secondary">Fit</button>
+          <button id="actual-size" class="toolbar-button secondary">100%</button>
+          <button id="save-draft" class="toolbar-button">Save Draft</button>
+          <button id="publish-release" class="toolbar-button gold">Publish</button>
+        </div>
+      </header>
 
-        <section class="panel">
-          <h2>Server</h2>
-          <label>Supabase URL<input id="supabase-url" type="text" /></label>
-          <label>Anon Key<textarea id="supabase-anon" rows="3"></textarea></label>
-          <label>Admin JWT<textarea id="supabase-jwt" rows="4"></textarea></label>
-          <div class="row">
-            <button id="load-draft">Draft Load</button>
-            <button id="load-latest" class="secondary">Latest Load</button>
-          </div>
-          <div class="row">
-            <button id="save-draft">Draft Save</button>
-            <button id="publish-release" class="secondary">Publish</button>
-          </div>
-          <small id="server-status" class="muted">서버 연결 대기</small>
-        </section>
-
-        <section class="panel">
-          <h2>Preview Device</h2>
-          <label>Profile<select id="device-profile"></select></label>
-          <div class="grid two">
-            <label>Width<input id="viewport-width" type="number" /></label>
-            <label>Height<input id="viewport-height" type="number" /></label>
-            <label>Safe Top<input id="safe-top" type="number" /></label>
-            <label>Safe Bottom<input id="safe-bottom" type="number" /></label>
-          </div>
-          <small class="muted" id="viewport-meta"></small>
-        </section>
-
-        <section class="panel">
-          <h2>Selection</h2>
-          <label>Screen<select id="screen-id"></select></label>
-          <label>Element<select id="element-id"></select></label>
-          <div class="grid two">
-            <label>Offset X<input id="offset-x" type="number" /></label>
-            <label>Offset Y<input id="offset-y" type="number" /></label>
-            <label>Scale<input id="scale" type="number" step="0.05" /></label>
-            <label>Opacity<input id="opacity" type="number" step="0.05" min="0" max="1" /></label>
-            <label>Z Index<input id="z-index" type="number" /></label>
-          </div>
-          <div class="checkboxes">
-            <label><input id="visible" type="checkbox" /> Visible</label>
-            <label><input id="safe-aware" type="checkbox" /> Safe area aware</label>
-          </div>
-          <div class="row">
-            <button id="apply-element">Apply</button>
-            <button id="reset-element" class="secondary">Reset</button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2>Manifest</h2>
-          <textarea id="manifest-json" rows="14"></textarea>
-          <div class="row">
-            <button id="apply-json">Apply JSON</button>
-            <button id="copy-json" class="secondary">Copy JSON</button>
-          </div>
-        </section>
-      </aside>
-
-      <main class="workspace">
-        <section class="panel workspace-panel">
-          <div class="workspace-header">
-            <div>
-              <p class="eyebrow">Preview</p>
-              <h2 id="workspace-title">level / header</h2>
+      <div class="workspace-shell">
+        <aside class="sidebar left-sidebar">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Connection</p>
+                <h2>Server</h2>
+              </div>
             </div>
-            <small class="muted">드래그 대신 수치 편집 중심. 해상도 프리셋과 JSON 전송을 PC에서 빠르게 검수합니다.</small>
-          </div>
-          <div class="preview-host">
-            <div id="device-frame" class="device-frame">
-              <div id="safe-top-overlay" class="safe-overlay top"></div>
-              <div id="safe-bottom-overlay" class="safe-overlay bottom"></div>
-              <div id="preview-canvas" class="preview-canvas"></div>
+            <label>Supabase URL<input id="supabase-url" type="text" /></label>
+            <label>Anon Key<textarea id="supabase-anon" rows="3"></textarea></label>
+            <label>Admin JWT<textarea id="supabase-jwt" rows="5"></textarea></label>
+            <div class="button-row">
+              <button id="load-draft">Load Draft</button>
+              <button id="load-latest" class="secondary">Load Latest</button>
             </div>
-          </div>
-        </section>
-      </main>
+            <div class="button-row">
+              <button id="refresh-history" class="secondary">Refresh History</button>
+              <button id="copy-json" class="secondary">Copy JSON</button>
+            </div>
+            <small id="server-status" class="muted">Idle</small>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Viewport</p>
+                <h2>Device Preview</h2>
+              </div>
+            </div>
+            <label>Screen<select id="screen-id"></select></label>
+            <label>Device Profile<select id="device-profile"></select></label>
+            <div class="grid two">
+              <label>Width<input id="viewport-width" type="number" /></label>
+              <label>Height<input id="viewport-height" type="number" /></label>
+              <label>Safe Top<input id="safe-top" type="number" /></label>
+              <label>Safe Bottom<input id="safe-bottom" type="number" /></label>
+            </div>
+            <div class="grid two compact-toggle-grid">
+              <label class="toggle-row"><input id="show-grid" type="checkbox" checked /> Show grid</label>
+              <label class="toggle-row"><input id="snap-grid" type="checkbox" checked /> Snap</label>
+            </div>
+            <div class="grid two">
+              <label>
+                Grid Size
+                <select id="grid-size">
+                  <option value="4">4 px</option>
+                  <option value="8">8 px</option>
+                  <option value="12">12 px</option>
+                  <option value="16" selected>16 px</option>
+                  <option value="24">24 px</option>
+                  <option value="32">32 px</option>
+                </select>
+              </label>
+              <label>
+                Zoom
+                <input id="zoom-range" type="range" min="0.35" max="3" step="0.05" value="1" />
+              </label>
+            </div>
+            <div class="grid two">
+              <label>Preview World<input id="preview-world" type="number" min="1" value="1" /></label>
+              <label>Preview Level<input id="preview-level" type="number" min="1" value="1" /></label>
+              <label>Preview Raid<input id="preview-raid-stage" type="number" min="1" value="1" /></label>
+              <label>Zoom Value<input id="zoom-value" type="number" step="0.05" value="1" /></label>
+            </div>
+            <small id="viewport-meta" class="muted">412 x 915, safe 34 / 34</small>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Background</p>
+                <h2>Scene Backdrop</h2>
+              </div>
+            </div>
+            <label>Scope<select id="background-scope"></select></label>
+            <label>Key<input id="background-key" type="text" placeholder="world 1 / level 12 / stage 3" /></label>
+            <label>Asset Key<input id="background-asset-key" type="text" placeholder="bg_world_1" /></label>
+            <div class="grid two">
+              <label>Tint<input id="background-tint-color" type="color" value="#000000" /></label>
+              <label>Tint Opacity<input id="background-tint-opacity" type="number" min="0" max="1" step="0.05" value="0" /></label>
+            </div>
+            <label class="toggle-row">
+              <input id="background-remove-image" type="checkbox" />
+              Remove image
+            </label>
+            <div class="button-row">
+              <button id="apply-background">Apply</button>
+              <button id="clear-background" class="secondary">Clear</button>
+            </div>
+            <label>Upload Asset<input id="asset-file" type="file" accept="image/*" /></label>
+            <div class="button-row">
+              <button id="upload-asset" class="secondary">Upload Asset</button>
+              <button id="load-asset-preview" class="secondary">Preview Asset</button>
+            </div>
+            <div id="background-preview-card" class="background-preview-card">
+              <div id="background-preview-image" class="background-preview-image"></div>
+              <div class="background-preview-meta">
+                <strong id="background-preview-title">No asset preview</strong>
+                <small id="background-preview-meta" class="muted">Select an asset key or upload an image.</small>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Publish</p>
+                <h2>Release Notes</h2>
+              </div>
+            </div>
+            <label>Notes<textarea id="publish-notes" rows="4" placeholder="Describe what changed in this visual release."></textarea></label>
+            <div class="button-row">
+              <button id="apply-json" class="secondary">Apply JSON</button>
+              <button id="reset-element" class="secondary">Reset Selected</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Release</p>
+                <h2>History</h2>
+              </div>
+            </div>
+            <div id="release-history" class="release-history"></div>
+          </section>
+        </aside>
+
+        <main class="stage-column">
+          <section class="panel stage-panel">
+            <div class="stage-toolbar">
+              <div class="toolbar-group">
+                <span class="toolbar-label">Mode</span>
+                <strong id="stage-screen-pill">level</strong>
+              </div>
+              <div class="toolbar-group">
+                <span class="toolbar-label">Selection</span>
+                <strong id="stage-selection-pill">header</strong>
+              </div>
+              <div class="toolbar-group">
+                <span class="toolbar-label">Offset</span>
+                <strong id="stage-offset-pill">0, 0</strong>
+              </div>
+              <div class="toolbar-group">
+                <span class="toolbar-label">Scale</span>
+                <strong id="stage-scale-pill">1.00x</strong>
+              </div>
+              <div class="toolbar-group">
+                <span class="toolbar-label">Grid</span>
+                <strong id="stage-grid-pill">16 px</strong>
+              </div>
+            </div>
+
+            <div class="stage-shell-inner">
+              <div id="ruler-x" class="ruler ruler-x"></div>
+              <div id="ruler-y" class="ruler ruler-y"></div>
+              <div id="stage-host" class="stage-host">
+                <div id="device-frame" class="device-frame">
+                  <div id="safe-top-overlay" class="safe-overlay top"></div>
+                  <div id="safe-bottom-overlay" class="safe-overlay bottom"></div>
+                  <div id="grid-overlay" class="grid-overlay"></div>
+                  <div id="preview-canvas" class="preview-canvas"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="stage-footer">
+              <small class="muted">
+                Drag directly on the stage. Arrow keys move by 1 px, Shift + Arrow moves by 10 px.
+                Snap follows the selected grid size.
+              </small>
+              <small id="status-line" class="muted status-line">Ready</small>
+            </div>
+          </section>
+        </main>
+
+        <aside class="sidebar right-sidebar">
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Hierarchy</p>
+                <h2>Layers</h2>
+              </div>
+            </div>
+            <div id="layer-list" class="layer-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Inspector</p>
+                <h2>Transform</h2>
+              </div>
+            </div>
+            <label>Element<select id="element-id"></select></label>
+            <div class="grid two">
+              <label>Offset X<input id="offset-x" type="number" /></label>
+              <label>Offset Y<input id="offset-y" type="number" /></label>
+              <label>Scale<input id="scale" type="number" step="0.05" /></label>
+              <label>Opacity<input id="opacity" type="number" step="0.05" min="0" max="1" /></label>
+              <label>Z Index<input id="z-index" type="number" /></label>
+            </div>
+            <div class="grid two compact-toggle-grid">
+              <label class="toggle-row"><input id="visible" type="checkbox" /> Visible</label>
+              <label class="toggle-row"><input id="safe-aware" type="checkbox" /> Safe area aware</label>
+            </div>
+            <div class="nudge-pad">
+              <button id="nudge-up" class="secondary nudge-button">Up</button>
+              <div class="nudge-row">
+                <button id="nudge-left" class="secondary nudge-button">Left</button>
+                <button id="apply-element">Apply</button>
+                <button id="nudge-right" class="secondary nudge-button">Right</button>
+              </div>
+              <button id="nudge-down" class="secondary nudge-button">Down</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Manifest</p>
+                <h2>Raw JSON</h2>
+              </div>
+            </div>
+            <textarea id="manifest-json" rows="28"></textarea>
+          </section>
+        </aside>
+      </div>
     </div>
 
     <script type="module" src="./studio.js"></script>
