@@ -16,6 +16,7 @@
 2. 빌드가 끝나면 `tools/blockhero-creator-desktop/dist` 아래에 `BlockHero Creator` 실행 파일이 생성됩니다.
 3. 생성된 `.exe`를 실행하면 브라우저 없이 데스크톱 앱으로 편집기를 사용할 수 있습니다.
 4. 이후에는 [run-blockhero-creator-exe.bat](/C:/www/game/blockhero_codex/run-blockhero-creator-exe.bat)을 더블클릭해 바로 실행할 수 있습니다.
+5. launcher는 portable exe가 있으면 그 파일을 우선 실행하고, 없으면 `win-unpacked`의 실행 파일로 자동 fallback 합니다.
 
 ## 주요 기능
 - 레벨 / 일반 레이드 / 보스 레이드 / 적 템플릿 트리 편집
