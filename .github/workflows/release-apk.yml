@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-release:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       NODE_OPTIONS: --max-old-space-size=8192
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
