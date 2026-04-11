@@ -1,5 +1,6 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   AppState as RNAppState,
   Modal,
@@ -7,18 +8,24 @@ import {
   Text,
   View,
 } from 'react-native';
-import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import GameDialogHost from '../components/GameDialogHost';
-import {flushPlayerStateNow} from '../services/playerState';
-import {installGameAlertBridge} from '../services/gameDialogService';
-import {supabase, getCurrentUserId} from '../services/supabase';
+import { flushPlayerStateNow } from '../services/playerState';
+import { installGameAlertBridge } from '../services/gameDialogService';
+import { supabase, getCurrentUserId } from '../services/supabase';
 import {
   checkForUpdate,
   downloadAndInstall,
   showUpdateDialog,
 } from '../services/updateService';
-import {preloadGameStoreState} from '../stores/gameStore';
+import {
+  getSelectedCharacter,
+  loadCharacterData,
+  loadGameData,
+  preloadGameStoreState,
+} from '../stores/gameStore';
+import { CHARACTER_CLASSES } from '../constants/characters';
 import {
   downloadPublishedVisualConfigIfNeeded,
   loadCachedVisualConfigManifest,
@@ -28,7 +35,8 @@ import {
   ensureCreatorDraftSeeded,
   loadCachedCreatorManifest,
 } from '../services/creatorService';
-import {getAdminStatus} from '../services/adminSync';
+import { getAdminStatus } from '../services/adminSync';
+import { updatePresence } from '../services/friendService';
 import AdminScreen from '../screens/AdminScreen';
 import BattleScreen from '../screens/BattleScreen';
 import BossCodexScreen from '../screens/BossCodexScreen';
@@ -54,9 +62,11 @@ import UiStudioScreen from '../screens/UiStudioScreen';
 
 const Stack = createNativeStackNavigator();
 
-type AppState = 'intro' | 'login' | 'app';
+type AppState = 'intro' | 'boot' | 'login' | 'app';
 
-const SESSION_ID = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+const SESSION_ID = `${Date.now()}_${Math.random()
+  .toString(36)
+  .substring(2, 10)}`;
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = 1200;
 
@@ -66,21 +76,35 @@ export default function AppNavigator() {
   const [appState, setAppState] = useState<AppState>('intro');
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const introExitedRef = useRef(false);
+  const appStateRef = useRef<AppState>('intro');
   const sessionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const updateCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const updateCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const lastUpdateCheckAtRef = useRef(0);
+  const startupBootstrapPromiseRef = useRef<Promise<void> | null>(null);
+  const presenceUserIdRef = useRef<string | null>(null);
 
   const registerSession = useCallback(async (userId: string) => {
-    await supabase.from('user_presence').upsert(
-      {
-        player_id: userId,
-        session_id: SESSION_ID,
-        last_seen: new Date().toISOString(),
-        is_online: true,
-      },
-      {onConflict: 'player_id'},
-    );
+    presenceUserIdRef.current = userId;
+    await updatePresence(userId, true, SESSION_ID);
   }, []);
+
+  const setOfflinePresence = useCallback(async (userId?: string | null) => {
+    const targetUserId = userId ?? presenceUserIdRef.current;
+    if (!targetUserId) {
+      return;
+    }
+
+    await updatePresence(targetUserId, false, null);
+    if (presenceUserIdRef.current === targetUserId) {
+      presenceUserIdRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    appStateRef.current = appState;
+  }, [appState]);
 
   const checkSession = useCallback(async () => {
     try {
@@ -89,7 +113,7 @@ export default function AppNavigator() {
         return;
       }
 
-      const {data} = await supabase
+      const { data } = await supabase
         .from('user_presence')
         .select('session_id')
         .eq('player_id', userId)
@@ -104,7 +128,7 @@ export default function AppNavigator() {
         Alert.alert(
           '다른 기기에서 로그인됨',
           '다른 기기에서 로그인하여 현재 세션이 종료됩니다.',
-          [{text: '확인', onPress: () => supabase.auth.signOut()}],
+          [{ text: '확인', onPress: () => supabase.auth.signOut() }],
         );
       }
     } catch {}
@@ -148,57 +172,126 @@ export default function AppNavigator() {
     }, UPDATE_CHECK_DELAY_MS);
   }, []);
 
-  const checkAuth = useCallback(async () => {
-    const {
-      data: {session},
-    } = await supabase.auth.getSession();
+  const preloadHomeEntryData = useCallback(async () => {
+    const [, selectedCharacterId] = await Promise.all([
+      loadGameData(),
+      getSelectedCharacter(),
+    ]);
 
-    if (session?.user) {
-      void registerSession(session.user.id);
+    if (selectedCharacterId) {
+      await loadCharacterData(selectedCharacterId);
     }
 
-    setAppState(session ? 'app' : 'login');
-    scheduleUpdateCheck();
+    await Promise.all(
+      CHARACTER_CLASSES.map(async characterClass => {
+        try {
+          await loadCharacterData(characterClass.id);
+        } catch {}
+      }),
+    );
+  }, []);
 
-    if (!session?.user) {
-      return;
+  const runStartupBootstrap = useCallback(async () => {
+    if (startupBootstrapPromiseRef.current) {
+      return startupBootstrapPromiseRef.current;
     }
 
-    void preloadGameStoreState();
-    void downloadPublishedVisualConfigIfNeeded().catch(() => {});
-    void downloadPublishedCreatorManifestIfNeeded().catch(() => {});
-    void (async () => {
+    startupBootstrapPromiseRef.current = (async () => {
+      await Promise.all([
+        loadCachedVisualConfigManifest().catch(() => {}),
+        loadCachedCreatorManifest().catch(() => {}),
+      ]);
+
+      await Promise.all([
+        preloadGameStoreState().catch(() => {}),
+        downloadPublishedVisualConfigIfNeeded().catch(() => {}),
+        downloadPublishedCreatorManifestIfNeeded().catch(() => {}),
+        preloadHomeEntryData().catch(() => {}),
+      ]);
+
       try {
         if (await getAdminStatus()) {
           await ensureCreatorDraftSeeded();
         }
       } catch {}
     })();
-  }, [registerSession, scheduleUpdateCheck]);
+
+    try {
+      return await startupBootstrapPromiseRef.current;
+    } finally {
+      startupBootstrapPromiseRef.current = null;
+    }
+  }, [preloadHomeEntryData]);
+
+  const checkAuth = useCallback(
+    async ({
+      blockOnBootstrap = false,
+    }: { blockOnBootstrap?: boolean } = {}) => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        void registerSession(session.user.id);
+      }
+
+      scheduleUpdateCheck();
+
+      if (!session?.user) {
+        await setOfflinePresence();
+        setAppState('login');
+        return;
+      }
+
+      if (blockOnBootstrap) {
+        setAppState('boot');
+        try {
+          await runStartupBootstrap();
+        } finally {
+          setAppState('app');
+        }
+        return;
+      }
+
+      setAppState('app');
+      void runStartupBootstrap();
+    },
+    [
+      registerSession,
+      runStartupBootstrap,
+      scheduleUpdateCheck,
+      setOfflinePresence,
+    ],
+  );
 
   useEffect(() => {
     const {
-      data: {subscription},
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!introExitedRef.current) {
         return;
       }
 
       if (session?.user) {
         void registerSession(session.user.id);
-        setAppState('app');
-        void preloadGameStoreState();
-        void downloadPublishedVisualConfigIfNeeded().catch(() => {});
-        void downloadPublishedCreatorManifestIfNeeded().catch(() => {});
-        void (async () => {
-          try {
-            if (await getAdminStatus()) {
-              await ensureCreatorDraftSeeded();
-            }
-          } catch {}
-        })();
         scheduleUpdateCheck();
+        const needsBlockingBootstrap =
+          event === 'SIGNED_IN' || appStateRef.current === 'login';
+
+        if (needsBlockingBootstrap) {
+          setAppState('boot');
+          try {
+            await runStartupBootstrap();
+          } finally {
+            setAppState('app');
+          }
+          return;
+        }
+
+        setAppState('app');
+        void runStartupBootstrap();
       } else {
+        void setOfflinePresence();
         if (sessionCheckRef.current) {
           clearInterval(sessionCheckRef.current);
           sessionCheckRef.current = null;
@@ -209,7 +302,12 @@ export default function AppNavigator() {
     });
 
     return () => subscription.unsubscribe();
-  }, [registerSession, scheduleUpdateCheck]);
+  }, [
+    registerSession,
+    runStartupBootstrap,
+    scheduleUpdateCheck,
+    setOfflinePresence,
+  ]);
 
   useEffect(() => {
     if (appState !== 'app') {
@@ -243,6 +341,7 @@ export default function AppNavigator() {
         (nextState === 'background' || nextState === 'inactive')
       ) {
         void flushPlayerStateNow('app_background');
+        void setOfflinePresence();
       }
 
       if (nextState === 'active' && introExitedRef.current) {
@@ -251,15 +350,16 @@ export default function AppNavigator() {
     });
 
     return () => subscription.remove();
-  }, [checkAuth]);
+  }, [checkAuth, setOfflinePresence]);
 
   useEffect(() => {
     return () => {
       if (updateCheckTimeoutRef.current) {
         clearTimeout(updateCheckTimeoutRef.current);
       }
+      void setOfflinePresence();
     };
-  }, []);
+  }, [setOfflinePresence]);
 
   const handleIntroPress = useCallback(() => {
     if (introExitedRef.current) {
@@ -267,7 +367,7 @@ export default function AppNavigator() {
     }
 
     introExitedRef.current = true;
-    checkAuth();
+    checkAuth({ blockOnBootstrap: true });
   }, [checkAuth]);
 
   if (appState === 'intro') {
@@ -280,10 +380,22 @@ export default function AppNavigator() {
     );
   }
 
+  if (appState === 'boot') {
+    return (
+      <>
+        <BootLoadingScreen />
+        <GameDialogHost />
+        <UpdateProgressOverlay downloadProgress={downloadProgress} />
+      </>
+    );
+  }
+
   if (appState === 'login') {
     return (
       <>
-        <LoginScreen onLoginSuccess={() => setAppState('app')} />
+        <LoginScreen
+          onLoginSuccess={() => checkAuth({ blockOnBootstrap: true })}
+        />
         <GameDialogHost />
         <UpdateProgressOverlay downloadProgress={downloadProgress} />
       </>
@@ -298,12 +410,16 @@ export default function AppNavigator() {
           screenOptions={{
             headerShown: false,
             animation: 'fade',
-          }}>
+          }}
+        >
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Missions" component={MissionsScreen} />
           <Stack.Screen name="Levels" component={LevelsScreen} />
           <Stack.Screen name="Ranking" component={RankingScreen} />
-          <Stack.Screen name="KnightSpriteTuner" component={KnightSpriteTunerScreen} />
+          <Stack.Screen
+            name="KnightSpriteTuner"
+            component={KnightSpriteTunerScreen}
+          />
           <Stack.Screen name="UiStudio" component={UiStudioScreen} />
           <Stack.Screen name="SingleGame" component={SingleGameScreen} />
           <Stack.Screen name="Endless" component={EndlessScreen} />
@@ -314,7 +430,10 @@ export default function AppNavigator() {
           <Stack.Screen name="Shop" component={ShopScreen} />
           <Stack.Screen name="Friends" component={FriendsScreen} />
           <Stack.Screen name="BossCodex" component={BossCodexScreen} />
-          <Stack.Screen name="SkinCollection" component={SkinCollectionScreen} />
+          <Stack.Screen
+            name="SkinCollection"
+            component={SkinCollectionScreen}
+          />
           <Stack.Screen name="SkillTree" component={SkillTreeScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
@@ -324,6 +443,20 @@ export default function AppNavigator() {
       <GameDialogHost />
       <UpdateProgressOverlay downloadProgress={downloadProgress} />
     </>
+  );
+}
+
+function BootLoadingScreen() {
+  return (
+    <View style={styles.bootOverlay}>
+      <View style={styles.bootCard}>
+        <ActivityIndicator size="large" color="#7f5a32" />
+        <Text style={styles.bootTitle}>게임 데이터를 준비 중입니다</Text>
+        <Text style={styles.bootSubtitle}>
+          로딩이 끝나면 바로 게임 화면으로 이동합니다.
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -338,7 +471,9 @@ function UpdateProgressOverlay({
         <View style={styles.modal}>
           <Text style={styles.title}>업데이트 다운로드 중</Text>
           <View style={styles.barBg}>
-            <View style={[styles.barFill, {width: `${downloadProgress ?? 0}%`}]} />
+            <View
+              style={[styles.barFill, { width: `${downloadProgress ?? 0}%` }]}
+            />
           </View>
           <Text style={styles.percent}>{downloadProgress ?? 0}%</Text>
         </View>
@@ -348,6 +483,43 @@ function UpdateProgressOverlay({
 }
 
 const styles = StyleSheet.create({
+  bootOverlay: {
+    flex: 1,
+    backgroundColor: '#1b120c',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  bootCard: {
+    width: 320,
+    maxWidth: '100%',
+    backgroundColor: '#fff4df',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#8a5e35',
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    alignItems: 'center',
+    shadowColor: '#160d06',
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  bootTitle: {
+    color: '#5f3a1e',
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  bootSubtitle: {
+    color: '#7a5433',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 19,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -365,7 +537,7 @@ const styles = StyleSheet.create({
     shadowColor: '#160d06',
     shadowOpacity: 0.32,
     shadowRadius: 16,
-    shadowOffset: {width: 0, height: 8},
+    shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
   title: {

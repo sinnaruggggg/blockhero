@@ -1,8 +1,17 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, Modal, FlatList} from 'react-native';
-import {t} from '../i18n';
+import {
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { t } from '../i18n';
 
-interface Friend {
+export interface InviteCandidate {
   id: string;
   nickname: string;
   isOnline: boolean;
@@ -10,48 +19,138 @@ interface Friend {
 
 interface FriendInviteModalProps {
   visible: boolean;
-  friends: Friend[];
-  onInvite: (friendId: string) => void;
+  friends: InviteCandidate[];
+  searchQuery: string;
+  searchResults: InviteCandidate[];
+  searching: boolean;
+  onChangeSearchQuery: (text: string) => void;
+  onSearch: () => void;
+  onInvite: (playerId: string) => void;
   onClose: () => void;
   title?: string;
+}
+
+function CandidateRow({
+  candidate,
+  onInvite,
+}: {
+  candidate: InviteCandidate;
+  onInvite: (playerId: string) => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <View
+        style={[
+          styles.onlineDot,
+          { backgroundColor: candidate.isOnline ? '#22c55e' : '#64748b' },
+        ]}
+      />
+      <View style={styles.identityBlock}>
+        <Text style={styles.name}>{candidate.nickname}</Text>
+        <Text style={styles.idText}>{candidate.id}</Text>
+      </View>
+      <TouchableOpacity
+        style={[
+          styles.inviteBtn,
+          !candidate.isOnline && styles.inviteBtnDisabled,
+        ]}
+        disabled={!candidate.isOnline}
+        onPress={() => onInvite(candidate.id)}
+      >
+        <Text style={styles.inviteBtnText}>
+          {candidate.isOnline ? t('party.invite') : '오프라인'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export default function FriendInviteModal({
   visible,
   friends,
+  searchQuery,
+  searchResults,
+  searching,
+  onChangeSearchQuery,
+  onSearch,
   onInvite,
   onClose,
   title,
 }: FriendInviteModalProps) {
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <View style={styles.content}>
           <Text style={styles.title}>{title || t('party.inviteFriend')}</Text>
 
-          {friends.length === 0 ? (
-            <Text style={styles.emptyText}>{t('friends.noFriends')}</Text>
-          ) : (
-            <FlatList
-              data={friends}
-              keyExtractor={item => item.id}
-              style={styles.list}
-              renderItem={({item}) => (
-                <View style={styles.row}>
-                  <View style={[
-                    styles.onlineDot,
-                    {backgroundColor: item.isOnline ? '#22c55e' : '#64748b'},
-                  ]} />
-                  <Text style={styles.name}>{item.nickname}</Text>
-                  <TouchableOpacity
-                    style={styles.inviteBtn}
-                    onPress={() => onInvite(item.id)}>
-                    <Text style={styles.inviteBtnText}>{t('party.invite')}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+          <View style={styles.searchRow}>
+            <TextInput
+              value={searchQuery}
+              onChangeText={onChangeSearchQuery}
+              placeholder="닉네임 또는 ID 검색"
+              placeholderTextColor="#94a3b8"
+              style={styles.searchInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={onSearch}
             />
-          )}
+            <TouchableOpacity
+              style={[
+                styles.searchBtn,
+                (!searchQuery.trim() || searching) && styles.searchBtnDisabled,
+              ]}
+              disabled={!searchQuery.trim() || searching}
+              onPress={onSearch}
+            >
+              {searching ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.searchBtnText}>검색</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>온라인 친구</Text>
+              {friends.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  초대 가능한 온라인 친구가 없습니다.
+                </Text>
+              ) : (
+                friends.map(candidate => (
+                  <CandidateRow
+                    key={`friend-${candidate.id}`}
+                    candidate={candidate}
+                    onInvite={onInvite}
+                  />
+                ))
+              )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>검색 결과</Text>
+              {searchResults.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  검색 후 온라인 유저가 여기에 표시됩니다.
+                </Text>
+              ) : (
+                searchResults.map(candidate => (
+                  <CandidateRow
+                    key={`search-${candidate.id}`}
+                    candidate={candidate}
+                    onInvite={onInvite}
+                  />
+                ))
+              )}
+            </View>
+          </ScrollView>
 
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
             <Text style={styles.closeBtnText}>{t('common.cancel')}</Text>
@@ -73,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e1b4b',
     borderRadius: 16,
     padding: 20,
-    maxHeight: '70%',
+    maxHeight: '78%',
   },
   title: {
     color: '#e2e8f0',
@@ -82,14 +181,53 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
-  emptyText: {
-    color: '#94a3b8',
+  searchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 12,
+    color: '#e2e8f0',
     fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: 20,
+  },
+  searchBtn: {
+    minWidth: 72,
+    borderRadius: 10,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  searchBtnDisabled: {
+    opacity: 0.5,
+  },
+  searchBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
   },
   list: {
-    maxHeight: 300,
+    maxHeight: 360,
+  },
+  section: {
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    color: '#cbd5f5',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  emptyText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 18,
+    paddingVertical: 8,
   },
   row: {
     flexDirection: 'row',
@@ -104,11 +242,18 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  identityBlock: {
+    flex: 1,
+    gap: 2,
+  },
   name: {
     color: '#e2e8f0',
     fontSize: 15,
     fontWeight: '600',
-    flex: 1,
+  },
+  idText: {
+    color: '#94a3b8',
+    fontSize: 11,
   },
   inviteBtn: {
     backgroundColor: '#6366f1',
@@ -116,13 +261,16 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
+  inviteBtnDisabled: {
+    backgroundColor: '#475569',
+  },
   inviteBtnText: {
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
   },
   closeBtn: {
-    marginTop: 16,
+    marginTop: 8,
     alignItems: 'center',
     paddingVertical: 12,
     backgroundColor: '#374151',

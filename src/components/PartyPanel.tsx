@@ -1,7 +1,7 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
-import {t} from '../i18n';
-import {MAX_PARTY_SIZE} from '../constants/raidConfig';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { t } from '../i18n';
+import { MAX_PARTY_SIZE } from '../constants/raidConfig';
 
 interface PartyMember {
   playerId: string;
@@ -45,7 +45,7 @@ export default function PartyPanel({
         <Text style={styles.title}>
           {t('party.title')} ({members.length}/{MAX_PARTY_SIZE})
         </Text>
-        {members.length < MAX_PARTY_SIZE && (
+        {isLeader && members.length < MAX_PARTY_SIZE && (
           <TouchableOpacity style={styles.inviteBtn} onPress={onInviteFriends}>
             <Text style={styles.inviteBtnText}>{t('party.invite')}</Text>
           </TouchableOpacity>
@@ -58,7 +58,8 @@ export default function PartyPanel({
               style={[
                 styles.memberName,
                 member.playerId === myPlayerId && styles.memberNameMe,
-              ]}>
+              ]}
+            >
               {member.nickname}
               {member.playerId === myPlayerId ? ' (나)' : ''}
             </Text>
@@ -67,7 +68,8 @@ export default function PartyPanel({
       </View>
       <TouchableOpacity
         style={styles.leaveBtn}
-        onPress={isLeader ? onDisbandParty : onLeaveParty}>
+        onPress={isLeader ? onDisbandParty : onLeaveParty}
+      >
         <Text style={styles.leaveBtnText}>
           {isLeader ? t('party.disband') : t('party.leave')}
         </Text>

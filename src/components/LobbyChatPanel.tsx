@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type {LobbyChatMessage} from '../hooks/useLobbyChat';
+import type { LobbyChatMessage } from '../hooks/useLobbyChat';
 
 interface ChannelOption {
   id: number;
@@ -32,6 +32,7 @@ interface LobbyChatPanelProps {
   onSend: () => void;
   onSwitchChannel: (channelId: number) => void;
   onRandomizeChannel: () => void;
+  onPressUser?: (userId: string, nickname: string) => void;
   bottom?: number;
 }
 
@@ -51,13 +52,14 @@ export default function LobbyChatPanel({
   onSend,
   onSwitchChannel,
   onRandomizeChannel,
+  onPressUser,
   bottom = 22,
 }: LobbyChatPanelProps) {
   const scrollRef = useRef<ScrollView>(null);
   const shouldAutoScrollRef = useRef(true);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const distanceFromBottom =
       contentSize.height - (contentOffset.y + layoutMeasurement.height);
     shouldAutoScrollRef.current = distanceFromBottom <= 28;
@@ -72,26 +74,27 @@ export default function LobbyChatPanel({
   useEffect(() => {
     if (isOpen && shouldAutoScrollRef.current) {
       requestAnimationFrame(() => {
-        scrollRef.current?.scrollToEnd({animated: true});
+        scrollRef.current?.scrollToEnd({ animated: true });
       });
     }
   }, [currentChannelId, isOpen, messages]);
 
   return (
-    <View pointerEvents="box-none" style={[styles.host, {bottom}]}>
+    <View pointerEvents="box-none" style={[styles.host, { bottom }]}>
       {isOpen ? (
-        <View style={[styles.panel, {borderColor: `${accentColor}AA`}]}>
+        <View style={[styles.panel, { borderColor: `${accentColor}AA` }]}>
           <View style={styles.header}>
             <View style={styles.headerTextBlock}>
               <Text style={styles.title}>{title}</Text>
-              <Text style={[styles.channelText, {color: accentColor}]}>
+              <Text style={[styles.channelText, { color: accentColor }]}>
                 {currentChannelId ? `채널 ${currentChannelId}` : '채널 연결 중'}
                 {currentChannelId ? ` · ${currentOccupancy}/${capacity}` : ''}
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.closeButton, {borderColor: `${accentColor}55`}]}
-              onPress={onToggle}>
+              style={[styles.closeButton, { borderColor: `${accentColor}55` }]}
+              onPress={onToggle}
+            >
               <Text style={styles.closeButtonText}>닫기</Text>
             </TouchableOpacity>
           </View>
@@ -105,24 +108,38 @@ export default function LobbyChatPanel({
                   key={`channel-${option.id}`}
                   style={[
                     styles.channelChip,
-                    active && {backgroundColor: accentColor},
+                    active && { backgroundColor: accentColor },
                     full && styles.channelChipFull,
                   ]}
                   disabled={full}
-                  onPress={() => onSwitchChannel(option.id)}>
-                  <Text style={[styles.channelChipText, active && styles.channelChipTextActive]}>
+                  onPress={() => onSwitchChannel(option.id)}
+                >
+                  <Text
+                    style={[
+                      styles.channelChipText,
+                      active && styles.channelChipTextActive,
+                    ]}
+                  >
                     {option.id}번
                   </Text>
-                  <Text style={[styles.channelChipMeta, active && styles.channelChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.channelChipMeta,
+                      active && styles.channelChipTextActive,
+                    ]}
+                  >
                     {option.count}/{capacity}
                   </Text>
                 </TouchableOpacity>
               );
             })}
             <TouchableOpacity
-              style={[styles.randomButton, {borderColor: `${accentColor}88`}]}
-              onPress={onRandomizeChannel}>
-              <Text style={[styles.randomButtonText, {color: accentColor}]}>랜덤</Text>
+              style={[styles.randomButton, { borderColor: `${accentColor}88` }]}
+              onPress={onRandomizeChannel}
+            >
+              <Text style={[styles.randomButtonText, { color: accentColor }]}>
+                랜덤
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -137,20 +154,49 @@ export default function LobbyChatPanel({
               if (!isOpen || !shouldAutoScrollRef.current) {
                 return;
               }
-              scrollRef.current?.scrollToEnd({animated: true});
-            }}>
+              scrollRef.current?.scrollToEnd({ animated: true });
+            }}
+          >
             {messages.length === 0 ? (
               <Text style={styles.emptyText}>
-                {connected ? '실시간 모집 채팅이 비어 있습니다.' : '채팅 채널에 연결 중입니다.'}
+                {connected
+                  ? '실시간 모집 채팅이 비어 있습니다.'
+                  : '채팅 채널에 연결 중입니다.'}
               </Text>
             ) : (
               messages.map(message => (
                 <View
                   key={message.id}
-                  style={[styles.messageBubble, message.self && styles.messageBubbleSelf]}>
-                  <Text style={[styles.messageNickname, message.self && styles.messageNicknameSelf]}>
+                  style={[
+                    styles.messageBubble,
+                    message.self && styles.messageBubbleSelf,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.messageNickname,
+                      message.self && styles.messageNicknameSelf,
+                    ]}
+                  >
                     {message.nickname}
                   </Text>
+                  {message.userId && onPressUser ? (
+                    <TouchableOpacity
+                      disabled={message.self}
+                      onPress={() =>
+                        onPressUser?.(message.userId!, message.nickname)
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.messageUserId,
+                          message.self && styles.messageUserIdDisabled,
+                        ]}
+                      >
+                        ID: {message.userId}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <Text style={styles.messageText}>{message.text}</Text>
                 </View>
               ))
@@ -169,8 +215,9 @@ export default function LobbyChatPanel({
               onSubmitEditing={onSend}
             />
             <TouchableOpacity
-              style={[styles.sendButton, {backgroundColor: accentColor}]}
-              onPress={onSend}>
+              style={[styles.sendButton, { backgroundColor: accentColor }]}
+              onPress={onSend}
+            >
               <Text style={styles.sendButtonText}>전송</Text>
             </TouchableOpacity>
           </View>
@@ -178,11 +225,14 @@ export default function LobbyChatPanel({
       ) : null}
 
       <TouchableOpacity
-        style={[styles.fab, {borderColor: `${accentColor}AA`}]}
-        onPress={onToggle}>
+        style={[styles.fab, { borderColor: `${accentColor}AA` }]}
+        onPress={onToggle}
+      >
         <Text style={styles.fabTitle}>채팅</Text>
-        <Text style={[styles.fabChannel, {color: accentColor}]}>
-          {currentChannelId ? `${currentChannelId}번 · ${currentOccupancy}/${capacity}` : '연결 중'}
+        <Text style={[styles.fabChannel, { color: accentColor }]}>
+          {currentChannelId
+            ? `${currentChannelId}번 · ${currentOccupancy}/${capacity}`
+            : '연결 중'}
         </Text>
       </TouchableOpacity>
     </View>
@@ -317,6 +367,16 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 12,
     lineHeight: 18,
+  },
+  messageUserId: {
+    color: '#93c5fd',
+    fontSize: 10,
+    lineHeight: 14,
+    textDecorationLine: 'underline',
+  },
+  messageUserIdDisabled: {
+    color: '#64748b',
+    textDecorationLine: 'none',
   },
   inputRow: {
     flexDirection: 'row',

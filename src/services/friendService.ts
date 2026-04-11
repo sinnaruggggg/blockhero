@@ -1,16 +1,114 @@
-import {supabase} from './supabase';
+import { supabase } from './supabase';
 
-// Search players by nickname
+interface PresenceRow {
+  player_id: string;
+  is_online: boolean;
+  last_seen: string;
+}
+
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+async function fetchPresenceMap(playerIds: string[]) {
+  if (playerIds.length === 0) {
+    return {} as Record<string, { isOnline: boolean; lastSeen: string }>;
+  }
+
+  const { data: presence } = await supabase
+    .from('user_presence')
+    .select('player_id, is_online, last_seen')
+    .in('player_id', playerIds);
+
+  const presenceMap: Record<string, { isOnline: boolean; lastSeen: string }> =
+    {};
+  (presence as PresenceRow[] | null)?.forEach(row => {
+    presenceMap[row.player_id] = {
+      isOnline: row.is_online,
+      lastSeen: row.last_seen,
+    };
+  });
+
+  return presenceMap;
+}
+
 export async function searchPlayers(query: string, excludePlayerId: string) {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { data: [], error: null };
+  }
+
   return supabase
     .from('profiles')
     .select('id, nickname')
-    .ilike('nickname', `%${query}%`)
+    .ilike('nickname', `%${trimmed}%`)
     .neq('id', excludePlayerId)
     .limit(20);
 }
 
-// Send friend request
+export async function searchOnlinePlayers(
+  query: string,
+  excludePlayerId: string,
+) {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { data: [], error: null };
+  }
+
+  const results = new Map<
+    string,
+    { id: string; nickname: string; isOnline: boolean }
+  >();
+
+  const { data: nicknameMatches, error: nicknameError } = await supabase
+    .from('profiles')
+    .select('id, nickname')
+    .ilike('nickname', `%${trimmed}%`)
+    .neq('id', excludePlayerId)
+    .limit(20);
+  if (nicknameError) {
+    return { data: null, error: nicknameError };
+  }
+
+  (nicknameMatches ?? []).forEach(profile => {
+    results.set(profile.id, {
+      id: profile.id,
+      nickname: profile.nickname,
+      isOnline: false,
+    });
+  });
+
+  if (isUuidLike(trimmed) && trimmed !== excludePlayerId) {
+    const { data: exactMatch, error: exactError } = await supabase
+      .from('profiles')
+      .select('id, nickname')
+      .eq('id', trimmed)
+      .maybeSingle();
+    if (exactError) {
+      return { data: null, error: exactError };
+    }
+    if (exactMatch) {
+      results.set(exactMatch.id, {
+        id: exactMatch.id,
+        nickname: exactMatch.nickname,
+        isOnline: false,
+      });
+    }
+  }
+
+  const presenceMap = await fetchPresenceMap(Array.from(results.keys()));
+  const onlinePlayers = Array.from(results.values())
+    .map(player => ({
+      ...player,
+      isOnline: presenceMap[player.id]?.isOnline ?? false,
+    }))
+    .filter(player => player.isOnline);
+
+  return { data: onlinePlayers, error: null };
+}
+
 export async function sendFriendRequest(requesterId: string, targetId: string) {
   return supabase.from('friends').insert({
     requester_id: requesterId,
@@ -19,151 +117,141 @@ export async function sendFriendRequest(requesterId: string, targetId: string) {
   });
 }
 
-// Accept friend request
 export async function acceptFriendRequest(friendshipId: string) {
   return supabase
     .from('friends')
-    .update({status: 'accepted', updated_at: new Date().toISOString()})
+    .update({ status: 'accepted', updated_at: new Date().toISOString() })
     .eq('id', friendshipId);
 }
 
-// Reject friend request (delete)
 export async function rejectFriendRequest(friendshipId: string) {
   return supabase.from('friends').delete().eq('id', friendshipId);
 }
 
-// Get friend list (accepted)
 export async function getFriendList(playerId: string) {
-  // Get all accepted friendships where I'm involved
-  const {data: asRequester} = await supabase
+  const { data: asRequester } = await supabase
     .from('friends')
     .select('id, target_id, created_at')
     .eq('requester_id', playerId)
     .eq('status', 'accepted');
 
-  const {data: asTarget} = await supabase
+  const { data: asTarget } = await supabase
     .from('friends')
     .select('id, requester_id, created_at')
     .eq('target_id', playerId)
     .eq('status', 'accepted');
 
-  // Collect friend IDs
   const friendIds: string[] = [];
-  const friendshipMap: Record<string, string> = {}; // friendId -> friendshipId
+  const friendshipMap: Record<string, string> = {};
 
   if (asRequester) {
-    for (const f of asRequester) {
-      friendIds.push(f.target_id);
-      friendshipMap[f.target_id] = f.id;
+    for (const friendship of asRequester) {
+      friendIds.push(friendship.target_id);
+      friendshipMap[friendship.target_id] = friendship.id;
     }
   }
   if (asTarget) {
-    for (const f of asTarget) {
-      friendIds.push(f.requester_id);
-      friendshipMap[f.requester_id] = f.id;
+    for (const friendship of asTarget) {
+      friendIds.push(friendship.requester_id);
+      friendshipMap[friendship.requester_id] = friendship.id;
     }
   }
 
-  if (friendIds.length === 0) return {data: [], friendshipMap};
+  if (friendIds.length === 0) {
+    return { data: [], friendshipMap };
+  }
 
-  // Get profiles
-  const {data: profiles} = await supabase
+  const { data: profiles } = await supabase
     .from('profiles')
     .select('id, nickname')
     .in('id', friendIds);
 
-  // Get presence
-  const {data: presence} = await supabase
-    .from('user_presence')
-    .select('player_id, is_online, last_seen')
-    .in('player_id', friendIds);
+  const presenceMap = await fetchPresenceMap(friendIds);
 
-  const presenceMap: Record<string, {isOnline: boolean; lastSeen: string}> = {};
-  if (presence) {
-    for (const p of presence) {
-      presenceMap[p.player_id] = {isOnline: p.is_online, lastSeen: p.last_seen};
-    }
-  }
-
-  const friends = (profiles || []).map(p => ({
-    id: p.id,
-    nickname: p.nickname,
-    friendshipId: friendshipMap[p.id],
-    isOnline: presenceMap[p.id]?.isOnline || false,
-    lastSeen: presenceMap[p.id]?.lastSeen || '',
+  const friends = (profiles || []).map(profile => ({
+    id: profile.id,
+    nickname: profile.nickname,
+    friendshipId: friendshipMap[profile.id],
+    isOnline: presenceMap[profile.id]?.isOnline || false,
+    lastSeen: presenceMap[profile.id]?.lastSeen || '',
   }));
 
-  return {data: friends, friendshipMap};
+  return { data: friends, friendshipMap };
 }
 
-// Get pending friend requests (incoming)
 export async function getPendingRequests(playerId: string) {
-  const {data} = await supabase
+  const { data } = await supabase
     .from('friends')
     .select('id, requester_id, created_at')
     .eq('target_id', playerId)
     .eq('status', 'pending');
 
-  if (!data || data.length === 0) return {data: []};
+  if (!data || data.length === 0) {
+    return { data: [] };
+  }
 
-  const requesterIds = data.map(d => d.requester_id);
-  const {data: profiles} = await supabase
+  const requesterIds = data.map(entry => entry.requester_id);
+  const { data: profiles } = await supabase
     .from('profiles')
     .select('id, nickname')
     .in('id', requesterIds);
 
   const profileMap: Record<string, string> = {};
   if (profiles) {
-    for (const p of profiles) {
-      profileMap[p.id] = p.nickname;
+    for (const profile of profiles) {
+      profileMap[profile.id] = profile.nickname;
     }
   }
 
-  const requests = data.map(d => ({
-    friendshipId: d.id,
-    requesterId: d.requester_id,
-    nickname: profileMap[d.requester_id] || 'Unknown',
-    createdAt: d.created_at,
+  const requests = data.map(entry => ({
+    friendshipId: entry.id,
+    requesterId: entry.requester_id,
+    nickname: profileMap[entry.requester_id] || 'Unknown',
+    createdAt: entry.created_at,
   }));
 
-  return {data: requests};
+  return { data: requests };
 }
 
-// Remove friend
 export async function removeFriend(friendshipId: string) {
   return supabase.from('friends').delete().eq('id', friendshipId);
 }
 
-// Update user presence
-export async function updatePresence(playerId: string, isOnline: boolean) {
-  return supabase
-    .from('user_presence')
-    .upsert(
-      {
-        player_id: playerId,
-        last_seen: new Date().toISOString(),
-        is_online: isOnline,
-      },
-      {onConflict: 'player_id'},
-    );
+export async function updatePresence(
+  playerId: string,
+  isOnline: boolean,
+  sessionId?: string | null,
+) {
+  return supabase.from('user_presence').upsert(
+    {
+      player_id: playerId,
+      last_seen: new Date().toISOString(),
+      is_online: isOnline,
+      session_id: typeof sessionId === 'undefined' ? undefined : sessionId,
+    },
+    { onConflict: 'player_id' },
+  );
 }
 
-// Get friend IDs (for filtering active raids)
 export async function getFriendIds(playerId: string): Promise<string[]> {
-  const {data: asRequester} = await supabase
+  const { data: asRequester } = await supabase
     .from('friends')
     .select('target_id')
     .eq('requester_id', playerId)
     .eq('status', 'accepted');
 
-  const {data: asTarget} = await supabase
+  const { data: asTarget } = await supabase
     .from('friends')
     .select('requester_id')
     .eq('target_id', playerId)
     .eq('status', 'accepted');
 
   const ids: string[] = [];
-  if (asRequester) ids.push(...asRequester.map(r => r.target_id));
-  if (asTarget) ids.push(...asTarget.map(r => r.requester_id));
+  if (asRequester) {
+    ids.push(...asRequester.map(row => row.target_id));
+  }
+  if (asTarget) {
+    ids.push(...asTarget.map(row => row.requester_id));
+  }
   return ids;
 }

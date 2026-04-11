@@ -1,6 +1,6 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Alert} from 'react-native';
-import {supabase} from '../services/supabase';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import { supabase } from '../services/supabase';
 import {
   buildLobbyChatChannelInfos,
   buildLobbyChatChannelOptions,
@@ -17,6 +17,7 @@ import {
 
 export interface LobbyChatMessage {
   id: string;
+  userId?: string;
   nickname: string;
   text: string;
   self?: boolean;
@@ -47,7 +48,9 @@ function readLobbyChatHistory(
     return [];
   }
 
-  return lobbyChatHistoryCache.get(getLobbyChatHistoryKey(mode, channelId)) ?? [];
+  return (
+    lobbyChatHistoryCache.get(getLobbyChatHistoryKey(mode, channelId)) ?? []
+  );
 }
 
 function writeLobbyChatHistory(
@@ -136,7 +139,7 @@ export function useLobbyChat({
             table: 'lobby_chat_messages',
             filter: `channel_key=eq.${channelKey}`,
           },
-          ({payload}: any) => {
+          ({ payload }: any) => {
             const incomingId =
               typeof payload?.new?.id === 'string' ? payload.new.id : null;
             const incomingNickname =
@@ -153,6 +156,10 @@ export function useLobbyChat({
             setMessages(current => {
               const nextMessages = appendLobbyChatMessage(current, {
                 id: incomingId,
+                userId:
+                  typeof payload?.new?.user_id === 'string'
+                    ? payload.new.user_id
+                    : undefined,
                 nickname: incomingNickname,
                 text: incomingText,
                 self: payload?.new?.user_id === userId,
@@ -194,7 +201,7 @@ export function useLobbyChat({
             refreshChannelInfos();
           }
 
-          const {data: history} = await fetchLobbyChatMessages(
+          const { data: history } = await fetchLobbyChatMessages(
             mode,
             targetChannelId,
             MESSAGE_LIMIT,
@@ -203,6 +210,7 @@ export function useLobbyChat({
           if (token === lifecycleTokenRef.current) {
             const hydratedMessages = history.map(message => ({
               id: message.id,
+              userId: message.userId,
               nickname: message.nickname,
               text: message.text,
               self: message.userId === userId,
@@ -270,9 +278,9 @@ export function useLobbyChat({
 
     const directoryChannel = supabase
       .channel(`lobby-directory:${mode}`, {
-        config: {presence: {key: userId}},
+        config: { presence: { key: userId } },
       })
-      .on('presence', {event: 'sync'}, () => {
+      .on('presence', { event: 'sync' }, () => {
         if (!active) {
           return;
         }
@@ -292,7 +300,11 @@ export function useLobbyChat({
         return;
       }
 
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+      if (
+        status === 'CHANNEL_ERROR' ||
+        status === 'TIMED_OUT' ||
+        status === 'CLOSED'
+      ) {
         setConnected(false);
       }
     });
@@ -325,6 +337,7 @@ export function useLobbyChat({
 
     const message: LobbyChatMessage = {
       id: `${userId}-${Date.now()}`,
+      userId,
       nickname,
       text,
       self: true,
@@ -336,7 +349,7 @@ export function useLobbyChat({
     });
     setDraft('');
 
-    const {error} = await insertLobbyChatMessage({
+    const { error } = await insertLobbyChatMessage({
       id: message.id,
       mode,
       channelId: activeChannelId,
