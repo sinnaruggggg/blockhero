@@ -1,4 +1,4 @@
-﻿import React, {useState, useEffect, useCallback, useRef} from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,46 +8,46 @@ import {
   Image,
   ImageBackground,
   Alert,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {t} from '../i18n';
-import {flushPlayerStateNow} from '../services/playerState';
-import {getAdminStatus} from '../services/adminSync';
-import {submitLevelLeaderboard} from '../services/rankingService';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
+import { t } from '../i18n';
+import { flushPlayerStateNow } from '../services/playerState';
+import { getAdminStatus } from '../services/adminSync';
+import { submitLevelLeaderboard } from '../services/rankingService';
 import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView, {
+  buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
-import {useVisualConfig} from '../hooks/useVisualConfig';
-import {useCreatorConfig} from '../hooks/useCreatorConfig';
+import { useVisualConfig } from '../hooks/useVisualConfig';
+import { useCreatorConfig } from '../hooks/useCreatorConfig';
 import {
   buildVisualTintColor,
   getLevelBackgroundOverride,
   getVisualElementRule,
+  type VisualViewport,
 } from '../game/visualConfig';
-import {resolveCreatorLevelRuntime} from '../game/creatorManifest';
-
-const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
+import { scaleGameplayUnit } from '../game/layoutScale';
+import { resolveCreatorLevelRuntime } from '../game/creatorManifest';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
 import NextPiecePreview from '../components/NextPiecePreview';
 import KnightSprite from '../components/KnightSprite';
-import {useDragDrop} from '../game/useDragDrop';
-import {
-  LEVELS,
-  COMBO_TIMEOUT_MS,
-  FEVER_DURATION,
-} from '../constants';
+import { useDragDrop } from '../game/useDragDrop';
+import { LEVELS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import {
   createBoard,
   generatePlaceablePieces,
-  generateSpecificPiece,
   placePiece,
   checkAndClearLines,
   countBlocks,
@@ -59,18 +59,19 @@ import {
   Piece,
   Board as BoardType,
 } from '../game/engine';
-import {getLevelEnemyStats} from '../game/battleBalance';
-import {resolveCombatTurn} from '../game/combatFlow';
-import {getLevelClearRewards} from '../game/levelProgress';
+import {
+  getAdjustedLevelMonsterHp,
+  getLevelEnemyStats,
+} from '../game/battleBalance';
+import { resolveCombatTurn } from '../game/combatFlow';
+import { getLevelClearRewards } from '../game/levelProgress';
 import {
   applyCombatDamageEffectsDetailed,
-  applyDamageTakenReduction,
   applyRewardMultipliers,
   getCharacterSkillEffects,
   getPieceGenerationOptions,
   shouldDodgeAttack,
 } from '../game/characterSkillEffects';
-import {SPECIAL_PIECE_ITEMS} from '../constants/shopItems';
 import {
   loadGameData,
   loadLevelProgress,
@@ -85,15 +86,23 @@ import {
   collectSpecialBlockRewards,
   GameData,
   getSelectedCharacter,
+  getLevelModeBreakthroughState,
+  getUnlockedSpecialPieceShapeIndices,
   gainSummonExp,
   loadSkinData,
+  recordLevelModeBreakthroughSuccess,
+  resetLevelModeBreakthrough,
 } from '../stores/gameStore';
 import {
   getCharacterAtk,
   getCharacterHp,
   xpToNextLevel,
 } from '../constants/characters';
-import {getSkinBoardBg, getSkinColors, setActiveSkin} from '../game/skinContext';
+import {
+  getSkinBoardBg,
+  getSkinColors,
+  setActiveSkin,
+} from '../game/skinContext';
 import {
   applySkinCombatDamage,
   applySkinIncomingDamage,
@@ -112,9 +121,15 @@ import {
   loadCharacterVisualTunings,
   subscribeCharacterVisualTunings,
 } from '../stores/characterVisualTuning';
-import {useBattleNotice} from '../hooks/useBattleNotice';
-import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
-import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
+import { useBattleNotice } from '../hooks/useBattleNotice';
+import {
+  buildBoardSkillTriggerNotice,
+  buildSkillTriggerNotice,
+} from '../game/skillTriggerNotice';
+import {
+  loadSkillTriggerNoticeMode,
+  type SkillTriggerNoticeMode,
+} from '../stores/gameSettings';
 import {
   pushFloatingDamageHit,
   type FloatingDamageHit,
@@ -123,6 +138,7 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import { applySkillBoardEffects } from '../game/skillBoardEffects';
 
 type FailureReason = 'board_full' | 'hp_zero';
 
@@ -170,43 +186,43 @@ function calculateVictoryStars(
   return 1;
 }
 
-const CHARACTER_VISUALS: Record<string, {name: string; emoji: string}> = {
-  knight: {name: '기사', emoji: '🛡️'},
-  mage: {name: '매지션', emoji: '🔮'},
-  archer: {name: '궁수', emoji: '🏹'},
-  rogue: {name: '도적', emoji: '🗡️'},
-  healer: {name: '힐러', emoji: '✨'},
+const CHARACTER_VISUALS: Record<string, { name: string; emoji: string }> = {
+  knight: { name: '기사', emoji: '🛡️' },
+  mage: { name: '매지션', emoji: '🔮' },
+  archer: { name: '궁수', emoji: '🏹' },
+  rogue: { name: '도적', emoji: '🗡️' },
+  healer: { name: '힐러', emoji: '✨' },
 };
 
 const LEVEL_UP_BURST_POINTS = [
-  {x: -94, y: -58, color: '#f59e0b'},
-  {x: -76, y: -112, color: '#fb7185'},
-  {x: -34, y: -86, color: '#38bdf8'},
-  {x: 0, y: -128, color: '#facc15'},
-  {x: 36, y: -90, color: '#c084fc'},
-  {x: 78, y: -112, color: '#22c55e'},
-  {x: 96, y: -52, color: '#fb7185'},
-  {x: -112, y: 4, color: '#f97316'},
-  {x: 112, y: 0, color: '#f59e0b'},
-  {x: -88, y: 72, color: '#38bdf8'},
-  {x: -30, y: 98, color: '#facc15'},
-  {x: 28, y: 104, color: '#c084fc'},
-  {x: 84, y: 70, color: '#22c55e'},
+  { x: -94, y: -58, color: '#f59e0b' },
+  { x: -76, y: -112, color: '#fb7185' },
+  { x: -34, y: -86, color: '#38bdf8' },
+  { x: 0, y: -128, color: '#facc15' },
+  { x: 36, y: -90, color: '#c084fc' },
+  { x: 78, y: -112, color: '#22c55e' },
+  { x: 96, y: -52, color: '#fb7185' },
+  { x: -112, y: 4, color: '#f97316' },
+  { x: 112, y: 0, color: '#f59e0b' },
+  { x: -88, y: 72, color: '#38bdf8' },
+  { x: -30, y: 98, color: '#facc15' },
+  { x: 28, y: 104, color: '#c084fc' },
+  { x: 84, y: 70, color: '#22c55e' },
 ];
 
 const COMBO_PARTICLE_POINTS = [
-  {x: -92, y: -30, color: '#f59e0b'},
-  {x: -74, y: -94, color: '#fb7185'},
-  {x: -20, y: -118, color: '#38bdf8'},
-  {x: 26, y: -110, color: '#facc15'},
-  {x: 76, y: -86, color: '#a78bfa'},
-  {x: 98, y: -24, color: '#22c55e'},
-  {x: 94, y: 34, color: '#fb7185'},
-  {x: 56, y: 88, color: '#f59e0b'},
-  {x: 0, y: 110, color: '#38bdf8'},
-  {x: -56, y: 90, color: '#facc15'},
-  {x: -98, y: 34, color: '#c084fc'},
-  {x: -106, y: -2, color: '#22c55e'},
+  { x: -92, y: -30, color: '#f59e0b' },
+  { x: -74, y: -94, color: '#fb7185' },
+  { x: -20, y: -118, color: '#38bdf8' },
+  { x: 26, y: -110, color: '#facc15' },
+  { x: 76, y: -86, color: '#a78bfa' },
+  { x: 98, y: -24, color: '#22c55e' },
+  { x: 94, y: 34, color: '#fb7185' },
+  { x: 56, y: 88, color: '#f59e0b' },
+  { x: 0, y: 110, color: '#38bdf8' },
+  { x: -56, y: 90, color: '#facc15' },
+  { x: -98, y: 34, color: '#c084fc' },
+  { x: -106, y: -2, color: '#22c55e' },
 ];
 
 const HIT_FRAMES = [
@@ -248,13 +264,7 @@ const WORLD_BACKGROUND_TINTS: Record<number, string> = {
   10: 'rgba(34, 10, 10, 0.72)',
 };
 
-function HitEffect({
-  damage,
-  onDone,
-}: {
-  damage: number;
-  onDone: () => void;
-}) {
+function HitEffect({ damage, onDone }: { damage: number; onDone: () => void }) {
   const [frame, setFrame] = useState(0);
   const scale = Math.min(2.2, 1 + Math.floor(damage / 12) * 0.08);
   const size = 88 * scale;
@@ -287,7 +297,7 @@ function HitEffect({
           height: size,
           top: -(size - 58) / 2,
           left: -(size - 58) / 2,
-          transform: [{rotate: `${rotation}deg`}, {scaleX: flipX ? -1 : 1}],
+          transform: [{ rotate: `${rotation}deg` }, { scaleX: flipX ? -1 : 1 }],
         },
       ]}
     />
@@ -307,34 +317,58 @@ function DamageFlash({
   useEffect(() => {
     Animated.parallel([
       Animated.sequence([
-        Animated.timing(translateY, {toValue: -6, duration: 220, useNativeDriver: true}),
-        Animated.timing(translateY, {toValue: -18, duration: 820, useNativeDriver: true}),
+        Animated.timing(translateY, {
+          toValue: -6,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: -18,
+          duration: 820,
+          useNativeDriver: true,
+        }),
       ]),
       Animated.sequence([
         Animated.delay(650),
-        Animated.timing(opacity, {toValue: 0, duration: 350, useNativeDriver: true}),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 350,
+          useNativeDriver: true,
+        }),
       ]),
     ]).start(onDone);
   }, [onDone, opacity, translateY]);
 
   return (
     <Animated.View
-      style={[
-        styles.damageFlash,
-        {opacity, transform: [{translateY}]},
-      ]}>
+      style={[styles.damageFlash, { opacity, transform: [{ translateY }] }]}
+    >
       <Text style={styles.damageFlashText}>-{damage}</Text>
     </Animated.View>
   );
 }
 
-export default function SingleGameScreen({route, navigation}: any) {
-  const {levelId} = route.params;
+export default function SingleGameScreen({ route, navigation }: any) {
+  const windowDimensions = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const visualViewport: VisualViewport = {
+    width: windowDimensions.width,
+    height: windowDimensions.height,
+    safeTop: insets.top,
+    safeBottom: insets.bottom,
+  };
+  const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
+  const { levelId } = route.params;
   const levelData = LEVELS.find(l => l.id === levelId);
   const activeLevel = levelData ?? LEVELS[0];
-  const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
-  const {manifest: creatorManifest, assetUris: creatorAssetUris} = useCreatorConfig();
-  const creatorLevelRuntime = resolveCreatorLevelRuntime(creatorManifest, levelId);
+  const { manifest: visualManifest, assetUris: visualAssetUris } =
+    useVisualConfig();
+  const { manifest: creatorManifest, assetUris: creatorAssetUris } =
+    useCreatorConfig();
+  const creatorLevelRuntime = resolveCreatorLevelRuntime(
+    creatorManifest,
+    levelId,
+  );
   const activeWorldId = creatorLevelRuntime?.worldId ?? activeLevel.world;
   const activeLevelName = creatorLevelRuntime?.name ?? activeLevel.name;
   const activeObstacles = activeLevel.obstacles;
@@ -346,7 +380,7 @@ export default function SingleGameScreen({route, navigation}: any) {
         monsterColor: creatorLevelRuntime.monsterColor,
       }
     : activeLevel.goal;
-  const maxMonsterHp = monster.monsterHp;
+  const maxMonsterHp = getAdjustedLevelMonsterHp(monster.monsterHp);
   const enemyStats = creatorLevelRuntime
     ? {
         attack: creatorLevelRuntime.enemyAttack,
@@ -365,7 +399,10 @@ export default function SingleGameScreen({route, navigation}: any) {
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [attackPower, setAttackPower] = useState(10);
   const [gameData, setGameData] = useState<GameData | null>(null);
-  const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
+  const [boardLayout, setBoardLayout] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [feverActive, setFeverActive] = useState(false);
   const [feverGauge, setFeverGauge] = useState(0);
   const [skinBoardBg, setSkinBoardBg] = useState(getSkinBoardBg());
@@ -375,7 +412,8 @@ export default function SingleGameScreen({route, navigation}: any) {
   const [summonActive, setSummonActive] = useState(false);
   const [summonRemainingMs, setSummonRemainingMs] = useState(0);
   const [nextPieces, setNextPieces] = useState<Piece[]>([]);
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string>('knight');
+  const [selectedCharacterId, setSelectedCharacterId] =
+    useState<string>('knight');
   const [characterVisualTunings, setCharacterVisualTunings] = useState(
     getCachedCharacterVisualTunings(),
   );
@@ -387,12 +425,16 @@ export default function SingleGameScreen({route, navigation}: any) {
   } | null>(null);
   const [comboBurstValue, setComboBurstValue] = useState(0);
   const [monsterHits, setMonsterHits] = useState<FloatingDamageHit[]>([]);
-  const [monsterImpactHit, setMonsterImpactHit] = useState<FloatingDamageHit | null>(null);
+  const [monsterImpactHit, setMonsterImpactHit] =
+    useState<FloatingDamageHit | null>(null);
   const [placementEffect, setPlacementEffect] = useState<{
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
-  const [playerHit, setPlayerHit] = useState<{id: number; damage: number} | null>(null);
+  const [playerHit, setPlayerHit] = useState<{
+    id: number;
+    damage: number;
+  } | null>(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [monsterPose, setMonsterPose] = useState<MonsterSpritePose>('idle');
   const [victoryState, setVictoryState] = useState<VictoryState | null>(null);
@@ -417,7 +459,9 @@ export default function SingleGameScreen({route, navigation}: any) {
   const comboTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const enemyAttackRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const monsterPoseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const monsterPoseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const comboRef = useRef(0);
   const comboExpireAtRef = useRef<number | null>(null);
   const feverActiveRef = useRef(false);
@@ -427,6 +471,8 @@ export default function SingleGameScreen({route, navigation}: any) {
   const twoLineCounterRef = useRef(0);
   const reviveUsedRef = useRef(false);
   const smallPieceStreakRef = useRef(0);
+  const lastPlacementAtRef = useRef<number | null>(null);
+  const damageReductionBuffUntilRef = useRef(0);
   const activeSkinIdRef = useRef(0);
   const summonGaugeRef = useRef(0);
   const summonGaugeRequiredRef = useRef(0);
@@ -450,8 +496,17 @@ export default function SingleGameScreen({route, navigation}: any) {
   const startedAtRef = useRef(Date.now());
   const levelPieceDifficulty = getLevelPieceDifficulty(activeWorldId);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
-  const {message: battleNoticeMessage, showNotice: showBattleNotice, clearNotice} =
-    useBattleNotice(3000);
+  const {
+    message: battleNoticeMessage,
+    messageKey: battleNoticeKey,
+    showNotice: showBattleNotice,
+    clearNotice,
+  } = useBattleNotice(3000);
+  const {
+    message: skillEffectMessage,
+    messageKey: skillEffectMessageKey,
+    showNotice: showSkillEffect,
+  } = useBattleNotice(1600);
 
   useEffect(() => {
     let active = true;
@@ -475,30 +530,37 @@ export default function SingleGameScreen({route, navigation}: any) {
   const queueMonsterHit = useCallback((damage: number) => {
     floatingHitIdRef.current += 1;
     const hitId = floatingHitIdRef.current;
-    const nextHit = {id: hitId, damage};
+    const nextHit = { id: hitId, damage };
     setMonsterHits(current => pushFloatingDamageHit(current, hitId, damage));
     setMonsterImpactHit(nextHit);
   }, []);
 
   const getCurrentPieceOptions = useCallback(
-    () =>
-      mergeSkinPieceGenerationOptions(
+    () => ({
+      ...mergeSkinPieceGenerationOptions(
         getPieceGenerationOptions(skillEffectsRef.current),
         activeSkinIdRef.current,
       ),
+      unlockedSpecialShapeIndices: getUnlockedSpecialPieceShapeIndices(
+        gameDataRef.current,
+      ),
+    }),
     [],
   );
 
-  const triggerMonsterPose = useCallback((pose: MonsterSpritePose, duration = 220) => {
-    if (monsterPoseTimerRef.current) {
-      clearTimeout(monsterPoseTimerRef.current);
-    }
-    setMonsterPose(pose);
-    monsterPoseTimerRef.current = setTimeout(() => {
-      setMonsterPose('idle');
-      monsterPoseTimerRef.current = null;
-    }, duration);
-  }, []);
+  const triggerMonsterPose = useCallback(
+    (pose: MonsterSpritePose, duration = 220) => {
+      if (monsterPoseTimerRef.current) {
+        clearTimeout(monsterPoseTimerRef.current);
+      }
+      setMonsterPose(pose);
+      monsterPoseTimerRef.current = setTimeout(() => {
+        setMonsterPose('idle');
+        monsterPoseTimerRef.current = null;
+      }, duration);
+    },
+    [],
+  );
 
   useEffect(() => {
     return () => {
@@ -526,7 +588,8 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   const isPiecePackPlaceable = useCallback(
     (targetBoard: BoardType, pack: Piece[]) =>
-      pack.length === 3 && pack.every(piece => canPlaceAnyPiece(targetBoard, [piece])),
+      pack.length === 3 &&
+      pack.every(piece => canPlaceAnyPiece(targetBoard, [piece])),
     [],
   );
 
@@ -535,14 +598,21 @@ export default function SingleGameScreen({route, navigation}: any) {
       if (!boardLayout) {
         return;
       }
-      const cells = buildPiecePlacementEffectCells(boardLayout, piece, row, col);
+      const cells = buildPiecePlacementEffectCells(
+        boardLayout,
+        piece,
+        row,
+        col,
+        false,
+        visualViewport,
+      );
       if (cells.length === 0) {
         return;
       }
       placementEffectIdRef.current += 1;
-      setPlacementEffect({id: placementEffectIdRef.current, cells});
+      setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
-    [boardLayout],
+    [boardLayout, visualViewport],
   );
 
   useEffect(() => {
@@ -560,6 +630,8 @@ export default function SingleGameScreen({route, navigation}: any) {
     twoLineCounterRef.current = 0;
     reviveUsedRef.current = false;
     smallPieceStreakRef.current = 0;
+    lastPlacementAtRef.current = null;
+    damageReductionBuffUntilRef.current = 0;
     skillEffectsRef.current = getCharacterSkillEffects(null, null);
     activeSkinIdRef.current = 0;
     summonGaugeRef.current = 0;
@@ -616,13 +688,14 @@ export default function SingleGameScreen({route, navigation}: any) {
 
     (async () => {
       try {
-        const [loadedGameData, skinData, charId, noticeMode, isAdmin] = await Promise.all([
-          loadGameData(),
-          loadSkinData(),
-          getSelectedCharacter(),
-          loadSkillTriggerNoticeMode(),
-          getAdminStatus().catch(() => false),
-        ]);
+        const [loadedGameData, skinData, charId, noticeMode, isAdmin] =
+          await Promise.all([
+            loadGameData(),
+            loadSkinData(),
+            getSelectedCharacter(),
+            loadSkillTriggerNoticeMode(),
+            getAdminStatus().catch(() => false),
+          ]);
 
         if (!mounted) {
           return;
@@ -643,11 +716,15 @@ export default function SingleGameScreen({route, navigation}: any) {
         setSummonGaugeRequired(skinLoadout.summonGaugeRequired);
         setSummonAttack(skinLoadout.summonAttack);
         setSummonRemainingMs(skinLoadout.summonDurationMs);
+        const levelModeBreakthroughState =
+          getLevelModeBreakthroughState(loadedGameData);
+        const levelModeBreakthroughCount =
+          levelModeBreakthroughState &&
+          levelModeBreakthroughState.nextLevelId === levelId
+            ? levelModeBreakthroughState.consecutiveClears
+            : 0;
 
-        let pieceOptions = mergeSkinPieceGenerationOptions(
-          getPieceGenerationOptions(skillEffectsRef.current),
-          activeSkinIdRef.current,
-        );
+        let pieceOptions = getCurrentPieceOptions();
 
         if (!charId) {
           setSelectedCharacterId('knight');
@@ -659,7 +736,10 @@ export default function SingleGameScreen({route, navigation}: any) {
             return;
           }
 
-          const effects = getCharacterSkillEffects(charId, charData, {mode: 'level'});
+          const effects = getCharacterSkillEffects(charId, charData, {
+            mode: 'level',
+            levelModeBreakthroughCount,
+          });
           skillEffectsRef.current = effects;
           const resolvedAttack = Math.round(
             getCharacterAtk(charId, charData.level) *
@@ -674,10 +754,7 @@ export default function SingleGameScreen({route, navigation}: any) {
           setMaxPlayerHp(resolvedHp);
           playerHpRef.current = resolvedHp;
           playerHpAnim.setValue(1);
-          pieceOptions = mergeSkinPieceGenerationOptions(
-            getPieceGenerationOptions(effects),
-            activeSkinIdRef.current,
-          );
+          pieceOptions = getCurrentPieceOptions();
         }
 
         const initialPack = generatePlaceablePieces(
@@ -710,7 +787,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 300);
 
@@ -765,19 +842,27 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   const showSkillTriggerNotice = useCallback(
     (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
-      const message = buildSkillTriggerNotice(skillNoticeModeRef.current, events);
-      if (message) {
-        showBattleNotice(message);
+      const noticeMessage = buildSkillTriggerNotice(
+        skillNoticeModeRef.current,
+        events,
+      );
+      if (noticeMessage) {
+        showBattleNotice(noticeMessage);
+      }
+
+      const boardMessage = buildBoardSkillTriggerNotice(events);
+      if (boardMessage) {
+        showSkillEffect(boardMessage);
       }
     },
-    [showBattleNotice],
+    [showBattleNotice, showSkillEffect],
   );
 
   const showLevelUpCelebration = useCallback(
     (fromLevel: number, toLevel: number) =>
       new Promise<void>(resolve => {
         const skillPointsGained = (toLevel - fromLevel) * 2;
-        setLevelUpState({fromLevel, toLevel, skillPointsGained});
+        setLevelUpState({ fromLevel, toLevel, skillPointsGained });
         levelUpAnim.setValue(0);
         Animated.sequence([
           Animated.timing(levelUpAnim, {
@@ -844,8 +929,8 @@ export default function SingleGameScreen({route, navigation}: any) {
 
       Animated.parallel([
         Animated.timing(comboBurstAnim, {
-          toValue: 1.15,
-          duration: 760,
+          toValue: 1,
+          duration: 1000,
           useNativeDriver: true,
         }),
         Animated.sequence([
@@ -1015,29 +1100,38 @@ export default function SingleGameScreen({route, navigation}: any) {
       });
 
       if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
-        await gainSummonExp(activeSkinIdRef.current, summonExpEarnedRef.current);
+        await gainSummonExp(
+          activeSkinIdRef.current,
+          summonExpEarnedRef.current,
+        );
       }
 
       if (success) {
         const progress = await loadLevelProgress();
+        const wasFirstClear = progress[levelId]?.cleared !== true;
         const stars = calculateVictoryStars(
           playerHpRef.current,
           maxPlayerHp,
           usedBattleItemRef.current,
         );
-        await saveLevelProgress(progress, levelId, totalDamageRef.current, stars);
+        await saveLevelProgress(
+          progress,
+          levelId,
+          totalDamageRef.current,
+          stars,
+        );
 
         const world = activeWorldId;
         const reward = creatorLevelRuntime
           ? {
               gold:
                 creatorLevelRuntime.reward.repeatGold +
-                (progress[levelId]?.cleared === true
-                  ? 0
-                  : creatorLevelRuntime.reward.firstClearBonusGold),
+                (wasFirstClear
+                  ? creatorLevelRuntime.reward.firstClearBonusGold
+                  : 0),
               xp: creatorLevelRuntime.reward.characterExp,
             }
-          : getLevelClearRewards(world, levelId, progress[levelId]?.cleared === true, {
+          : getLevelClearRewards(world, levelId, !wasFirstClear, {
               isAdmin: isAdminRef.current,
             });
         const rewardTotals = applyRewardMultipliers(
@@ -1053,7 +1147,17 @@ export default function SingleGameScreen({route, navigation}: any) {
         if (!currentGameData) {
           return;
         }
-        const updated = await addGold(currentGameData, goldReward);
+        let updated = await addGold(currentGameData, goldReward);
+        if (
+          wasFirstClear &&
+          skillEffectsRef.current.levelModeBreakthroughAttackPerClear > 0
+        ) {
+          updated = await recordLevelModeBreakthroughSuccess(
+            updated,
+            levelId,
+            LEVELS.length,
+          );
+        }
 
         const charId = (await getSelectedCharacter()) ?? selectedCharacterId;
         let characterIdForReward = charId;
@@ -1100,6 +1204,12 @@ export default function SingleGameScreen({route, navigation}: any) {
         return;
       }
 
+      const currentGameData = gameDataRef.current ?? (await loadGameData());
+      if (currentGameData) {
+        const updated = await resetLevelModeBreakthrough(currentGameData);
+        gameDataRef.current = updated;
+        setGameData(updated);
+      }
       void flushPlayerStateNow('single_game_defeat');
       setDefeatState({
         characterId: selectedCharacterId,
@@ -1130,17 +1240,28 @@ export default function SingleGameScreen({route, navigation}: any) {
       return;
     }
 
+    const placementProtectionActive =
+      damageReductionBuffUntilRef.current > Date.now();
+    const incomingReduction = Math.min(
+      0.85,
+      skillEffectsRef.current.damageTakenReduction +
+        (placementProtectionActive
+          ? skillEffectsRef.current.placementDamageReduction
+          : 0),
+    );
     const incomingDamage = applySkinIncomingDamage(
-      applyDamageTakenReduction(enemyStats.attack, skillEffectsRef.current),
+      Math.max(0, Math.round(enemyStats.attack * (1 - incomingReduction))),
       activeSkinIdRef.current,
     );
     const rawNextHp = Math.max(0, playerHpRef.current - incomingDamage);
     const nextHp =
-      rawNextHp <= 0 && skillEffectsRef.current.reviveOnce && !reviveUsedRef.current
+      rawNextHp <= 0 &&
+      skillEffectsRef.current.reviveOnce &&
+      !reviveUsedRef.current
         ? 1
         : rawNextHp;
     if (incomingDamage > 0) {
-      setPlayerHit({id: Date.now(), damage: incomingDamage});
+      setPlayerHit({ id: Date.now(), damage: incomingDamage });
       triggerAvatarShake(
         playerAvatarShakeX,
         Math.min(12, 4 + incomingDamage / 10),
@@ -1251,7 +1372,7 @@ export default function SingleGameScreen({route, navigation}: any) {
       victoryXpAnim.setValue(segment.startXp / Math.max(1, segment.required));
 
       listeners.push(
-        victoryXpAnim.addListener(({value}) => {
+        victoryXpAnim.addListener(({ value }) => {
           if (!cancelled) {
             setVictoryDisplayedXpCurrent(
               Math.round(Math.max(0, Math.min(1, value)) * segment.required),
@@ -1382,12 +1503,42 @@ export default function SingleGameScreen({route, navigation}: any) {
       }
 
       const effects = skillEffectsRef.current;
+      const placedAt = Date.now();
+      const fastPlacement =
+        effects.fastPlacementWindowMs > 0 &&
+        lastPlacementAtRef.current !== null &&
+        placedAt - lastPlacementAtRef.current <= effects.fastPlacementWindowMs;
+      lastPlacementAtRef.current = placedAt;
+      if (
+        effects.placementDamageReduction > 0 &&
+        effects.placementDamageReductionWindowMs > 0
+      ) {
+        damageReductionBuffUntilRef.current =
+          placedAt + effects.placementDamageReductionWindowMs;
+      }
       const wasSmallPiece = blockCount <= 2;
-      smallPieceStreakRef.current = wasSmallPiece ? smallPieceStreakRef.current + 1 : 0;
+      smallPieceStreakRef.current = wasSmallPiece
+        ? smallPieceStreakRef.current + 1
+        : 0;
       const usedSmallPieceStreak = smallPieceStreakRef.current >= 2;
       if (usedSmallPieceStreak) {
         smallPieceStreakRef.current = 0;
       }
+
+      const boardSkillResult = applySkillBoardEffects({
+        board: newBoard,
+        piece,
+        row,
+        col,
+        didClear: totalLines > 0,
+        combo: totalLines > 0 ? comboRef.current + 1 : comboRef.current,
+        effects,
+        colors: getSkinColors(),
+      });
+      newBoard = boardSkillResult.board;
+      totalLines += boardSkillResult.extraLinesCleared;
+      totalGemsFound += boardSkillResult.gemsFound;
+      totalItemsFound.push(...boardSkillResult.itemsFound);
 
       const turnResult = resolveCombatTurn({
         mode: 'level',
@@ -1397,7 +1548,10 @@ export default function SingleGameScreen({route, navigation}: any) {
         combo: comboRef.current,
         feverActive: feverActiveRef.current,
         feverGauge: feverGaugeRef.current,
-        feverLinesRequired: Math.max(1, Math.round(20 * effects.feverRequirementMultiplier)),
+        feverLinesRequired: Math.max(
+          1,
+          Math.round(20 * effects.feverRequirementMultiplier),
+        ),
         feverGaugeGainMultiplier: effects.feverGaugeGainMultiplier,
       });
 
@@ -1420,17 +1574,36 @@ export default function SingleGameScreen({route, navigation}: any) {
         setFeverGauge(turnResult.nextFeverGauge);
       }
 
-      const damageResult = applyCombatDamageEffectsDetailed(turnResult.damage, effects, {
-        combo: turnResult.nextCombo,
-        didClear: turnResult.didClear,
-        feverActive: feverActiveRef.current,
-        usedSmallPieceStreak,
-      });
+      const damageResult = applyCombatDamageEffectsDetailed(
+        turnResult.damage,
+        effects,
+        {
+          combo: turnResult.nextCombo,
+          didClear: turnResult.didClear,
+          feverActive: feverActiveRef.current,
+          usedSmallPieceStreak,
+          clearedLines: totalLines,
+          fastPlacement,
+        },
+      );
       showSkillTriggerNotice(...damageResult.events);
-      const skinDamage = applySkinCombatDamage(damageResult.amount, activeSkinIdRef.current, {
-        combo: turnResult.nextCombo,
-        didClear: turnResult.didClear,
-      }).damage;
+      const fastPlacementDetail = damageResult.details.find(
+        detail => detail.event === 'fast_placement' && detail.bonusAmount > 0,
+      );
+      if (fastPlacementDetail) {
+        showSkillEffect(
+          `신속 배치 +${fastPlacementDetail.bonusAmount.toLocaleString()}`,
+          1800,
+        );
+      }
+      const skinDamage = applySkinCombatDamage(
+        damageResult.amount,
+        activeSkinIdRef.current,
+        {
+          combo: turnResult.nextCombo,
+          didClear: turnResult.didClear,
+        },
+      ).damage;
       const summonBonus =
         summonActiveRef.current && summonRemainingMsRef.current > 0
           ? summonAttackRef.current
@@ -1456,7 +1629,11 @@ export default function SingleGameScreen({route, navigation}: any) {
       totalDamageRef.current += damageThisTurn;
       linesClearedRef.current += totalLines;
 
-      if (activeSkinIdRef.current > 0 && summonGaugeRequiredRef.current > 0 && !summonActiveRef.current) {
+      if (
+        activeSkinIdRef.current > 0 &&
+        summonGaugeRequiredRef.current > 0 &&
+        !summonActiveRef.current
+      ) {
         const nextGauge = Math.min(
           summonGaugeRequiredRef.current,
           summonGaugeRef.current +
@@ -1470,11 +1647,15 @@ export default function SingleGameScreen({route, navigation}: any) {
         clearEventCounterRef.current += 1;
         twoLineCounterRef.current += totalLines;
 
-        let healAmount = Math.round(maxPlayerHp * effects.healPerLineClearPercent * totalLines);
+        let healAmount = Math.round(
+          maxPlayerHp * effects.healPerLineClearPercent * totalLines,
+        );
         if (effects.healEveryTwoLinesPercent > 0) {
           const triggerCount = Math.floor(twoLineCounterRef.current / 2);
           if (triggerCount > 0) {
-            healAmount += Math.round(maxPlayerHp * effects.healEveryTwoLinesPercent * triggerCount);
+            healAmount += Math.round(
+              maxPlayerHp * effects.healEveryTwoLinesPercent * triggerCount,
+            );
             twoLineCounterRef.current %= 2;
           }
         }
@@ -1483,12 +1664,17 @@ export default function SingleGameScreen({route, navigation}: any) {
           clearEventCounterRef.current >= 5
         ) {
           const triggerCount = Math.floor(clearEventCounterRef.current / 5);
-          healAmount += Math.round(maxPlayerHp * effects.healEveryFiveClearsPercent * triggerCount);
+          healAmount += Math.round(
+            maxPlayerHp * effects.healEveryFiveClearsPercent * triggerCount,
+          );
           clearEventCounterRef.current %= 5;
         }
 
         if (healAmount > 0) {
-          const healedHp = Math.min(maxPlayerHp, playerHpRef.current + healAmount);
+          const healedHp = Math.min(
+            maxPlayerHp,
+            playerHpRef.current + healAmount,
+          );
           playerHpRef.current = healedHp;
           setPlayerHp(healedHp);
           animatePlayerHpBar(healedHp / Math.max(1, maxPlayerHp));
@@ -1496,7 +1682,10 @@ export default function SingleGameScreen({route, navigation}: any) {
       }
 
       setBoard(newBoard);
-      if (gameDataRef.current && (totalGemsFound > 0 || totalItemsFound.length > 0)) {
+      if (
+        gameDataRef.current &&
+        (totalGemsFound > 0 || totalItemsFound.length > 0)
+      ) {
         diamondsEarnedRef.current += totalGemsFound;
         collectSpecialBlockRewards(
           gameDataRef.current,
@@ -1512,10 +1701,12 @@ export default function SingleGameScreen({route, navigation}: any) {
       newPieces[pieceIndex] = null;
       const remainingPieces = newPieces.filter(p => p !== null);
       if (remainingPieces.length === 0) {
-        const upcomingPack =
-          isPiecePackPlaceable(newBoard, nextPiecesRef.current)
-            ? nextPiecesRef.current
-            : buildPiecePack(newBoard);
+        const upcomingPack = isPiecePackPlaceable(
+          newBoard,
+          nextPiecesRef.current,
+        )
+          ? nextPiecesRef.current
+          : buildPiecePack(newBoard);
         newPieces[0] = upcomingPack[0];
         newPieces[1] = upcomingPack[1];
         newPieces[2] = upcomingPack[2];
@@ -1559,22 +1750,36 @@ export default function SingleGameScreen({route, navigation}: any) {
     ],
   );
 
-  const dragDrop = useDragDrop(board, pieces, boardLayout, handlePlace);
+  const dragDrop = useDragDrop(
+    board,
+    pieces,
+    boardLayout,
+    handlePlace,
+    false,
+    0,
+    visualViewport,
+  );
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 100);
   }, []);
 
   const handleToggleSummon = useCallback(() => {
-    if (summonGaugeRequiredRef.current <= 0 || summonRemainingMsRef.current <= 0) {
+    if (
+      summonGaugeRequiredRef.current <= 0 ||
+      summonRemainingMsRef.current <= 0
+    ) {
       return;
     }
 
-    if (!summonActiveRef.current && summonGaugeRef.current < summonGaugeRequiredRef.current) {
+    if (
+      !summonActiveRef.current &&
+      summonGaugeRef.current < summonGaugeRequiredRef.current
+    ) {
       return;
     }
 
@@ -1614,33 +1819,6 @@ export default function SingleGameScreen({route, navigation}: any) {
           setGameData(updatedData);
           setPieces(buildPiecePack(board));
         });
-        return;
-      }
-
-      const specialDef = SPECIAL_PIECE_ITEMS.find(def => def.itemKey === item);
-      if (specialDef?.pieceIndices) {
-        if ((gameData.items[item] || 0) <= 0) {
-          return;
-        }
-
-        consumeItem(gameData, item as keyof typeof gameData.items).then(
-          updatedData => {
-            if (!updatedData) {
-              return;
-            }
-
-            usedBattleItemRef.current = true;
-            gameDataRef.current = updatedData;
-            setGameData(updatedData);
-            const newPiece = generateSpecificPiece(specialDef.pieceIndices!);
-            setPieces(prev => {
-              const updated = [...prev];
-              const nullIndex = updated.findIndex(p => p === null);
-              updated[nullIndex >= 0 ? nullIndex : 0] = newPiece;
-              return updated;
-            });
-          },
-        );
         return;
       }
 
@@ -1696,7 +1874,10 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   const handleRetryLevel = useCallback(async () => {
     const latestGameData = gameDataRef.current ?? (await loadGameData());
-    if (!latestGameData || (!isAdminRef.current && latestGameData.hearts <= 0)) {
+    if (
+      !latestGameData ||
+      (!isAdminRef.current && latestGameData.hearts <= 0)
+    ) {
       Alert.alert('하트 부족', '다시 도전하려면 하트가 필요합니다.');
       return;
     }
@@ -1709,7 +1890,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
     gameDataRef.current = updatedGameData;
     setGameData(updatedGameData);
-    navigation.replace('SingleGame', {levelId});
+    navigation.replace('SingleGame', { levelId });
   }, [levelId, navigation]);
 
   const monsterHpPercent = monsterHp / maxMonsterHp;
@@ -1717,25 +1898,32 @@ export default function SingleGameScreen({route, navigation}: any) {
     monsterHpPercent > 0.5
       ? '#22c55e'
       : monsterHpPercent > 0.2
-        ? '#f59e0b'
-        : '#ef4444';
+      ? '#f59e0b'
+      : '#ef4444';
   const playerHpPercent = playerHp / Math.max(1, maxPlayerHp);
   const playerHpColor =
     playerHpPercent > 0.5
       ? '#38bdf8'
       : playerHpPercent > 0.2
-        ? '#f59e0b'
-        : '#ef4444';
+      ? '#f59e0b'
+      : '#ef4444';
   const previewPieces =
     skillEffectsRef.current.previewCountBonus > 0
-      ? nextPieces.slice(0, Math.min(3, skillEffectsRef.current.previewCountBonus))
+      ? nextPieces.slice(
+          0,
+          Math.min(3, skillEffectsRef.current.previewCountBonus),
+        )
       : [];
   const hasSidePreview = previewPieces.length > 0;
   const compactPieceTray = hasSidePreview;
-  const comboGaugeMaxMs = COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
+  const comboGaugeMaxMs =
+    COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
   const playerVisual =
     CHARACTER_VISUALS[selectedCharacterId] ?? CHARACTER_VISUALS.knight;
-  const monsterSpriteSet = getWorldMonsterSpriteSet(activeWorldId, monster.monsterName);
+  const monsterSpriteSet = getWorldMonsterSpriteSet(
+    activeWorldId,
+    monster.monsterName,
+  );
   const monsterSprite =
     getMonsterPoseSource(monsterSpriteSet, monsterPose) ??
     getMonsterPoseSource(monsterSpriteSet, 'idle');
@@ -1752,28 +1940,27 @@ export default function SingleGameScreen({route, navigation}: any) {
         levelBackgroundOverride.tintOpacity,
       )
     : creatorBackgroundRule
-      ? buildVisualTintColor(
-          creatorBackgroundRule.tintColor,
-          creatorBackgroundRule.tintOpacity,
-        )
-      : WORLD_BACKGROUND_TINTS[activeWorldId] ?? 'rgba(10, 10, 30, 0.72)';
+    ? buildVisualTintColor(
+        creatorBackgroundRule.tintColor,
+        creatorBackgroundRule.tintOpacity,
+      )
+    : WORLD_BACKGROUND_TINTS[activeWorldId] ?? 'rgba(10, 10, 30, 0.72)';
   const runtimeBackgroundImage =
     levelBackgroundOverride?.removeImage === true ||
     creatorBackgroundRule?.removeImage === true
       ? null
       : levelBackgroundOverride?.assetKey &&
-          visualAssetUris[levelBackgroundOverride.assetKey]
-        ? {uri: visualAssetUris[levelBackgroundOverride.assetKey]}
-        : creatorBackgroundRule?.assetKey &&
-            creatorAssetUris[creatorBackgroundRule.assetKey]
-          ? {uri: creatorAssetUris[creatorBackgroundRule.assetKey]}
-        : backgroundImage;
+        visualAssetUris[levelBackgroundOverride.assetKey]
+      ? { uri: visualAssetUris[levelBackgroundOverride.assetKey] }
+      : creatorBackgroundRule?.assetKey &&
+        creatorAssetUris[creatorBackgroundRule.assetKey]
+      ? { uri: creatorAssetUris[creatorBackgroundRule.assetKey] }
+      : backgroundImage;
   const comboGaugeRule = getVisualElementRule(
     visualManifest,
     'level',
     'combo_gauge',
   );
-
   useEffect(() => {
     setMonsterPose('idle');
   }, [activeWorldId, monster.monsterName]);
@@ -1790,9 +1977,9 @@ export default function SingleGameScreen({route, navigation}: any) {
       ] ?? characterVisualTunings.knight;
     const battleTransform = {
       transform: [
-        {translateX: tuning.battleOffsetX},
-        {translateY: tuning.battleOffsetY},
-        {scale: tuning.battleScaleMultiplier},
+        { translateX: tuning.battleOffsetX },
+        { translateY: tuning.battleOffsetY },
+        { scale: tuning.battleScaleMultiplier },
       ],
     };
 
@@ -1817,7 +2004,7 @@ export default function SingleGameScreen({route, navigation}: any) {
             style={{
               width: size * 0.96,
               height: size * 1.18,
-              transform: [{scaleX: facing}],
+              transform: [{ scaleX: facing }],
             }}
           />
         </View>
@@ -1826,12 +2013,17 @@ export default function SingleGameScreen({route, navigation}: any) {
     return (
       <View style={battleTransform}>
         <View
-          style={[styles.characterFallbackBadge, {width: size * 0.82, height: size * 0.82}]}>
+          style={[
+            styles.characterFallbackBadge,
+            { width: size * 0.82, height: size * 0.82 },
+          ]}
+        >
           <Text
             style={[
               styles.characterFallbackEmoji,
-              {fontSize: size * 0.44, transform: [{scaleX: facing}]},
-            ]}>
+              { fontSize: size * 0.44, transform: [{ scaleX: facing }] },
+            ]}
+          >
             {visual.emoji}
           </Text>
         </View>
@@ -1856,7 +2048,9 @@ export default function SingleGameScreen({route, navigation}: any) {
           style={{
             width: size,
             height: size,
-            transform: [{scaleX: (monsterSpriteSet?.facing ?? 1) * facingMultiplier}],
+            transform: [
+              { scaleX: (monsterSpriteSet?.facing ?? 1) * facingMultiplier },
+            ],
           }}
         />
       );
@@ -1865,8 +2059,9 @@ export default function SingleGameScreen({route, navigation}: any) {
       <Text
         style={[
           styles.monsterEmojiCompact,
-          {fontSize: size * 0.68, transform: [{scaleX: facingMultiplier}]},
-        ]}>
+          { fontSize: size * 0.68, transform: [{ scaleX: facingMultiplier }] },
+        ]}
+      >
         {monster.monsterEmoji}
       </Text>
     );
@@ -1879,9 +2074,12 @@ export default function SingleGameScreen({route, navigation}: any) {
           style={[
             styles.unitAvatarFrame,
             styles.playerAvatarFrame,
-            {transform: [{translateX: playerAvatarShakeX}]},
-          ]}>
-          <View style={styles.playerAvatarSpriteWrap}>{renderPlayerAvatar(62)}</View>
+            { transform: [{ translateX: playerAvatarShakeX }] },
+          ]}
+        >
+          <View style={styles.playerAvatarSpriteWrap}>
+            {renderPlayerAvatar(62)}
+          </View>
           {playerHit && (
             <>
               <HitEffect
@@ -1893,7 +2091,9 @@ export default function SingleGameScreen({route, navigation}: any) {
                 key={`player-flash-${playerHit.id}`}
                 damage={playerHit.damage}
                 onDone={() =>
-                  setPlayerHit(current => (current?.id === playerHit.id ? null : current))
+                  setPlayerHit(current =>
+                    current?.id === playerHit.id ? null : current,
+                  )
                 }
               />
             </>
@@ -1926,17 +2126,20 @@ export default function SingleGameScreen({route, navigation}: any) {
         <View style={styles.centerInfoCard}>
           <View style={styles.centerInfoRow}>
             <Text style={styles.centerInfoText}>공격 {attackPower}</Text>
-            <Text style={styles.centerInfoText}>적 공격 {enemyStats.attack}</Text>
+            <Text style={styles.centerInfoText}>
+              적 공격 {enemyStats.attack}
+            </Text>
           </View>
-        <View style={styles.centerInfoRow}>
-          <Text
-            style={[
-              styles.centerInfoStatus,
-              feverActive && styles.centerInfoTextActive,
-            ]}>
-            {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
-          </Text>
-        </View>
+          <View style={styles.centerInfoRow}>
+            <Text
+              style={[
+                styles.centerInfoStatus,
+                feverActive && styles.centerInfoTextActive,
+              ]}
+            >
+              {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
+            </Text>
+          </View>
 
           {activeSkinIdRef.current > 0 && summonGaugeRequired > 0 && (
             <View style={styles.summonInlineCard}>
@@ -1951,7 +2154,11 @@ export default function SingleGameScreen({route, navigation}: any) {
                   style={[
                     styles.summonInlineFill,
                     {
-                      width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
+                      width: `${
+                        summonGaugeRequired > 0
+                          ? (summonGauge / summonGaugeRequired) * 100
+                          : 0
+                      }%`,
                     },
                   ]}
                 />
@@ -1972,7 +2179,8 @@ export default function SingleGameScreen({route, navigation}: any) {
                     (summonRemainingMs <= 0 ||
                       (summonGauge < summonGaugeRequired && !summonActive)) &&
                       styles.summonInlineBtnDisabled,
-                  ]}>
+                  ]}
+                >
                   <Text style={styles.summonInlineBtnText}>
                     {summonActive ? '회수' : '소환'}
                   </Text>
@@ -1988,9 +2196,10 @@ export default function SingleGameScreen({route, navigation}: any) {
           style={[
             styles.unitAvatarFrame,
             styles.monsterAvatarFrame,
-            {borderColor: monster.monsterColor},
-            {transform: [{translateX: monsterAvatarShakeX}]},
-          ]}>
+            { borderColor: monster.monsterColor },
+            { transform: [{ translateX: monsterAvatarShakeX }] },
+          ]}
+        >
           {renderMonsterAvatar(68, -1)}
           {monsterImpactHit && (
             <HitEffect
@@ -2019,7 +2228,8 @@ export default function SingleGameScreen({route, navigation}: any) {
         </Animated.View>
         <Text
           numberOfLines={1}
-          style={[styles.unitName, {color: monster.monsterColor}]}>
+          style={[styles.unitName, { color: monster.monsterColor }]}
+        >
           {monster.monsterName}
         </Text>
         <View style={styles.compactHpTrack}>
@@ -2046,8 +2256,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 
   if (!levelData) {
     return (
-      <SafeAreaView
-        style={styles.missingContainer}>
+      <SafeAreaView style={styles.missingContainer}>
         <Text style={styles.missingText}>스테이지를 찾을 수 없습니다.</Text>
         <BackImageButton onPress={() => navigation.goBack()} size={48} />
       </SafeAreaView>
@@ -2060,28 +2269,44 @@ export default function SingleGameScreen({route, navigation}: any) {
         <ImageBackground
           source={runtimeBackgroundImage}
           resizeMode="cover"
-          style={styles.screenBackground}>
-          <View style={[styles.backgroundTint, {backgroundColor: backgroundTint}]}>
+          style={styles.screenBackground}
+        >
+          <View
+            style={[styles.backgroundTint, { backgroundColor: backgroundTint }]}
+          >
             <Animated.View
               style={[
                 styles.screenContent,
                 {
-                  transform: [{translateX: screenShakeX}, {translateY: screenShakeY}],
+                  paddingTop: modeVerticalGutter,
+                  paddingBottom: modeVerticalGutter,
+                  transform: [
+                    { translateX: screenShakeX },
+                    { translateY: screenShakeY },
+                  ],
                 },
-              ]}>
-              <VisualElementView screenId="level" elementId="header" style={styles.header}>
-                <TouchableOpacity
-                  onPress={() => setShowExitConfirm(true)}>
-                <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
-              </TouchableOpacity>
-              <Text style={styles.stageLabel}>{activeLevelName}</Text>
-              <View style={styles.headerSideSpacer} />
+              ]}
+            >
+              <VisualElementView
+                screenId="level"
+                elementId="header"
+                style={styles.header}
+              >
+                <TouchableOpacity onPress={() => setShowExitConfirm(true)}>
+                  <BackImageButton
+                    onPress={() => setShowExitConfirm(true)}
+                    size={40}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.stageLabel}>{activeLevelName}</Text>
+                <View style={styles.headerSideSpacer} />
               </VisualElementView>
 
               <VisualElementView
                 screenId="level"
                 elementId="battle_lane"
-                style={styles.visualWrapper}>
+                style={styles.visualWrapper}
+              >
                 {renderBattleLane()}
               </VisualElementView>
 
@@ -2089,18 +2314,28 @@ export default function SingleGameScreen({route, navigation}: any) {
                 screenId="level"
                 elementId="board"
                 style={styles.boardContainer}
-                onLayout={handleBoardLayout}>
+                onLayout={handleBoardLayout}
+              >
                 {comboGaugeRule.visible && (
                   <ComboGaugeOverlay
                     combo={combo}
                     comboRemainingMs={comboRemainingMs}
                     comboMaxMs={comboGaugeMaxMs}
-                    style={buildVisualElementStyle(comboGaugeRule)}
+                    visualAutomationLabel={buildVisualAutomationLabel(
+                      'level',
+                      'combo_gauge',
+                    )}
+                    style={buildVisualElementStyle(
+                      comboGaugeRule,
+                      visualViewport,
+                      visualManifest.referenceViewport,
+                    )}
                   />
                 )}
                 <Board
                   ref={boardRef}
                   board={board}
+                  viewport={visualViewport}
                   backgroundColor={skinBoardBg}
                   previewCells={dragDrop.previewCells}
                   invalidPreview={dragDrop.invalidPreview}
@@ -2127,7 +2362,8 @@ export default function SingleGameScreen({route, navigation}: any) {
                   <VisualElementView
                     screenId="level"
                     elementId="piece_tray"
-                    style={styles.visualWrapper}>
+                    style={styles.visualWrapper}
+                  >
                     <PieceSelector
                       pieces={pieces}
                       onDragStart={dragDrop.onDragStart}
@@ -2135,11 +2371,17 @@ export default function SingleGameScreen({route, navigation}: any) {
                       onDragEnd={dragDrop.onDragEnd}
                       onDragCancel={dragDrop.onDragCancel}
                       compact={compactPieceTray}
+                      boardCompact={false}
+                      viewport={visualViewport}
                     />
                   </VisualElementView>
                 </View>
                 {hasSidePreview && (
-                  <NextPiecePreview pieces={previewPieces} variant="side" />
+                  <NextPiecePreview
+                    pieces={previewPieces}
+                    variant="side"
+                    viewport={visualViewport}
+                  />
                 )}
               </View>
 
@@ -2147,7 +2389,8 @@ export default function SingleGameScreen({route, navigation}: any) {
                 <VisualElementView
                   screenId="level"
                   elementId="item_bar"
-                  style={styles.visualWrapper}>
+                  style={styles.visualWrapper}
+                >
                   <ItemBar
                     items={gameData.items}
                     selectedItem={selectedItem}
@@ -2160,102 +2403,147 @@ export default function SingleGameScreen({route, navigation}: any) {
           </View>
         </ImageBackground>
       ) : (
-        <View style={[styles.screenBackground, {backgroundColor: backgroundTint}]}>
+        <View
+          style={[styles.screenBackground, { backgroundColor: backgroundTint }]}
+        >
           <Animated.View
             style={[
               styles.screenContent,
               {
-                transform: [{translateX: screenShakeX}, {translateY: screenShakeY}],
+                paddingTop: modeVerticalGutter,
+                paddingBottom: modeVerticalGutter,
+                transform: [
+                  { translateX: screenShakeX },
+                  { translateY: screenShakeY },
+                ],
               },
-            ]}>
-        <VisualElementView screenId="level" elementId="header" style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setShowExitConfirm(true)}>
-          <BackImageButton onPress={() => setShowExitConfirm(true)} size={40} />
-        </TouchableOpacity>
-        <Text style={styles.stageLabel}>{activeLevelName}</Text>
-        <View style={styles.headerSideSpacer} />
-        </VisualElementView>
-
-        <VisualElementView
-          screenId="level"
-          elementId="battle_lane"
-          style={styles.visualWrapper}>
-          {renderBattleLane()}
-        </VisualElementView>
-
-        <VisualElementView
-          screenId="level"
-          elementId="board"
-          style={styles.boardContainer}
-          onLayout={handleBoardLayout}>
-          {comboGaugeRule.visible && (
-            <ComboGaugeOverlay
-              combo={combo}
-              comboRemainingMs={comboRemainingMs}
-              comboMaxMs={comboGaugeMaxMs}
-              style={buildVisualElementStyle(comboGaugeRule)}
-            />
-          )}
-          <Board
-            ref={boardRef}
-            board={board}
-            backgroundColor={skinBoardBg}
-            previewCells={dragDrop.previewCells}
-            invalidPreview={dragDrop.invalidPreview}
-            clearGuideCells={dragDrop.clearGuideCells}
-            onCellPress={selectedItem ? handleBoardTapForItem : undefined}
-          />
-        </VisualElementView>
-
-        {selectedItem && (
-          <View style={styles.itemHintRow}>
-            <Text style={styles.itemHint}>
-              {selectedItem === 'hammer'
-                ? '망치로 제거할 칸을 선택하세요'
-                : '폭탄을 사용할 칸을 선택하세요'}
-            </Text>
-            <TouchableOpacity onPress={() => setSelectedItem(null)}>
-              <Text style={styles.cancelItem}>{t('common.cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.bottomActionRow}>
-          <View style={styles.bottomPieceArea}>
+            ]}
+          >
             <VisualElementView
               screenId="level"
-              elementId="piece_tray"
-              style={styles.visualWrapper}>
-              <PieceSelector
-                pieces={pieces}
-                onDragStart={dragDrop.onDragStart}
-                onDragMove={dragDrop.onDragMove}
-                onDragEnd={dragDrop.onDragEnd}
-                onDragCancel={dragDrop.onDragCancel}
-                compact={compactPieceTray}
-              />
+              elementId="header"
+              style={styles.header}
+            >
+              <TouchableOpacity onPress={() => setShowExitConfirm(true)}>
+                <BackImageButton
+                  onPress={() => setShowExitConfirm(true)}
+                  size={40}
+                />
+              </TouchableOpacity>
+              <Text style={styles.stageLabel}>{activeLevelName}</Text>
+              <View style={styles.headerSideSpacer} />
             </VisualElementView>
-          </View>
-          {hasSidePreview && (
-            <NextPiecePreview pieces={previewPieces} variant="side" />
-          )}
-        </View>
 
-        {gameData && (
-          <VisualElementView
-            screenId="level"
-            elementId="item_bar"
-            style={styles.visualWrapper}>
-            <ItemBar
-              items={gameData.items}
-              selectedItem={selectedItem}
-              onSelectItem={handleItemSelect}
-              showAddTurns={false}
-            />
-          </VisualElementView>
-        )}
-      </Animated.View>
+            <VisualElementView
+              screenId="level"
+              elementId="battle_lane"
+              style={styles.visualWrapper}
+            >
+              {renderBattleLane()}
+            </VisualElementView>
+
+            <VisualElementView
+              screenId="level"
+              elementId="board"
+              style={styles.boardContainer}
+              onLayout={handleBoardLayout}
+            >
+              {comboGaugeRule.visible && (
+                <ComboGaugeOverlay
+                  combo={combo}
+                  comboRemainingMs={comboRemainingMs}
+                  comboMaxMs={comboGaugeMaxMs}
+                  visualAutomationLabel={buildVisualAutomationLabel(
+                    'level',
+                    'combo_gauge',
+                  )}
+                  style={buildVisualElementStyle(
+                    comboGaugeRule,
+                    visualViewport,
+                    visualManifest.referenceViewport,
+                  )}
+                />
+              )}
+              <Board
+                ref={boardRef}
+                board={board}
+                viewport={visualViewport}
+                backgroundColor={skinBoardBg}
+                previewCells={dragDrop.previewCells}
+                invalidPreview={dragDrop.invalidPreview}
+                clearGuideCells={dragDrop.clearGuideCells}
+                onCellPress={selectedItem ? handleBoardTapForItem : undefined}
+              />
+              <VisualElementView
+                screenId="level"
+                elementId="skill_effect"
+                style={styles.boardSkillEffectLayer}
+                pointerEvents="none"
+                viewport={visualViewport}
+              >
+                <SkillTriggerBoardEffect
+                  message={skillEffectMessage}
+                  triggerKey={skillEffectMessageKey}
+                />
+              </VisualElementView>
+            </VisualElementView>
+
+            {selectedItem && (
+              <View style={styles.itemHintRow}>
+                <Text style={styles.itemHint}>
+                  {selectedItem === 'hammer'
+                    ? '망치로 제거할 칸을 선택하세요'
+                    : '폭탄을 사용할 칸을 선택하세요'}
+                </Text>
+                <TouchableOpacity onPress={() => setSelectedItem(null)}>
+                  <Text style={styles.cancelItem}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.bottomActionRow}>
+              <View style={styles.bottomPieceArea}>
+                <VisualElementView
+                  screenId="level"
+                  elementId="piece_tray"
+                  style={styles.visualWrapper}
+                >
+                  <PieceSelector
+                    pieces={pieces}
+                    onDragStart={dragDrop.onDragStart}
+                    onDragMove={dragDrop.onDragMove}
+                    onDragEnd={dragDrop.onDragEnd}
+                    onDragCancel={dragDrop.onDragCancel}
+                    compact={compactPieceTray}
+                    boardCompact={false}
+                    viewport={visualViewport}
+                  />
+                </VisualElementView>
+              </View>
+              {hasSidePreview && (
+                <NextPiecePreview
+                  pieces={previewPieces}
+                  variant="side"
+                  viewport={visualViewport}
+                />
+              )}
+            </View>
+
+            {gameData && (
+              <VisualElementView
+                screenId="level"
+                elementId="item_bar"
+                style={styles.visualWrapper}
+              >
+                <ItemBar
+                  items={gameData.items}
+                  selectedItem={selectedItem}
+                  onSelectItem={handleItemSelect}
+                  showAddTurns={false}
+                />
+              </VisualElementView>
+            )}
+          </Animated.View>
         </View>
       )}
 
@@ -2270,7 +2558,10 @@ export default function SingleGameScreen({route, navigation}: any) {
         />
       )}
 
-      <BattleNoticeOverlay message={battleNoticeMessage} />
+      <BattleNoticeOverlay
+        message={battleNoticeMessage}
+        messageKey={battleNoticeKey}
+      />
 
       {showExitConfirm && (
         <View style={styles.exitOverlay}>
@@ -2282,12 +2573,14 @@ export default function SingleGameScreen({route, navigation}: any) {
             <View style={styles.exitButtonRow}>
               <TouchableOpacity
                 style={[styles.exitBtn, styles.exitCancelBtn]}
-                onPress={() => setShowExitConfirm(false)}>
+                onPress={() => setShowExitConfirm(false)}
+              >
                 <Text style={styles.exitBtnText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.exitBtn, styles.exitConfirmBtn]}
-                onPress={() => navigation.goBack()}>
+                onPress={() => navigation.goBack()}
+              >
                 <Text style={styles.exitBtnText}>나가기</Text>
               </TouchableOpacity>
             </View>
@@ -2297,56 +2590,100 @@ export default function SingleGameScreen({route, navigation}: any) {
 
       {comboBurstValue >= 3 && (
         <View pointerEvents="none" style={styles.comboOverlay}>
-          {Array.from({
-            length: Math.min(
-              COMBO_PARTICLE_POINTS.length + 6,
-              8 + (comboBurstValue - 3) * 3,
-            ),
-          }).map((_, index, list) => {
-            const point = COMBO_PARTICLE_POINTS[index % COMBO_PARTICLE_POINTS.length];
-            const angle = (Math.PI * 2 * index) / list.length + comboBurstValue * 0.06;
-            const distance = 84 + comboBurstValue * 10 + (index % 3) * 14;
-            const translateX = Math.cos(angle) * distance;
-            const translateY = Math.sin(angle) * distance * 0.82;
-            const isStreak = index % 2 === 0;
-
-            return (
-              <Animated.View
-                key={`combo-burst-${comboBurstValue}-${index}`}
-                style={[
-                  styles.comboParticle,
-                  isStreak ? styles.comboParticleStreak : styles.comboParticleDot,
+          <Animated.View
+            style={[
+              styles.comboShockwaveFlash,
+              {
+                opacity: comboBurstAnim.interpolate({
+                  inputRange: [0, 0.14, 1],
+                  outputRange: [0, 0.28, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [
                   {
-                    backgroundColor: point.color,
-                    opacity: comboBurstAnim.interpolate({
-                      inputRange: [0, 0.08, 0.76, 1.15],
-                      outputRange: [0, 1, 1, 0],
+                    scale: comboBurstAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.42, 1.34],
                       extrapolate: 'clamp',
                     }),
-                    transform: [
-                      {
-                        translateX: comboBurstAnim.interpolate({
-                          inputRange: [0, 1.15],
-                          outputRange: [0, translateX],
-                          extrapolate: 'clamp',
-                        }),
-                      },
-                      {
-                        translateY: comboBurstAnim.interpolate({
-                          inputRange: [0, 1.15],
-                          outputRange: [0, translateY],
-                          extrapolate: 'clamp',
-                        }),
-                      },
-                      {
-                        rotate: `${(angle * 180) / Math.PI}deg`,
-                      },
-                    ],
                   },
-                ]}
-              />
-            );
-          })}
+                ],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.comboShockwaveRing,
+              {
+                opacity: comboBurstAnim.interpolate({
+                  inputRange: [0, 0.1, 1],
+                  outputRange: [0, 0.82, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [
+                  {
+                    scale: comboBurstAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.2, 1.9],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.comboShockwaveRingSecondary,
+              {
+                opacity: comboBurstAnim.interpolate({
+                  inputRange: [0, 0.22, 1],
+                  outputRange: [0, 0.58, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [
+                  {
+                    scale: comboBurstAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.12, 2.25],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.comboCenterBadge,
+              {
+                opacity: comboBurstAnim.interpolate({
+                  inputRange: [0, 0.08, 0.86, 1],
+                  outputRange: [0, 1, 1, 0],
+                  extrapolate: 'clamp',
+                }),
+                transform: [
+                  {
+                    scale: comboBurstAnim.interpolate({
+                      inputRange: [0, 0.16, 1],
+                      outputRange: [0.58, 1.12, 1.42],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                  {
+                    translateY: comboBurstAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [18, -10],
+                      extrapolate: 'clamp',
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text style={styles.comboCenterLabel}>COMBO</Text>
+            <Text style={styles.comboCenterValue}>{comboBurstValue}</Text>
+          </Animated.View>
         </View>
       )}
 
@@ -2355,7 +2692,8 @@ export default function SingleGameScreen({route, navigation}: any) {
           <View style={styles.victoryCard}>
             <Text style={styles.victoryTitle}>몬스터 처치 성공!</Text>
             <Text style={styles.victoryDamageText}>
-              총 대미지 {totalDamageRef.current.toLocaleString()} / 최대 콤보 {maxComboRef.current}
+              총 대미지 {totalDamageRef.current.toLocaleString()} / 최대 콤보{' '}
+              {maxComboRef.current}
             </Text>
 
             <View style={styles.victoryMainRow}>
@@ -2364,29 +2702,42 @@ export default function SingleGameScreen({route, navigation}: any) {
                   {renderCharacterPortrait(victoryState.characterId, 86)}
                 </View>
                 <Text style={styles.victoryAvatarName}>
-                  {(CHARACTER_VISUALS[victoryState.characterId] ?? CHARACTER_VISUALS.knight).name}
+                  {
+                    (
+                      CHARACTER_VISUALS[victoryState.characterId] ??
+                      CHARACTER_VISUALS.knight
+                    ).name
+                  }
                 </Text>
               </View>
 
               <View style={styles.victoryRewardCol}>
                 <View style={styles.victoryRewardRow}>
                   <Text style={styles.victoryRewardLabel}>골드</Text>
-                  <Text style={styles.victoryRewardValue}>+{victoryState.rewardGold}</Text>
+                  <Text style={styles.victoryRewardValue}>
+                    +{victoryState.rewardGold}
+                  </Text>
                 </View>
                 <View style={styles.victoryRewardRow}>
                   <Text style={styles.victoryRewardLabel}>보석</Text>
-                  <Text style={styles.victoryRewardValue}>+{victoryState.rewardDiamonds}</Text>
+                  <Text style={styles.victoryRewardValue}>
+                    +{victoryState.rewardDiamonds}
+                  </Text>
                 </View>
                 <View style={styles.victoryRewardRow}>
                   <Text style={styles.victoryRewardLabel}>경험치</Text>
-                  <Text style={styles.victoryRewardValue}>+{victoryState.rewardXp}</Text>
+                  <Text style={styles.victoryRewardValue}>
+                    +{victoryState.rewardXp}
+                  </Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.victoryXpCard}>
               <View style={styles.victoryXpHeader}>
-                <Text style={styles.victoryXpLabel}>레벨 {victoryDisplayedLevel}</Text>
+                <Text style={styles.victoryXpLabel}>
+                  레벨 {victoryDisplayedLevel}
+                </Text>
                 <Text style={styles.victoryXpText}>
                   {victoryDisplayedXpCurrent} / {victoryDisplayedXpMax}
                 </Text>
@@ -2418,7 +2769,8 @@ export default function SingleGameScreen({route, navigation}: any) {
                 styles.victoryConfirmBtn,
                 !victoryReady && styles.victoryConfirmBtnDisabled,
               ]}
-              onPress={() => navigation.goBack()}>
+              onPress={() => navigation.goBack()}
+            >
               <Text style={styles.victoryConfirmText}>
                 {victoryReady ? '확인' : '정산 중...'}
               </Text>
@@ -2439,11 +2791,18 @@ export default function SingleGameScreen({route, navigation}: any) {
 
             <View style={styles.defeatMainRow}>
               <View style={styles.victoryAvatarSlot}>
-                <View style={[styles.victoryAvatarFrame, styles.defeatAvatarFrame]}>
+                <View
+                  style={[styles.victoryAvatarFrame, styles.defeatAvatarFrame]}
+                >
                   {renderCharacterPortrait(defeatState.characterId, 86)}
                 </View>
                 <Text style={styles.victoryAvatarName}>
-                  {(CHARACTER_VISUALS[defeatState.characterId] ?? CHARACTER_VISUALS.knight).name}
+                  {
+                    (
+                      CHARACTER_VISUALS[defeatState.characterId] ??
+                      CHARACTER_VISUALS.knight
+                    ).name
+                  }
                 </Text>
               </View>
 
@@ -2462,7 +2821,9 @@ export default function SingleGameScreen({route, navigation}: any) {
                 </View>
                 <View style={styles.defeatInfoRow}>
                   <Text style={styles.defeatInfoLabel}>최대 콤보</Text>
-                  <Text style={styles.defeatInfoValue}>{defeatState.maxCombo}</Text>
+                  <Text style={styles.defeatInfoValue}>
+                    {defeatState.maxCombo}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -2470,12 +2831,14 @@ export default function SingleGameScreen({route, navigation}: any) {
             <View style={styles.defeatButtonRow}>
               <TouchableOpacity
                 style={[styles.defeatBtn, styles.defeatRetryBtn]}
-                onPress={handleRetryLevel}>
+                onPress={handleRetryLevel}
+              >
                 <Text style={styles.defeatBtnText}>다시 도전</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.defeatBtn, styles.defeatExitBtn]}
-                onPress={() => navigation.goBack()}>
+                onPress={() => navigation.goBack()}
+              >
                 <Text style={styles.defeatBtnText}>나가기</Text>
               </TouchableOpacity>
             </View>
@@ -2543,7 +2906,8 @@ export default function SingleGameScreen({route, navigation}: any) {
                   },
                 ],
               },
-            ]}>
+            ]}
+          >
             <Text style={styles.levelUpBadge}>LEVEL UP</Text>
             <Text style={styles.levelUpTitle}>레벨업!</Text>
             <Text style={styles.levelUpValue}>
@@ -2560,7 +2924,7 @@ export default function SingleGameScreen({route, navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#0a0a1e'},
+  container: { flex: 1, backgroundColor: '#0a0a1e' },
   screenBackground: {
     flex: 1,
   },
@@ -2569,11 +2933,14 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     flex: 1,
-    paddingTop: MODE_VERTICAL_GUTTER,
-    paddingBottom: MODE_VERTICAL_GUTTER,
   },
   visualWrapper: {
     alignSelf: 'stretch',
+  },
+  boardSkillEffectLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
   },
   missingContainer: {
     flex: 1,
@@ -2581,8 +2948,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  missingText: {color: '#fff', fontSize: 18, marginBottom: 20},
-  missingLink: {color: '#6366f1', fontSize: 16},
+  missingText: { color: '#fff', fontSize: 18, marginBottom: 20 },
+  missingLink: { color: '#6366f1', fontSize: 16 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2591,7 +2958,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     gap: 8,
   },
-  backBtn: {color: '#94a3b8', fontSize: 20, fontWeight: 'bold'},
+  backBtn: { color: '#94a3b8', fontSize: 20, fontWeight: 'bold' },
   stageLabel: {
     color: '#e2e8f0',
     fontSize: 13,
@@ -2784,20 +3151,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     gap: 10,
   },
-  monsterEmoji: {fontSize: 40},
-  monsterInfo: {flex: 1, gap: 4},
-  monsterName: {fontSize: 14, fontWeight: '800'},
+  monsterEmoji: { fontSize: 40 },
+  monsterInfo: { flex: 1, gap: 4 },
+  monsterName: { fontSize: 14, fontWeight: '800' },
   hpBarBg: {
     height: 10,
     backgroundColor: '#334155',
     borderRadius: 5,
     overflow: 'hidden',
   },
-  hpBarFill: {height: 10, borderRadius: 5},
-  hpText: {color: '#94a3b8', fontSize: 11},
-  atkInfo: {alignItems: 'center'},
-  atkLabel: {color: '#94a3b8', fontSize: 10},
-  atkValue: {color: '#f97316', fontSize: 18, fontWeight: '900'},
+  hpBarFill: { height: 10, borderRadius: 5 },
+  hpText: { color: '#94a3b8', fontSize: 11 },
+  atkInfo: { alignItems: 'center' },
+  atkLabel: { color: '#94a3b8', fontSize: 10 },
+  atkValue: { color: '#f97316', fontSize: 18, fontWeight: '900' },
   playerStatusCard: {
     marginHorizontal: 12,
     marginBottom: 6,
@@ -2825,7 +3192,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     overflow: 'hidden',
   },
-  playerHpBarFill: {height: 10, borderRadius: 5},
+  playerHpBarFill: { height: 10, borderRadius: 5 },
   playerMetaRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -2925,7 +3292,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 4,
   },
-  itemHint: {color: '#fbbf24', fontSize: 13, fontWeight: '600'},
+  itemHint: { color: '#fbbf24', fontSize: 13, fontWeight: '600' },
   cancelItem: {
     color: '#94a3b8',
     fontSize: 13,
@@ -3008,23 +3375,63 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 80,
+    paddingBottom: 0,
   },
-  comboParticle: {
+  comboShockwaveFlash: {
     position: 'absolute',
+    width: 146,
+    height: 146,
     borderRadius: 999,
-    shadowOpacity: 0.95,
-    shadowRadius: 12,
-    elevation: 12,
+    backgroundColor: 'rgba(250, 204, 21, 0.26)',
   },
-  comboParticleDot: {
-    width: 10,
-    height: 10,
-  },
-  comboParticleStreak: {
-    width: 6,
-    height: 24,
+  comboShockwaveRing: {
+    position: 'absolute',
+    width: 156,
+    height: 156,
     borderRadius: 999,
+    borderWidth: 3,
+    borderColor: 'rgba(250, 204, 21, 0.95)',
+    shadowColor: '#facc15',
+    shadowOpacity: 0.65,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 18,
+  },
+  comboShockwaveRingSecondary: {
+    position: 'absolute',
+    width: 192,
+    height: 192,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'rgba(96, 165, 250, 0.72)',
+  },
+  comboCenterBadge: {
+    minWidth: 148,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(250, 204, 21, 0.72)',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 18,
+  },
+  comboCenterLabel: {
+    color: '#fde68a',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.8,
+  },
+  comboCenterValue: {
+    marginTop: 4,
+    color: '#ffffff',
+    fontSize: 42,
+    fontWeight: '900',
   },
   hitEffect: {
     position: 'absolute',
@@ -3317,4 +3724,3 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 });
-

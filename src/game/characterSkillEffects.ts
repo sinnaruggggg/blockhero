@@ -1,9 +1,10 @@
-import type {CharacterData} from '../stores/gameStore';
+import type { CharacterData } from '../stores/gameStore';
 
 export interface SkillEffectContext {
-  mode?: 'level' | 'endless' | 'raid';
+  mode?: 'level' | 'endless' | 'raid' | 'battle';
   partySize?: number;
   bossHpRatio?: number;
+  levelModeBreakthroughCount?: number;
 }
 
 export interface CharacterSkillEffects {
@@ -46,6 +47,23 @@ export interface CharacterSkillEffects {
   doubleAttackChance: number;
   previewCountBonus: number;
   itemCapacityPerTypeBonus: number;
+  adjacentLineClearChance: number;
+  extraLineClearChance: number;
+  fillerCellChance: number;
+  fillerCellCount: number;
+  randomLineClearChance: number;
+  randomLineClearComboThreshold: number;
+  fastPlacementDamageBonus: number;
+  fastPlacementWindowMs: number;
+  multiLineDamageBonus: number;
+  placementDamageReduction: number;
+  placementDamageReductionWindowMs: number;
+  rewardJackpotChance: number;
+  rewardJackpotMultiplier: number;
+  raidActiveSkillDamageBonus: number;
+  battleExtraAttackLineChance: number;
+  battleCounterAttackChance: number;
+  levelModeBreakthroughAttackPerClear: number;
 }
 
 export type CombatDamageEffectEvent =
@@ -53,13 +71,20 @@ export type CombatDamageEffectEvent =
   | 'line_clear_bonus'
   | 'fever_bonus'
   | 'small_piece_chain'
+  | 'fast_placement'
   | 'raid_bonus'
   | 'jackpot_double'
   | 'double_attack';
 
+export interface CombatDamageEffectDetail {
+  event: CombatDamageEffectEvent;
+  bonusAmount: number;
+}
+
 export interface CombatDamageEffectResult {
   amount: number;
   events: CombatDamageEffectEvent[];
+  details: CombatDamageEffectDetail[];
 }
 
 const DEFAULT_EFFECTS: CharacterSkillEffects = {
@@ -102,6 +127,23 @@ const DEFAULT_EFFECTS: CharacterSkillEffects = {
   doubleAttackChance: 0,
   previewCountBonus: 0,
   itemCapacityPerTypeBonus: 0,
+  adjacentLineClearChance: 0,
+  extraLineClearChance: 0,
+  fillerCellChance: 0,
+  fillerCellCount: 0,
+  randomLineClearChance: 0,
+  randomLineClearComboThreshold: 0,
+  fastPlacementDamageBonus: 0,
+  fastPlacementWindowMs: 0,
+  multiLineDamageBonus: 0,
+  placementDamageReduction: 0,
+  placementDamageReductionWindowMs: 0,
+  rewardJackpotChance: 0,
+  rewardJackpotMultiplier: 1,
+  raidActiveSkillDamageBonus: 0,
+  battleExtraAttackLineChance: 0,
+  battleCounterAttackChance: 0,
+  levelModeBreakthroughAttackPerClear: 0,
 };
 
 function scale(points: number, maxValue: number): number {
@@ -112,7 +154,11 @@ function scale(points: number, maxValue: number): number {
   return (maxValue * points) / 5;
 }
 
-function reductionWithBase(points: number, base: number, perPointAfterFirst: number): number {
+function reductionWithBase(
+  points: number,
+  base: number,
+  perPointAfterFirst: number,
+): number {
   if (points <= 0) {
     return 0;
   }
@@ -126,47 +172,100 @@ export function getCharacterSkillEffects(
   context: SkillEffectContext = {},
 ): CharacterSkillEffects {
   if (!characterId || !data) {
-    return {...DEFAULT_EFFECTS};
+    return { ...DEFAULT_EFFECTS };
   }
 
-  const effects: CharacterSkillEffects = {...DEFAULT_EFFECTS};
+  const effects: CharacterSkillEffects = { ...DEFAULT_EFFECTS };
   const personal = data.personalAllocations;
   const party = data.partyAllocations;
   const mode = context.mode ?? 'level';
   const partySize = Math.max(1, context.partySize ?? 1);
   const bossHpRatio = context.bossHpRatio ?? 1;
+  const levelModeBreakthroughCount = Math.max(
+    0,
+    context.levelModeBreakthroughCount ?? 0,
+  );
 
   switch (characterId) {
     case 'knight': {
-      effects.damageTakenReduction += reductionWithBase(personal[0] ?? 0, 0.1, 0.05);
+      effects.damageTakenReduction += reductionWithBase(
+        personal[0] ?? 0,
+        0.1,
+        0.05,
+      );
       effects.comboDamageBonus += scale(personal[1] ?? 0, 0.1);
       effects.raidSkillChargeGainMultiplier += scale(personal[2] ?? 0, 0.2);
-      effects.endlessObstacleSpawnMultiplier *= 1 - scale(personal[5] ?? 0, 0.25);
+      if (mode === 'battle') {
+        effects.battleExtraAttackLineChance += scale(personal[3] ?? 0, 0.5);
+        effects.battleCounterAttackChance += scale(personal[7] ?? 0, 0.25);
+      }
+      if (mode === 'level') {
+        effects.levelModeBreakthroughAttackPerClear +=
+          (personal[4] ?? 0) * 0.01;
+        effects.baseAttackMultiplier +=
+          effects.levelModeBreakthroughAttackPerClear *
+          levelModeBreakthroughCount;
+      }
+      effects.endlessObstacleSpawnMultiplier *=
+        1 - scale(personal[5] ?? 0, 0.25);
       if ((personal[8] ?? 0) > 0) {
         effects.reviveOnce = true;
       }
       if ((personal[6] ?? 0) > 0) {
         effects.comboDamageBonus += scale(personal[6] ?? 0, 0.5);
       }
+      effects.adjacentLineClearChance += scale(personal[9] ?? 0, 0.2);
 
       if (mode === 'raid') {
         effects.damageTakenReduction += scale(party[0] ?? 0, 0.15);
+        effects.damageTakenReduction += scale(party[1] ?? 0, 0.08);
         effects.raidDamageMultiplier += scale(party[2] ?? 0, 0.1);
+        effects.raidActiveSkillDamageBonus += scale(party[3] ?? 0, 0.15);
+        effects.damageTakenReduction += scale(party[4] ?? 0, 0.08);
         if (bossHpRatio <= 0.2) {
           effects.raidDamageMultiplier += scale(party[5] ?? 0, 0.25);
         }
         effects.raidSkillChargeGainMultiplier += scale(party[6] ?? 0, 0.1);
+        if ((party[7] ?? 0) > 0) {
+          effects.reviveOnce = true;
+          effects.maxHpMultiplier += scale(party[7] ?? 0, 0.08);
+        }
         effects.rewardGoldMultiplier += scale(party[8] ?? 0, 0.1);
         effects.rewardDiamondMultiplier += scale(party[8] ?? 0, 0.1);
-        effects.baseAttackMultiplier += Math.min(0.25, scale(party[9] ?? 0, 0.05) * partySize);
+        effects.baseAttackMultiplier += Math.min(
+          0.25,
+          scale(party[9] ?? 0, 0.05) * partySize,
+        );
       }
       break;
     }
     case 'mage': {
       effects.previewCountBonus += Math.round(scale(personal[0] ?? 0, 3));
       effects.endlessDifficultySlowRate += scale(personal[1] ?? 0, 0.1);
+      effects.extraLineClearChance += scale(personal[2] ?? 0, 0.2);
+      effects.placementDamageReduction += scale(personal[3] ?? 0, 0.18);
+      effects.placementDamageReductionWindowMs = Math.max(
+        effects.placementDamageReductionWindowMs,
+        Math.round(scale(personal[3] ?? 0, 4000)),
+      );
+      effects.fillerCellChance += scale(personal[4] ?? 0, 0.18);
+      effects.fillerCellCount += Math.max(
+        0,
+        Math.round(scale(personal[4] ?? 0, 2)),
+      );
       effects.diamondChanceBonus += scale(personal[5] ?? 0, 0.01);
+      effects.previewCountBonus += Math.round(scale(personal[6] ?? 0, 1));
       effects.feverGaugeGainMultiplier += scale(personal[7] ?? 0, 0.15);
+      effects.randomLineClearChance += scale(personal[8] ?? 0, 0.18);
+      effects.randomLineClearComboThreshold = Math.max(
+        effects.randomLineClearComboThreshold,
+        (personal[8] ?? 0) > 0 ? 4 : 0,
+      );
+      effects.fillerCellChance += scale(personal[9] ?? 0, 0.12);
+      effects.fillerCellCount += Math.max(
+        0,
+        Math.round(scale(personal[9] ?? 0, 1)),
+      );
 
       if (mode === 'raid') {
         effects.baseAttackMultiplier += scale(party[0] ?? 0, 0.05);
@@ -176,22 +275,49 @@ export function getCharacterSkillEffects(
         effects.raidTimeBonusMs += Math.round(scale(party[2] ?? 0, 15000));
         effects.lineClearDamageBonus += scale(party[3] ?? 0, 0.12);
         effects.feverDurationBonusMs += Math.round(scale(party[4] ?? 0, 3000));
+        effects.raidSkillChargeGainMultiplier += scale(party[5] ?? 0, 0.08);
         effects.comboWindowBonusMs += Math.round(scale(party[6] ?? 0, 5000));
+        effects.damageTakenReduction += scale(party[7] ?? 0, 0.08);
         if (bossHpRatio <= 0.5) {
           effects.feverRequirementMultiplier *= 1 - scale(party[8] ?? 0, 0.2);
         }
+        effects.feverGaugeGainMultiplier += scale(party[9] ?? 0, 0.12);
       }
       break;
     }
     case 'archer': {
       effects.smallPieceChanceBonus += scale(personal[0] ?? 0, 0.25);
+      effects.fastPlacementDamageBonus += scale(personal[1] ?? 0, 0.2);
+      effects.fastPlacementWindowMs = Math.max(
+        effects.fastPlacementWindowMs,
+        Math.round(scale(personal[1] ?? 0, 3000)),
+      );
+      effects.multiLineDamageBonus += scale(personal[2] ?? 0, 0.15);
       effects.feverDamageBonus += scale(personal[3] ?? 0, 0.2);
+      effects.randomLineClearChance += scale(personal[4] ?? 0, 0.16);
+      effects.randomLineClearComboThreshold = Math.max(
+        effects.randomLineClearComboThreshold,
+        (personal[4] ?? 0) > 0 ? 5 : 0,
+      );
+      effects.lineClearDamageBonus += scale(personal[5] ?? 0, 0.05);
+      effects.lineClearDamageBonus += scale(personal[6] ?? 0, 0.08);
+      effects.feverDamageBonus += scale(personal[7] ?? 0, 0.15);
       effects.feverRequirementMultiplier *= 1 - scale(personal[8] ?? 0, 0.3);
       effects.dodgeChance += scale(personal[9] ?? 0, 0.3);
 
       if (mode === 'raid') {
         effects.lineClearDamageBonus += scale(party[0] ?? 0, 0.08);
+        effects.raidTimeBonusMs += Math.round(scale(party[1] ?? 0, 10000));
+        effects.comboDamageBonus += scale(party[2] ?? 0, 0.08);
+        effects.raidDamageMultiplier += scale(party[3] ?? 0, 0.08);
+        effects.raidTimeBonusMs += Math.round(scale(party[4] ?? 0, 8000));
         effects.smallPieceChanceBonus += scale(party[5] ?? 0, 0.1);
+        effects.fastPlacementDamageBonus += scale(party[6] ?? 0, 0.08);
+        effects.fastPlacementWindowMs = Math.max(
+          effects.fastPlacementWindowMs,
+          Math.round(scale(party[6] ?? 0, 2500)),
+        );
+        effects.lineClearDamageBonus += scale(party[7] ?? 0, 0.08);
         effects.doubleAttackChance += scale(party[8] ?? 0, 0.05);
         effects.doubleAttackChance += Math.min(
           0.2,
@@ -205,13 +331,43 @@ export function getCharacterSkillEffects(
       effects.extraDiamondChance += scale(personal[0] ?? 0, 0.1);
       effects.itemBlockChanceBonus += scale(personal[1] ?? 0, 0.1);
       effects.jackpotDoubleChance += scale(personal[2] ?? 0, 0.1);
-      effects.itemCapacityPerTypeBonus += Math.round(scale(personal[8] ?? 0, 1));
+      effects.smallPieceChanceBonus += scale(personal[3] ?? 0, 0.08);
+      effects.placementDamageReduction += scale(personal[4] ?? 0, 0.2);
+      effects.placementDamageReductionWindowMs = Math.max(
+        effects.placementDamageReductionWindowMs,
+        Math.round(scale(personal[4] ?? 0, 2500)),
+      );
+      effects.rewardGoldMultiplier += scale(personal[5] ?? 0, 0.1);
+      effects.rewardDiamondMultiplier += scale(personal[5] ?? 0, 0.05);
+      effects.doubleAttackChance += scale(personal[6] ?? 0, 0.05);
+      effects.rewardJackpotChance += scale(personal[7] ?? 0, 0.15);
+      effects.rewardJackpotMultiplier = Math.max(
+        effects.rewardJackpotMultiplier,
+        2 + Math.round(scale(personal[7] ?? 0, 1)),
+      );
+      effects.itemCapacityPerTypeBonus += Math.round(
+        scale(personal[8] ?? 0, 1),
+      );
       effects.shopGoldDiscount += scale(personal[9] ?? 0, 0.15);
       effects.shopRefreshDiscount += scale(personal[9] ?? 0, 0.3);
 
       if (mode === 'raid') {
         effects.rewardGoldMultiplier += scale(party[0] ?? 0, 0.1);
         effects.rewardDiamondMultiplier += scale(party[0] ?? 0, 0.1);
+        effects.rewardGoldMultiplier += scale(party[1] ?? 0, 0.08);
+        effects.rewardDiamondMultiplier += scale(party[1] ?? 0, 0.08);
+        effects.damageTakenReduction += scale(party[2] ?? 0, 0.06);
+        effects.raidTimeBonusMs += Math.round(scale(party[3] ?? 0, 8000));
+        effects.raidDamageMultiplier += scale(party[4] ?? 0, 0.08);
+        effects.lineClearDamageBonus += scale(party[5] ?? 0, 0.08);
+        effects.rewardGoldMultiplier += scale(party[6] ?? 0, 0.08);
+        effects.rewardDiamondMultiplier += scale(party[6] ?? 0, 0.08);
+        effects.raidDamageMultiplier += scale(party[7] ?? 0, 0.08);
+        if ((party[8] ?? 0) > 0) {
+          effects.reviveOnce = true;
+          effects.raidTimeBonusMs += Math.round(scale(party[8] ?? 0, 15000));
+        }
+        effects.raidSkillChargeGainMultiplier += scale(party[9] ?? 0, 0.05);
       }
       break;
     }
@@ -220,21 +376,42 @@ export function getCharacterSkillEffects(
         effects.autoHealIntervalMs = 60000;
         effects.autoHealPercent += scale(personal[0] ?? 0, 0.1);
       }
+      effects.autoHealPercent += scale(personal[1] ?? 0, 0.03);
       effects.heartCapacityBonus += Math.round(scale(personal[3] ?? 0, 1));
       effects.heartRegenMultiplier *= 1 - scale(personal[3] ?? 0, 0.2);
       effects.healEveryTwoLinesPercent += scale(personal[4] ?? 0, 0.05);
       effects.comboWindowBonusMs += Math.round(scale(personal[5] ?? 0, 3000));
+      effects.itemBlockChanceBonus += scale(personal[6] ?? 0, 0.08);
       effects.itemPreserveChance += scale(personal[7] ?? 0, 0.2);
+      effects.baseAttackMultiplier += scale(personal[8] ?? 0, 0.1);
       effects.healPerLineClearPercent += scale(personal[9] ?? 0, 0.01);
       effects.healEveryFiveClearsPercent += scale(personal[2] ?? 0, 0.15);
 
       if (mode === 'raid') {
         effects.placeHealChance += scale(party[0] ?? 0, 0.05);
         effects.placeHealPercent += scale(party[0] ?? 0, 0.05);
+        if ((party[1] ?? 0) > 0) {
+          effects.autoHealIntervalMs = Math.min(
+            effects.autoHealIntervalMs > 0 ? effects.autoHealIntervalMs : 45000,
+            45000,
+          );
+          effects.autoHealPercent += scale(party[1] ?? 0, 0.08);
+        }
+        effects.placeHealChance += scale(party[2] ?? 0, 0.04);
+        effects.placeHealPercent += scale(party[2] ?? 0, 0.03);
+        effects.damageTakenReduction += scale(party[3] ?? 0, 0.05);
         effects.raidTimeBonusMs += Math.round(scale(party[4] ?? 0, 60000));
+        effects.damageTakenReduction += scale(party[5] ?? 0, 0.08);
         effects.rewardGoldMultiplier += scale(party[6] ?? 0, 0.1);
         effects.rewardDiamondMultiplier += scale(party[6] ?? 0, 0.1);
-        effects.maxHpMultiplier += Math.min(0.3, scale(party[9] ?? 0, 0.03) * partySize);
+        if ((party[7] ?? 0) > 0) {
+          effects.reviveOnce = true;
+        }
+        effects.comboDamageBonus += scale(party[8] ?? 0, 0.08);
+        effects.maxHpMultiplier += Math.min(
+          0.3,
+          scale(party[9] ?? 0, 0.03) * partySize,
+        );
       }
       break;
     }
@@ -245,7 +422,10 @@ export function getCharacterSkillEffects(
   return effects;
 }
 
-export function applyDamageTakenReduction(damage: number, effects: CharacterSkillEffects): number {
+export function applyDamageTakenReduction(
+  damage: number,
+  effects: CharacterSkillEffects,
+): number {
   return Math.max(0, Math.round(damage * (1 - effects.damageTakenReduction)));
 }
 
@@ -258,6 +438,8 @@ export function applyCombatDamageEffects(
     feverActive: boolean;
     usedSmallPieceStreak?: boolean;
     isRaid?: boolean;
+    clearedLines?: number;
+    fastPlacement?: boolean;
   },
 ): number {
   return applyCombatDamageEffectsDetailed(baseAmount, effects, context).amount;
@@ -272,10 +454,13 @@ export function applyCombatDamageEffectsDetailed(
     feverActive: boolean;
     usedSmallPieceStreak?: boolean;
     isRaid?: boolean;
+    clearedLines?: number;
+    fastPlacement?: boolean;
   },
 ): CombatDamageEffectResult {
   let value = baseAmount;
   const events: CombatDamageEffectEvent[] = [];
+  const details: CombatDamageEffectDetail[] = [];
 
   if (context.combo > 0) {
     value *= 1 + effects.comboDamageBonus;
@@ -291,6 +476,10 @@ export function applyCombatDamageEffectsDetailed(
     }
   }
 
+  if ((context.clearedLines ?? 0) >= 2 && effects.multiLineDamageBonus > 0) {
+    value *= 1 + effects.multiLineDamageBonus;
+  }
+
   if (context.feverActive) {
     value *= 1 + effects.feverDamageBonus;
     if (effects.feverDamageBonus > 0) {
@@ -299,8 +488,23 @@ export function applyCombatDamageEffectsDetailed(
   }
 
   if (context.usedSmallPieceStreak) {
+    const before = value;
     value *= 1 + 0.2;
     events.push('small_piece_chain');
+    details.push({
+      event: 'small_piece_chain',
+      bonusAmount: Math.max(0, Math.round(value - before)),
+    });
+  }
+
+  if (context.fastPlacement && effects.fastPlacementDamageBonus > 0) {
+    const before = value;
+    value *= 1 + effects.fastPlacementDamageBonus;
+    events.push('fast_placement');
+    details.push({
+      event: 'fast_placement',
+      bonusAmount: Math.max(0, Math.round(value - before)),
+    });
   }
 
   if (context.isRaid) {
@@ -310,12 +514,18 @@ export function applyCombatDamageEffectsDetailed(
     }
   }
 
-  if (effects.jackpotDoubleChance > 0 && Math.random() < effects.jackpotDoubleChance) {
+  if (
+    effects.jackpotDoubleChance > 0 &&
+    Math.random() < effects.jackpotDoubleChance
+  ) {
     value *= 2;
     events.push('jackpot_double');
   }
 
-  if (effects.doubleAttackChance > 0 && Math.random() < effects.doubleAttackChance) {
+  if (
+    effects.doubleAttackChance > 0 &&
+    Math.random() < effects.doubleAttackChance
+  ) {
     value *= 2;
     events.push('double_attack');
   }
@@ -323,23 +533,35 @@ export function applyCombatDamageEffectsDetailed(
   return {
     amount: Math.max(0, Math.round(value)),
     events,
+    details,
   };
 }
 
-export function getDynamicHeartCap(baseHearts: number, effects: CharacterSkillEffects): number {
+export function getDynamicHeartCap(
+  baseHearts: number,
+  effects: CharacterSkillEffects,
+): number {
   return baseHearts + effects.heartCapacityBonus;
 }
 
-export function getDynamicHeartRegenMs(baseMs: number, effects: CharacterSkillEffects): number {
+export function getDynamicHeartRegenMs(
+  baseMs: number,
+  effects: CharacterSkillEffects,
+): number {
   return Math.round(baseMs * effects.heartRegenMultiplier);
 }
 
-export function getDynamicItemCapPerType(baseCap: number, effects: CharacterSkillEffects): number {
+export function getDynamicItemCapPerType(
+  baseCap: number,
+  effects: CharacterSkillEffects,
+): number {
   return baseCap + effects.itemCapacityPerTypeBonus;
 }
 
 export function shouldPreserveItem(effects: CharacterSkillEffects): boolean {
-  return effects.itemPreserveChance > 0 && Math.random() < effects.itemPreserveChance;
+  return (
+    effects.itemPreserveChance > 0 && Math.random() < effects.itemPreserveChance
+  );
 }
 
 export function shouldDodgeAttack(effects: CharacterSkillEffects): boolean {
@@ -359,13 +581,27 @@ export function applyRewardMultipliers(
   diamonds: number,
   effects: CharacterSkillEffects,
 ) {
+  let nextGold = Math.round(gold * effects.rewardGoldMultiplier);
   let nextDiamonds = Math.round(diamonds * effects.rewardDiamondMultiplier);
-  if (nextDiamonds > 0 && effects.extraDiamondChance > 0 && Math.random() < effects.extraDiamondChance) {
+  if (
+    (nextGold > 0 || nextDiamonds > 0) &&
+    effects.rewardJackpotChance > 0 &&
+    effects.rewardJackpotMultiplier > 1 &&
+    Math.random() < effects.rewardJackpotChance
+  ) {
+    nextGold = Math.round(nextGold * effects.rewardJackpotMultiplier);
+    nextDiamonds = Math.round(nextDiamonds * effects.rewardJackpotMultiplier);
+  }
+  if (
+    nextDiamonds > 0 &&
+    effects.extraDiamondChance > 0 &&
+    Math.random() < effects.extraDiamondChance
+  ) {
     nextDiamonds += 1;
   }
 
   return {
-    gold: Math.round(gold * effects.rewardGoldMultiplier),
+    gold: nextGold,
     diamonds: nextDiamonds,
   };
 }

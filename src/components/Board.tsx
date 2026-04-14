@@ -1,44 +1,29 @@
-import React, {useRef, forwardRef} from 'react';
-import {View, StyleSheet, Dimensions, TouchableOpacity, Text} from 'react-native';
-import {ROWS, COLS} from '../constants';
-import {Board as BoardType, CellValue} from '../game/engine';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const BOARD_PADDING = 8;
-const CELL_GAP = 2;
-const BOARD_WIDTH = Math.min(SCREEN_WIDTH - 48, 388);
-const CELL_SIZE = (BOARD_WIDTH - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
-
-// Compact mode for battle screen
-const COMPACT_SCALE = 0.82;
-const COMPACT_CELL_SIZE = CELL_SIZE * COMPACT_SCALE;
-const COMPACT_CELL_GAP = CELL_GAP * COMPACT_SCALE;
-const COMPACT_BOARD_PADDING = BOARD_PADDING * COMPACT_SCALE;
-
-export function getBoardMetrics(
-  viewportWidth = SCREEN_WIDTH,
-  options?: {small?: boolean; compact?: boolean},
-) {
-  const scale = options?.small ? 0.4 : options?.compact ? COMPACT_SCALE : 1;
-  const baseBoardWidth = Math.min(viewportWidth - 48, 388);
-  const baseCellSize =
-    (baseBoardWidth - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
-  const cellSize = baseCellSize * scale;
-  const gap = CELL_GAP * scale;
-  const padding = BOARD_PADDING * scale;
-  const boardSize = cellSize * COLS + gap * (COLS - 1) + padding * 2;
-
-  return {
-    scale,
-    cellSize,
-    gap,
-    padding,
-    boardSize,
-  };
-}
+import React, { useRef, forwardRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import { ROWS, COLS } from '../constants';
+import { Board as BoardType, CellValue } from '../game/engine';
+import { type VisualViewport } from '../game/visualConfig';
+import {
+  BOARD_PADDING,
+  BOARD_REFERENCE_VIEWPORT,
+  BOARD_WIDTH,
+  CELL_GAP,
+  CELL_SIZE,
+  COMPACT_SCALE,
+  getBoardMetrics,
+} from '../game/gameplayMetrics';
+export {
+  BOARD_PADDING,
+  BOARD_REFERENCE_VIEWPORT,
+  BOARD_WIDTH,
+  CELL_GAP,
+  CELL_SIZE,
+  COMPACT_SCALE,
+  getBoardMetrics,
+} from '../game/gameplayMetrics';
 
 // Voxel 3D helpers
-function hexToRgb(hex: string): {r: number; g: number; b: number} {
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace('#', '');
   return {
     r: parseInt(h.substring(0, 2), 16),
@@ -48,25 +33,32 @@ function hexToRgb(hex: string): {r: number; g: number; b: number} {
 }
 
 function lighten(hex: string, amount: number): string {
-  const {r, g, b} = hexToRgb(hex);
-  return `rgb(${Math.min(255, r + amount)},${Math.min(255, g + amount)},${Math.min(255, b + amount)})`;
+  const { r, g, b } = hexToRgb(hex);
+  return `rgb(${Math.min(255, r + amount)},${Math.min(
+    255,
+    g + amount,
+  )},${Math.min(255, b + amount)})`;
 }
 
 function darken(hex: string, amount: number): string {
-  const {r, g, b} = hexToRgb(hex);
-  return `rgb(${Math.max(0, r - amount)},${Math.max(0, g - amount)},${Math.max(0, b - amount)})`;
+  const { r, g, b } = hexToRgb(hex);
+  return `rgb(${Math.max(0, r - amount)},${Math.max(0, g - amount)},${Math.max(
+    0,
+    b - amount,
+  )})`;
 }
 
 interface BoardProps {
   board: BoardType;
-  previewCells?: {row: number; col: number; color: string}[];
+  previewCells?: { row: number; col: number; color: string }[];
   invalidPreview?: boolean;
-  clearGuideCells?: {row: number; col: number}[];
+  clearGuideCells?: { row: number; col: number }[];
   onCellPress?: (row: number, col: number) => void;
   small?: boolean;
   compact?: boolean;
   backgroundColor?: string;
   viewportWidth?: number;
+  viewport?: Partial<VisualViewport>;
 }
 
 const Cell = React.memo(function Cell({
@@ -98,12 +90,17 @@ const Cell = React.memo(function Cell({
   }
 
   if (!cell && isPreview) {
-    const color = isInvalid ? '#ef4444' : (previewColor || '#ffffff');
+    const color = isInvalid ? '#ef4444' : previewColor || '#ffffff';
     return (
-      <View style={{
-        width: size, height: size, borderRadius: 3,
-        backgroundColor: color, opacity: isInvalid ? 0.25 : 0.4,
-      }} />
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 3,
+          backgroundColor: color,
+          opacity: isInvalid ? 0.25 : 0.4,
+        }}
+      />
     );
   }
 
@@ -115,24 +112,94 @@ const Cell = React.memo(function Cell({
 
   if (cell!.type === 'stone') {
     return (
-      <View style={{width: size, height: size, borderRadius: 3, opacity}}>
-        <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 3, backgroundColor: darken('#6b7280', 50)}} />
-        <View style={{position: 'absolute', top: 0, left: 0, right: bevel, bottom: bevel, borderRadius: 3, backgroundColor: lighten('#6b7280', 40)}} />
-        <View style={{position: 'absolute', top: bevel, left: bevel, right: bevel, bottom: bevel, borderRadius: 2, backgroundColor: '#6b7280'}} />
+      <View style={{ width: size, height: size, borderRadius: 3, opacity }}>
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: 3,
+            backgroundColor: darken('#6b7280', 50),
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: bevel,
+            bottom: bevel,
+            borderRadius: 3,
+            backgroundColor: lighten('#6b7280', 40),
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            top: bevel,
+            left: bevel,
+            right: bevel,
+            bottom: bevel,
+            borderRadius: 2,
+            backgroundColor: '#6b7280',
+          }}
+        />
       </View>
     );
   }
 
   return (
-    <View style={{width: size, height: size, borderRadius: 4, opacity}}>
+    <View style={{ width: size, height: size, borderRadius: 4, opacity }}>
       {/* Shadow edge */}
-      <View style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 3, backgroundColor: darken(baseColor, 70)}} />
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          borderRadius: 3,
+          backgroundColor: darken(baseColor, 70),
+        }}
+      />
       {/* Highlight edge */}
-      <View style={{position: 'absolute', top: 0, left: 0, right: bevel, bottom: bevel, borderRadius: 3, backgroundColor: lighten(baseColor, 60)}} />
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: bevel,
+          bottom: bevel,
+          borderRadius: 3,
+          backgroundColor: lighten(baseColor, 60),
+        }}
+      />
       {/* Face */}
-      <View style={{position: 'absolute', top: bevel, left: bevel, right: bevel, bottom: bevel, borderRadius: 2, backgroundColor: baseColor}} />
+      <View
+        style={{
+          position: 'absolute',
+          top: bevel,
+          left: bevel,
+          right: bevel,
+          bottom: bevel,
+          borderRadius: 2,
+          backgroundColor: baseColor,
+        }}
+      />
       {/* Gloss */}
-      <View style={{position: 'absolute', top: bevel + 1, left: bevel + 1, width: Math.floor((size - bevel * 2) * 0.4), height: Math.floor((size - bevel * 2) * 0.25), borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.3)'}} />
+      <View
+        style={{
+          position: 'absolute',
+          top: bevel + 1,
+          left: bevel + 1,
+          width: Math.floor((size - bevel * 2) * 0.4),
+          height: Math.floor((size - bevel * 2) * 0.25),
+          borderRadius: 1,
+          backgroundColor: 'rgba(255,255,255,0.3)',
+        }}
+      />
       {cell!.type === 'hard' && typeof cell!.hits === 'number' && (
         <View style={styles.hardBadge}>
           <Text style={styles.hardBadgeText}>x{cell!.hits}</Text>
@@ -153,11 +220,21 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
     compact = false,
     backgroundColor = '#0a0820',
     viewportWidth,
+    viewport,
   },
   ref,
 ) {
-  const metrics = getBoardMetrics(viewportWidth ?? SCREEN_WIDTH, {small, compact});
-  const {cellSize, gap, padding} = metrics;
+  const metrics = getBoardMetrics(
+    viewport ??
+      (typeof viewportWidth === 'number'
+        ? {
+            width: viewportWidth,
+            height: BOARD_REFERENCE_VIEWPORT.height,
+          }
+        : BOARD_REFERENCE_VIEWPORT),
+    { small, compact },
+  );
+  const { cellSize, gap, padding } = metrics;
 
   const previewMap = useRef(new Map<string, string>());
   previewMap.current.clear();
@@ -174,12 +251,16 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
   return (
     <View
       ref={ref}
-      style={[styles.board, {
-        padding,
-        width: cellSize * COLS + gap * (COLS - 1) + padding * 2,
-        gap,
-        backgroundColor,
-      }]}>
+      style={[
+        styles.board,
+        {
+          padding,
+          width: cellSize * COLS + gap * (COLS - 1) + padding * 2,
+          gap,
+          backgroundColor,
+        },
+      ]}
+    >
       <View pointerEvents="none" style={styles.boardFrame}>
         <View style={[styles.corner, styles.cornerTopLeft]} />
         <View style={[styles.corner, styles.cornerTopRight]} />
@@ -187,32 +268,44 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
         <View style={[styles.corner, styles.cornerBottomRight]} />
       </View>
       {board.map((row, r) => (
-        <View key={r} style={{flexDirection: 'row', gap}}>
+        <View key={r} style={{ flexDirection: 'row', gap }}>
           {row.map((cell, c) => {
             const key = `${r},${c}`;
             const isPreview = previewMap.current.has(key);
             const isClearGuide = clearGuideMap.current.has(key);
             const cellNode = (
-              <View key={c} style={{width: cellSize, height: cellSize}}>
+              <View key={c} style={{ width: cellSize, height: cellSize }}>
                 <Cell
-                  cell={cell} isPreview={isPreview}
+                  cell={cell}
+                  isPreview={isPreview}
                   previewColor={previewMap.current.get(key)}
-                  isInvalid={invalidPreview && isPreview} size={cellSize}
+                  isInvalid={invalidPreview && isPreview}
+                  size={cellSize}
                 />
                 {isClearGuide && (
-                  <View style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    borderRadius: 3,
-                    backgroundColor: 'rgba(255,255,255,0.15)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.3)',
-                  }} />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      borderRadius: 3,
+                      backgroundColor: 'rgba(255,255,255,0.15)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.3)',
+                    }}
+                  />
                 )}
               </View>
             );
             if (onCellPress) {
               return (
-                <TouchableOpacity key={c} activeOpacity={0.7} onPress={() => onCellPress(r, c)}>
+                <TouchableOpacity
+                  key={c}
+                  activeOpacity={0.7}
+                  onPress={() => onCellPress(r, c)}
+                >
                   {cellNode}
                 </TouchableOpacity>
               );
@@ -229,21 +322,27 @@ export default BoardComponent;
 
 // Helper: convert absolute screen position to board row/col
 export function screenToBoard(
-  x: number, y: number, boardX: number, boardY: number, compact?: boolean,
-): {row: number; col: number} | null {
-  const cs = compact ? COMPACT_CELL_SIZE : CELL_SIZE;
-  const cg = compact ? COMPACT_CELL_GAP : CELL_GAP;
-  const bp = compact ? COMPACT_BOARD_PADDING : BOARD_PADDING;
+  x: number,
+  y: number,
+  boardX: number,
+  boardY: number,
+  compact?: boolean,
+  viewport?: Partial<VisualViewport>,
+): { row: number; col: number } | null {
+  const metrics = getBoardMetrics(viewport ?? BOARD_REFERENCE_VIEWPORT, {
+    compact,
+  });
+  const cs = metrics.cellSize;
+  const cg = metrics.gap;
+  const bp = metrics.padding;
   const localX = x - boardX - bp;
   const localY = y - boardY - bp;
   const cellStep = cs + cg;
   const col = Math.floor(localX / cellStep);
   const row = Math.floor(localY / cellStep);
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return null;
-  return {row, col};
+  return { row, col };
 }
-
-export {CELL_SIZE, BOARD_WIDTH, BOARD_PADDING, CELL_GAP, COMPACT_SCALE};
 
 const styles = StyleSheet.create({
   board: {
@@ -254,7 +353,7 @@ const styles = StyleSheet.create({
     shadowColor: '#040211',
     shadowOpacity: 0.55,
     shadowRadius: 12,
-    shadowOffset: {width: 0, height: 8},
+    shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
   boardFrame: {

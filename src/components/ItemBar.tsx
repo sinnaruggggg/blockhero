@@ -1,26 +1,18 @@
 import React from 'react';
-import {View, StyleSheet, TouchableOpacity, Text} from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 
 interface ItemBarProps {
-  items: {[key: string]: number};
+  items: { [key: string]: number };
   selectedItem: string | null;
   onSelectItem: (item: string) => void;
   showAddTurns?: boolean;
 }
 
 const ITEM_DEFS = [
-  {key: 'hammer', emoji: '🔨', label: '망치'},
-  {key: 'bomb', emoji: '💣', label: '폭탄'},
-  {key: 'refresh', emoji: '🔄', label: '새로고침'},
-  {key: 'addTurns', emoji: '➕', label: '턴 추가'},
-];
-
-const PIECE_ITEM_DEFS = [
-  {key: 'piece_square3', emoji: '🟪', label: '3x3'},
-  {key: 'piece_rect', emoji: '▭', label: '2x3'},
-  {key: 'piece_line5', emoji: '🟦', label: '5줄'},
-  {key: 'piece_num2', emoji: '2', label: 'No.2'},
-  {key: 'piece_diag', emoji: '╱', label: '대각'},
+  { key: 'hammer', emoji: '🔨' },
+  { key: 'bomb', emoji: '💣' },
+  { key: 'refresh', emoji: '🔄' },
+  { key: 'addTurns', emoji: '⏱' },
 ];
 
 export default function ItemBar({
@@ -32,12 +24,10 @@ export default function ItemBar({
   const visibleItems = showAddTurns
     ? ITEM_DEFS
     : ITEM_DEFS.filter(item => item.key !== 'addTurns');
-  const ownedPieces = PIECE_ITEM_DEFS.filter(item => (items[item.key] || 0) > 0);
-  const allItems = [...visibleItems, ...ownedPieces];
 
   return (
     <View style={styles.container}>
-      {allItems.map(item => {
+      {visibleItems.map(item => {
         const count = items[item.key] || 0;
         const selected = selectedItem === item.key;
         return (
@@ -45,7 +35,8 @@ export default function ItemBar({
             key={item.key}
             style={[styles.itemBtn, selected && styles.selectedItem]}
             onPress={() => onSelectItem(item.key)}
-            activeOpacity={0.7}>
+            activeOpacity={0.7}
+          >
             <Text style={styles.emoji}>{item.emoji}</Text>
             <Text style={styles.count}>{count}</Text>
           </TouchableOpacity>

@@ -1,6 +1,17 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
-import {View, StyleSheet, Alert, Text, Animated, TouchableOpacity, Dimensions} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  StyleSheet,
+  Alert,
+  Text,
+  Animated,
+  TouchableOpacity,
+  useWindowDimensions,
+} from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
@@ -9,14 +20,19 @@ import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView, {
+  buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
-import {flushPlayerStateNow} from '../services/playerState';
-import {submitEndlessLeaderboard} from '../services/rankingService';
-import {useVisualConfig} from '../hooks/useVisualConfig';
-import {getVisualElementRule} from '../game/visualConfig';
-import {useDragDrop} from '../game/useDragDrop';
+import { flushPlayerStateNow } from '../services/playerState';
+import { submitEndlessLeaderboard } from '../services/rankingService';
+import { useVisualConfig } from '../hooks/useVisualConfig';
+import {
+  getVisualElementRule,
+  type VisualViewport,
+} from '../game/visualConfig';
+import { useDragDrop } from '../game/useDragDrop';
 import {
   LEVEL_THRESHOLDS,
   FEVER_MAX,
@@ -24,12 +40,9 @@ import {
   COMBO_TIMEOUT_MS,
   ENDLESS_GOLD_MILESTONES,
 } from '../constants';
-
-const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
 import {
   createBoard,
   generatePlaceablePieces,
-  generateSpecificPiece,
   placePiece,
   checkAndClearLines,
   countBlocks,
@@ -41,13 +54,12 @@ import {
   Piece,
   Board as BoardType,
 } from '../game/engine';
-import {resolveCombatTurn} from '../game/combatFlow';
+import { resolveCombatTurn } from '../game/combatFlow';
 import {
   applyCombatDamageEffectsDetailed,
   getCharacterSkillEffects,
   getPieceGenerationOptions,
 } from '../game/characterSkillEffects';
-import {SPECIAL_PIECE_ITEMS} from '../constants/shopItems';
 import {
   loadGameData,
   addGold,
@@ -58,13 +70,18 @@ import {
   updateDailyStats,
   GameData,
   getSelectedCharacter,
+  getUnlockedSpecialPieceShapeIndices,
   loadCharacterData,
   collectSpecialBlockRewards,
   gainSummonExp,
   loadSkinData,
 } from '../stores/gameStore';
-import {getCharacterAtk} from '../constants/characters';
-import {getSkinBoardBg, getSkinColors, setActiveSkin} from '../game/skinContext';
+import { getCharacterAtk } from '../constants/characters';
+import {
+  getSkinBoardBg,
+  getSkinColors,
+  setActiveSkin,
+} from '../game/skinContext';
 import {
   applySkinCombatDamage,
   applySkinRewardBonuses,
@@ -72,16 +89,33 @@ import {
   getSummonGaugeGain,
   mergeSkinPieceGenerationOptions,
 } from '../game/skinSummonRuntime';
-import {useBattleNotice} from '../hooks/useBattleNotice';
-import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
-import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
+import { useBattleNotice } from '../hooks/useBattleNotice';
+import {
+  buildBoardSkillTriggerNotice,
+  buildSkillTriggerNotice,
+} from '../game/skillTriggerNotice';
+import {
+  loadSkillTriggerNoticeMode,
+  type SkillTriggerNoticeMode,
+} from '../stores/gameSettings';
 import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import { scaleGameplayUnit } from '../game/layoutScale';
+import { applySkillBoardEffects } from '../game/skillBoardEffects';
 
-export default function EndlessScreen({navigation}: any) {
-  const {manifest: visualManifest} = useVisualConfig();
+export default function EndlessScreen({ navigation }: any) {
+  const windowDimensions = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const visualViewport: VisualViewport = {
+    width: windowDimensions.width,
+    height: windowDimensions.height,
+    safeTop: insets.top,
+    safeBottom: insets.bottom,
+  };
+  const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
+  const { manifest: visualManifest } = useVisualConfig();
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
   const [score, setScore] = useState(0);
@@ -94,7 +128,10 @@ export default function EndlessScreen({navigation}: any) {
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [gameOver, setGameOver] = useState(false);
-  const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
+  const [boardLayout, setBoardLayout] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [attackPower, setAttackPower] = useState(10);
   const [nextMilestoneIdx, setNextMilestoneIdx] = useState(0);
   const [goldEarned, setGoldEarned] = useState(0);
@@ -128,6 +165,7 @@ export default function EndlessScreen({navigation}: any) {
   const startedAtRef = useRef(Date.now());
   const skillEffectsRef = useRef(getCharacterSkillEffects(null, null));
   const smallPieceStreakRef = useRef(0);
+  const lastPlacementAtRef = useRef<number | null>(null);
   const activeSkinIdRef = useRef(0);
   const summonGaugeRef = useRef(0);
   const summonGaugeRequiredRef = useRef(0);
@@ -137,17 +175,29 @@ export default function EndlessScreen({navigation}: any) {
   const summonExpEarnedRef = useRef(0);
   const nextPiecesRef = useRef<Piece[]>([]);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
-  const {message: battleNoticeMessage, showNotice: showBattleNotice} =
-    useBattleNotice(3000);
+  const {
+    message: battleNoticeMessage,
+    messageKey: battleNoticeKey,
+    showNotice: showBattleNotice,
+  } = useBattleNotice(3000);
+  const {
+    message: skillEffectMessage,
+    messageKey: skillEffectMessageKey,
+    showNotice: showSkillEffect,
+  } = useBattleNotice(1600);
 
   const milestoneAnim = useRef(new Animated.Value(0)).current;
 
   const getCurrentPieceOptions = useCallback(
-    () =>
-      mergeSkinPieceGenerationOptions(
+    () => ({
+      ...mergeSkinPieceGenerationOptions(
         getPieceGenerationOptions(skillEffectsRef.current),
         activeSkinIdRef.current,
       ),
+      unlockedSpecialShapeIndices: getUnlockedSpecialPieceShapeIndices(
+        gameDataRef.current,
+      ),
+    }),
     [],
   );
 
@@ -163,38 +213,45 @@ export default function EndlessScreen({navigation}: any) {
       }
       const compactLayout =
         activeSkinIdRef.current > 0 ||
-        (skillEffectsRef.current.previewCountBonus > 0 && nextPiecesRef.current.length > 0);
+        (skillEffectsRef.current.previewCountBonus > 0 &&
+          nextPiecesRef.current.length > 0);
       const cells = buildPiecePlacementEffectCells(
         boardLayout,
         piece,
         row,
         col,
         compactLayout,
+        visualViewport,
       );
       if (cells.length === 0) {
         return;
       }
       placementEffectIdRef.current += 1;
-      setPlacementEffect({id: placementEffectIdRef.current, cells});
+      setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
-    [boardLayout],
+    [boardLayout, visualViewport],
   );
 
   const showSkillTriggerNotice = useCallback(
     (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
-      const message = buildSkillTriggerNotice(skillNoticeModeRef.current, events);
-      if (message) {
-        showBattleNotice(message);
+      const noticeMessage = buildSkillTriggerNotice(
+        skillNoticeModeRef.current,
+        events,
+      );
+      if (noticeMessage) {
+        showBattleNotice(noticeMessage);
+      }
+
+      const boardMessage = buildBoardSkillTriggerNotice(events);
+      if (boardMessage) {
+        showSkillEffect(boardMessage);
       }
     },
-    [showBattleNotice],
+    [showBattleNotice, showSkillEffect],
   );
 
   const buildPiecePack = useCallback(
-    (
-      difficulty: 'easy' | 'medium' | 'hard',
-      targetBoard: BoardType,
-    ) =>
+    (difficulty: 'easy' | 'medium' | 'hard', targetBoard: BoardType) =>
       generatePlaceablePieces(
         targetBoard,
         difficulty,
@@ -206,7 +263,8 @@ export default function EndlessScreen({navigation}: any) {
 
   const isPiecePackPlaceable = useCallback(
     (targetBoard: BoardType, pack: Piece[]) =>
-      pack.length === 3 && pack.every(piece => canPlaceAnyPiece(targetBoard, [piece])),
+      pack.length === 3 &&
+      pack.every(piece => canPlaceAnyPiece(targetBoard, [piece])),
     [],
   );
 
@@ -215,6 +273,7 @@ export default function EndlessScreen({navigation}: any) {
     resetPieceGenerationHistory();
     const initialBoard = createBoard();
     setBoard(initialBoard);
+    lastPlacementAtRef.current = null;
     activeSkinIdRef.current = 0;
     summonGaugeRef.current = 0;
     summonGaugeRequiredRef.current = 0;
@@ -263,7 +322,9 @@ export default function EndlessScreen({navigation}: any) {
       }
 
       const charData = await loadCharacterData(charId);
-      const effects = getCharacterSkillEffects(charId, charData, {mode: 'endless'});
+      const effects = getCharacterSkillEffects(charId, charData, {
+        mode: 'endless',
+      });
       skillEffectsRef.current = effects;
       setAttackPower(
         Math.round(
@@ -278,7 +339,7 @@ export default function EndlessScreen({navigation}: any) {
     })();
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 300);
   }, [buildPiecePack, updateNextPieces]);
@@ -288,9 +349,17 @@ export default function EndlessScreen({navigation}: any) {
       setMilestoneText(text);
       milestoneAnim.setValue(0);
       Animated.sequence([
-        Animated.timing(milestoneAnim, {toValue: 1, duration: 300, useNativeDriver: true}),
+        Animated.timing(milestoneAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
         Animated.delay(1500),
-        Animated.timing(milestoneAnim, {toValue: 0, duration: 400, useNativeDriver: true}),
+        Animated.timing(milestoneAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
       ]).start();
     },
     [milestoneAnim],
@@ -411,7 +480,13 @@ export default function EndlessScreen({navigation}: any) {
     }
 
     const stats = await loadEndlessStats();
-    await saveEndlessStats(stats, finalScore, finalLines, currentLevel, maxComboRef.current);
+    await saveEndlessStats(
+      stats,
+      finalScore,
+      finalLines,
+      currentLevel,
+      maxComboRef.current,
+    );
     const dailyStats = await loadDailyStats();
     await updateDailyStats(dailyStats, {
       games: 1,
@@ -424,7 +499,8 @@ export default function EndlessScreen({navigation}: any) {
       finalScore,
       maxLevel: currentLevel,
       maxCombo: maxComboRef.current,
-      playTimeMs: startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0,
+      playTimeMs:
+        startedAtRef.current > 0 ? Date.now() - startedAtRef.current : 0,
       totalLines: finalLines,
     });
 
@@ -433,8 +509,10 @@ export default function EndlessScreen({navigation}: any) {
     const isHighScore = finalScore > stats.highScore;
     Alert.alert(
       isHighScore ? '새 최고 기록!' : '게임 종료',
-      `점수: ${finalScore.toLocaleString()}\n레벨: ${currentLevel}\n클리어 줄: ${finalLines}\n최대 콤보: ${maxComboRef.current}\n획득 골드: +${finalGold}`,
-      [{text: '확인', onPress: () => navigation.goBack()}],
+      `점수: ${finalScore.toLocaleString()}\n레벨: ${currentLevel}\n클리어 줄: ${finalLines}\n최대 콤보: ${
+        maxComboRef.current
+      }\n획득 골드: +${finalGold}`,
+      [{ text: '확인', onPress: () => navigation.goBack() }],
     );
   }, [currentLevel, gameOver, navigation]);
 
@@ -454,7 +532,9 @@ export default function EndlessScreen({navigation}: any) {
 
       if (totalGoldGained > 0) {
         totalGoldGained = applySkinRewardBonuses(
-          Math.round(totalGoldGained * skillEffectsRef.current.rewardGoldMultiplier),
+          Math.round(
+            totalGoldGained * skillEffectsRef.current.rewardGoldMultiplier,
+          ),
           activeSkinIdRef.current,
         );
         const newIdx = idx;
@@ -472,7 +552,9 @@ export default function EndlessScreen({navigation}: any) {
 
         const nextScore = ENDLESS_GOLD_MILESTONES[newIdx]?.score;
         showMilestoneBanner(
-          `+${totalGoldGained} 골드! 다음 목표: ${nextScore?.toLocaleString() ?? '최대'}`,
+          `+${totalGoldGained} 골드! 다음 목표: ${
+            nextScore?.toLocaleString() ?? '최대'
+          }`,
         );
       }
     },
@@ -499,7 +581,8 @@ export default function EndlessScreen({navigation}: any) {
 
       while (true) {
         const result = checkAndClearLines(newBoard);
-        const clearedLines = result.clearedRows.length + result.clearedCols.length;
+        const clearedLines =
+          result.clearedRows.length + result.clearedCols.length;
         if (clearedLines === 0) {
           break;
         }
@@ -510,12 +593,35 @@ export default function EndlessScreen({navigation}: any) {
       }
 
       const effects = skillEffectsRef.current;
+      const placedAt = Date.now();
+      const fastPlacement =
+        effects.fastPlacementWindowMs > 0 &&
+        lastPlacementAtRef.current !== null &&
+        placedAt - lastPlacementAtRef.current <= effects.fastPlacementWindowMs;
+      lastPlacementAtRef.current = placedAt;
       const wasSmallPiece = blockCount <= 2;
-      smallPieceStreakRef.current = wasSmallPiece ? smallPieceStreakRef.current + 1 : 0;
+      smallPieceStreakRef.current = wasSmallPiece
+        ? smallPieceStreakRef.current + 1
+        : 0;
       const usedSmallPieceStreak = smallPieceStreakRef.current >= 2;
       if (usedSmallPieceStreak) {
         smallPieceStreakRef.current = 0;
       }
+
+      const boardSkillResult = applySkillBoardEffects({
+        board: newBoard,
+        piece,
+        row,
+        col,
+        didClear: totalLines > 0,
+        combo: totalLines > 0 ? comboRef.current + 1 : comboRef.current,
+        effects,
+        colors: getSkinColors(),
+      });
+      newBoard = boardSkillResult.board;
+      totalLines += boardSkillResult.extraLinesCleared;
+      totalGemsFound += boardSkillResult.gemsFound;
+      totalItemsFound.push(...boardSkillResult.itemsFound);
 
       const turnResult = resolveCombatTurn({
         mode: 'endless',
@@ -525,7 +631,10 @@ export default function EndlessScreen({navigation}: any) {
         combo: comboRef.current,
         feverActive: feverActiveRef.current,
         feverGauge,
-        feverLinesRequired: Math.max(1, Math.round(20 * effects.feverRequirementMultiplier)),
+        feverLinesRequired: Math.max(
+          1,
+          Math.round(20 * effects.feverRequirementMultiplier),
+        ),
         feverGaugeGainMultiplier: effects.feverGaugeGainMultiplier,
       });
       if (turnResult.nextCombo > maxComboRef.current) {
@@ -538,17 +647,36 @@ export default function EndlessScreen({navigation}: any) {
         resetComboTimer();
       }
 
-      const scoreResult = applyCombatDamageEffectsDetailed(turnResult.score, effects, {
-        combo: turnResult.nextCombo,
-        didClear: turnResult.didClear,
-        feverActive: feverActiveRef.current,
-        usedSmallPieceStreak,
-      });
+      const scoreResult = applyCombatDamageEffectsDetailed(
+        turnResult.score,
+        effects,
+        {
+          combo: turnResult.nextCombo,
+          didClear: turnResult.didClear,
+          feverActive: feverActiveRef.current,
+          usedSmallPieceStreak,
+          clearedLines: totalLines,
+          fastPlacement,
+        },
+      );
       showSkillTriggerNotice(...scoreResult.events);
-      const skinScore = applySkinCombatDamage(scoreResult.amount, activeSkinIdRef.current, {
-        combo: turnResult.nextCombo,
-        didClear: turnResult.didClear,
-      }).damage;
+      const fastPlacementDetail = scoreResult.details.find(
+        detail => detail.event === 'fast_placement' && detail.bonusAmount > 0,
+      );
+      if (fastPlacementDetail) {
+        showSkillEffect(
+          `신속 배치 +${fastPlacementDetail.bonusAmount.toLocaleString()}`,
+          1800,
+        );
+      }
+      const skinScore = applySkinCombatDamage(
+        scoreResult.amount,
+        activeSkinIdRef.current,
+        {
+          combo: turnResult.nextCombo,
+          didClear: turnResult.didClear,
+        },
+      ).damage;
       const summonBonus =
         summonActiveRef.current && summonRemainingMsRef.current > 0
           ? summonAttackRef.current
@@ -572,7 +700,10 @@ export default function EndlessScreen({navigation}: any) {
       const effectiveScoreForLevel = Math.floor(
         newScore * (1 - effects.endlessDifficultySlowRate),
       );
-      const newLevel = getEndlessLevel(effectiveScoreForLevel, LEVEL_THRESHOLDS);
+      const newLevel = getEndlessLevel(
+        effectiveScoreForLevel,
+        LEVEL_THRESHOLDS,
+      );
 
       if (
         newLevel > currentLevel &&
@@ -601,7 +732,10 @@ export default function EndlessScreen({navigation}: any) {
         setSummonGauge(nextGauge);
       }
 
-      if (gameDataRef.current && (totalGemsFound > 0 || totalItemsFound.length > 0)) {
+      if (
+        gameDataRef.current &&
+        (totalGemsFound > 0 || totalItemsFound.length > 0)
+      ) {
         collectSpecialBlockRewards(
           gameDataRef.current,
           totalGemsFound,
@@ -617,10 +751,12 @@ export default function EndlessScreen({navigation}: any) {
       const remaining = newPieces.filter(p => p !== null);
       if (remaining.length === 0) {
         const difficulty = getDifficulty(newLevel);
-        const upcomingPack =
-          isPiecePackPlaceable(newBoard, nextPiecesRef.current)
-            ? nextPiecesRef.current
-            : buildPiecePack(difficulty, newBoard);
+        const upcomingPack = isPiecePackPlaceable(
+          newBoard,
+          nextPiecesRef.current,
+        )
+          ? nextPiecesRef.current
+          : buildPiecePack(difficulty, newBoard);
         newPieces[0] = upcomingPack[0];
         newPieces[1] = upcomingPack[1];
         newPieces[2] = upcomingPack[2];
@@ -658,25 +794,39 @@ export default function EndlessScreen({navigation}: any) {
     ],
   );
 
-  const dragDrop = useDragDrop(board, pieces, boardLayout, handlePlace);
   const useCompactLayout =
     activeSkinIdRef.current > 0 ||
     (skillEffectsRef.current.previewCountBonus > 0 && nextPieces.length > 0);
+  const dragDrop = useDragDrop(
+    board,
+    pieces,
+    boardLayout,
+    handlePlace,
+    useCompactLayout,
+    0,
+    visualViewport,
+  );
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 100);
   }, []);
 
   const handleToggleSummon = useCallback(() => {
-    if (summonGaugeRequiredRef.current <= 0 || summonRemainingMsRef.current <= 0) {
+    if (
+      summonGaugeRequiredRef.current <= 0 ||
+      summonRemainingMsRef.current <= 0
+    ) {
       return;
     }
 
-    if (!summonActiveRef.current && summonGaugeRef.current < summonGaugeRequiredRef.current) {
+    if (
+      !summonActiveRef.current &&
+      summonGaugeRef.current < summonGaugeRequiredRef.current
+    ) {
       return;
     }
 
@@ -715,26 +865,6 @@ export default function EndlessScreen({navigation}: any) {
       if (item === 'addTurns') {
         return;
       }
-      const specialDef = SPECIAL_PIECE_ITEMS.find(definition => definition.itemKey === item);
-      if (specialDef?.pieceIndices) {
-        if ((gameData.items[item] || 0) <= 0) {
-          return;
-        }
-        consumeItem(gameData, item as keyof typeof gameData.items).then(updated => {
-          if (updated) {
-            setGameData(updated);
-            gameDataRef.current = updated;
-            const newPiece = generateSpecificPiece(specialDef.pieceIndices!);
-            setPieces(prev => {
-              const nextPieces = [...prev];
-              const nullIdx = nextPieces.findIndex(piece => piece === null);
-              nextPieces[nullIdx >= 0 ? nullIdx : 0] = newPiece;
-              return nextPieces;
-            });
-          }
-        });
-        return;
-      }
       if ((gameData.items[item as keyof typeof gameData.items] ?? 0) <= 0) {
         return;
       }
@@ -744,34 +874,44 @@ export default function EndlessScreen({navigation}: any) {
   );
 
   const nextMilestone = ENDLESS_GOLD_MILESTONES[nextMilestoneIdx];
-  const comboGaugeMaxMs = COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
+  const comboGaugeMaxMs =
+    COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
   const comboGaugeRule = getVisualElementRule(
     visualManifest,
     'endless',
     'combo_gauge',
   );
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          paddingTop: modeVerticalGutter,
+          paddingBottom: modeVerticalGutter,
+        },
+      ]}
+    >
       <VisualElementView screenId="endless" elementId="header">
         <GameHeader
-        score={score}
-        combo={combo}
-        linesCleared={linesCleared}
-        level={`무한 모드 레벨 ${currentLevel}`}
-        goalText={
-          nextMilestone
-            ? `다음 골드: ${nextMilestone.score.toLocaleString()}점 / +${nextMilestone.gold}골드`
-            : '최대 목표 달성!'
-        }
-        onBack={() => {
-          Alert.alert('나가기', '게임을 종료하시겠습니까?', [
-            {text: '취소', style: 'cancel'},
-            {text: '나가기', onPress: () => endGame()},
-          ]);
-        }}
-        feverActive={feverActive}
-        feverGauge={feverGauge}
+          score={score}
+          combo={combo}
+          linesCleared={linesCleared}
+          level={`무한 모드 레벨 ${currentLevel}`}
+          goalText={
+            nextMilestone
+              ? `다음 골드: ${nextMilestone.score.toLocaleString()}점 / +${
+                  nextMilestone.gold
+                }골드`
+              : '최대 목표 달성!'
+          }
+          onBack={() => {
+            Alert.alert('나가기', '게임을 종료하시겠습니까?', [
+              { text: '취소', style: 'cancel' },
+              { text: '나가기', onPress: () => endGame() },
+            ]);
+          }}
+          feverActive={feverActive}
+          feverGauge={feverGauge}
         />
       </VisualElementView>
 
@@ -789,7 +929,8 @@ export default function EndlessScreen({navigation}: any) {
               },
             ],
           },
-        ]}>
+        ]}
+      >
         <Text style={styles.milestoneBannerText}>{milestoneText}</Text>
       </Animated.View>
 
@@ -804,91 +945,133 @@ export default function EndlessScreen({navigation}: any) {
         />
       )}
 
-      <BattleNoticeOverlay message={battleNoticeMessage} bottom={148} />
+      <BattleNoticeOverlay
+        message={battleNoticeMessage}
+        messageKey={battleNoticeKey}
+        bottom={148}
+      />
 
       <VisualElementView screenId="endless" elementId="status_bar">
         <View style={styles.goldBar}>
-        <Text style={styles.goldBarText}>이번 판 획득 골드: {goldEarned}</Text>
-        {nextMilestone && (
-          <Text style={styles.goldBarNext}>
-            다음: {nextMilestone.score.toLocaleString()}점
+          <Text style={styles.goldBarText}>
+            이번 판 획득 골드: {goldEarned}
           </Text>
-        )}
+          {nextMilestone && (
+            <Text style={styles.goldBarNext}>
+              다음: {nextMilestone.score.toLocaleString()}점
+            </Text>
+          )}
         </View>
       </VisualElementView>
 
       <VisualElementView screenId="endless" elementId="next_preview">
-        {skillEffectsRef.current.previewCountBonus > 0 && nextPieces.length > 0 && (
-          <NextPiecePreview
-            pieces={nextPieces.slice(
-              0,
-              Math.min(3, skillEffectsRef.current.previewCountBonus),
-            )}
-          />
-        )}
+        {skillEffectsRef.current.previewCountBonus > 0 &&
+          nextPieces.length > 0 && (
+            <NextPiecePreview
+              pieces={nextPieces.slice(
+                0,
+                Math.min(3, skillEffectsRef.current.previewCountBonus),
+              )}
+              viewport={visualViewport}
+            />
+          )}
       </VisualElementView>
 
       <VisualElementView screenId="endless" elementId="summon_panel">
         {activeSkinIdRef.current > 0 && (
           <View style={styles.summonCard}>
-          <View style={styles.summonHeader}>
-            <Text style={styles.summonTitle}>소환수</Text>
-            <Text style={styles.summonMeta}>
-              공격 {summonAttack} / 남은 시간 {Math.ceil(summonRemainingMs / 1000)}초
-            </Text>
-          </View>
-          <View style={styles.summonBarBg}>
-            <View
-              style={[
-                styles.summonBarFill,
-                {
-                  width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.summonFooter}>
-            <Text style={styles.summonMeta}>
-              게이지 {summonGauge}/{summonGaugeRequired || '-'}
-            </Text>
-            <TouchableOpacity
-              onPress={handleToggleSummon}
-              disabled={
-                (summonGauge < summonGaugeRequired && !summonActive) || summonRemainingMs <= 0
-              }
-              style={[
-                styles.summonBtn,
-                summonActive && styles.summonBtnActive,
-                (summonRemainingMs <= 0 ||
-                  (summonGauge < summonGaugeRequired && !summonActive)) &&
-                  styles.summonBtnDisabled,
-              ]}>
-              <Text style={styles.summonBtnText}>{summonActive ? '회수' : '소환'}</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.summonHeader}>
+              <Text style={styles.summonTitle}>소환수</Text>
+              <Text style={styles.summonMeta}>
+                공격 {summonAttack} / 남은 시간{' '}
+                {Math.ceil(summonRemainingMs / 1000)}초
+              </Text>
+            </View>
+            <View style={styles.summonBarBg}>
+              <View
+                style={[
+                  styles.summonBarFill,
+                  {
+                    width: `${
+                      summonGaugeRequired > 0
+                        ? (summonGauge / summonGaugeRequired) * 100
+                        : 0
+                    }%`,
+                  },
+                ]}
+              />
+            </View>
+            <View style={styles.summonFooter}>
+              <Text style={styles.summonMeta}>
+                게이지 {summonGauge}/{summonGaugeRequired || '-'}
+              </Text>
+              <TouchableOpacity
+                onPress={handleToggleSummon}
+                disabled={
+                  (summonGauge < summonGaugeRequired && !summonActive) ||
+                  summonRemainingMs <= 0
+                }
+                style={[
+                  styles.summonBtn,
+                  summonActive && styles.summonBtnActive,
+                  (summonRemainingMs <= 0 ||
+                    (summonGauge < summonGaugeRequired && !summonActive)) &&
+                    styles.summonBtnDisabled,
+                ]}
+              >
+                <Text style={styles.summonBtnText}>
+                  {summonActive ? '회수' : '소환'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </VisualElementView>
 
-      <VisualElementView screenId="endless" elementId="board" style={styles.visualWrapper}>
+      <VisualElementView
+        screenId="endless"
+        elementId="board"
+        style={styles.visualWrapper}
+      >
         <View style={styles.boardContainer} onLayout={handleBoardLayout}>
           {comboGaugeRule.visible && (
             <ComboGaugeOverlay
               combo={combo}
               comboRemainingMs={comboRemainingMs}
               comboMaxMs={comboGaugeMaxMs}
-              style={buildVisualElementStyle(comboGaugeRule)}
+              visualAutomationLabel={buildVisualAutomationLabel(
+                'endless',
+                'combo_gauge',
+              )}
+              style={buildVisualElementStyle(
+                comboGaugeRule,
+                visualViewport,
+                visualManifest.referenceViewport,
+              )}
             />
           )}
           <Board
             ref={boardRef}
             board={board}
+            viewport={visualViewport}
             backgroundColor={skinBoardBg}
             compact={useCompactLayout}
             previewCells={dragDrop.previewCells}
             invalidPreview={dragDrop.invalidPreview}
             clearGuideCells={dragDrop.clearGuideCells}
           />
+          <VisualElementView
+            screenId="endless"
+            elementId="skill_effect"
+            style={styles.boardSkillEffectLayer}
+            pointerEvents="none"
+            viewport={visualViewport}
+          >
+            <SkillTriggerBoardEffect
+              message={skillEffectMessage}
+              triggerKey={skillEffectMessageKey}
+            />
+          </VisualElementView>
         </View>
       </VisualElementView>
 
@@ -900,6 +1083,8 @@ export default function EndlessScreen({navigation}: any) {
           onDragEnd={dragDrop.onDragEnd}
           onDragCancel={dragDrop.onDragCancel}
           compact={useCompactLayout}
+          boardCompact={useCompactLayout}
+          viewport={visualViewport}
         />
       </VisualElementView>
       {gameData && (
@@ -920,11 +1105,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0a1628',
-    paddingTop: MODE_VERTICAL_GUTTER,
-    paddingBottom: MODE_VERTICAL_GUTTER,
   },
   visualWrapper: {
     alignSelf: 'stretch',
+  },
+  boardSkillEffectLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
   },
   boardContainer: {
     flex: 1,
@@ -958,8 +1146,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: '#1e1b4b',
   },
-  goldBarText: {color: '#fbbf24', fontSize: 13, fontWeight: '700'},
-  goldBarNext: {color: '#94a3b8', fontSize: 12},
+  goldBarText: { color: '#fbbf24', fontSize: 13, fontWeight: '700' },
+  goldBarNext: { color: '#94a3b8', fontSize: 12 },
   summonCard: {
     marginHorizontal: 14,
     marginTop: 8,

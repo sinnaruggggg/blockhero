@@ -1,5 +1,6 @@
-import {BOARD_PADDING, CELL_GAP, CELL_SIZE, COMPACT_SCALE} from '../components/Board';
-import type {Piece} from './engine';
+import { getBoardMetrics } from '../components/Board';
+import type { Piece } from './engine';
+import type { VisualViewport } from './visualConfig';
 
 export interface PiecePlacementEffectCell {
   id: string;
@@ -9,16 +10,17 @@ export interface PiecePlacementEffectCell {
 }
 
 export function buildPiecePlacementEffectCells(
-  boardLayout: {x: number; y: number},
+  boardLayout: { x: number; y: number },
   piece: Piece,
   row: number,
   col: number,
   compact = false,
+  viewport?: Partial<VisualViewport>,
 ): PiecePlacementEffectCell[] {
-  const scale = compact ? COMPACT_SCALE : 1;
-  const cellSize = CELL_SIZE * scale;
-  const gap = CELL_GAP * scale;
-  const padding = BOARD_PADDING * scale;
+  const metrics = getBoardMetrics(viewport, { compact });
+  const cellSize = metrics.cellSize;
+  const gap = metrics.gap;
+  const padding = metrics.padding;
 
   return piece.shape.flatMap((shapeRow, rowIndex) =>
     shapeRow.flatMap((occupied, colIndex) => {
@@ -31,8 +33,16 @@ export function buildPiecePlacementEffectCells(
       return [
         {
           id: `${targetRow}-${targetCol}`,
-          x: boardLayout.x + padding + targetCol * (cellSize + gap) + cellSize / 2,
-          y: boardLayout.y + padding + targetRow * (cellSize + gap) + cellSize / 2,
+          x:
+            boardLayout.x +
+            padding +
+            targetCol * (cellSize + gap) +
+            cellSize / 2,
+          y:
+            boardLayout.y +
+            padding +
+            targetRow * (cellSize + gap) +
+            cellSize / 2,
           color: piece.color,
         },
       ];

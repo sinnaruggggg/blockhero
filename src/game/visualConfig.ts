@@ -29,6 +29,7 @@ export type LevelElementId =
   | 'header'
   | 'battle_lane'
   | 'board'
+  | 'skill_effect'
   | 'piece_tray'
   | 'item_bar'
   | 'combo_gauge';
@@ -39,6 +40,7 @@ export type EndlessElementId =
   | 'summon_panel'
   | 'next_preview'
   | 'board'
+  | 'skill_effect'
   | 'piece_tray'
   | 'item_bar'
   | 'combo_gauge';
@@ -48,6 +50,7 @@ export type BattleElementId =
   | 'opponent_panel'
   | 'attack_bar'
   | 'board'
+  | 'skill_effect'
   | 'piece_tray';
 
 export type RaidElementId =
@@ -55,6 +58,7 @@ export type RaidElementId =
   | 'skill_bar'
   | 'info_bar'
   | 'board'
+  | 'skill_effect'
   | 'piece_tray'
   | 'combo_gauge';
 
@@ -68,6 +72,8 @@ export type VisualElementRule = {
   offsetX: number;
   offsetY: number;
   scale: number;
+  widthScale: number;
+  heightScale: number;
   opacity: number;
   visible: boolean;
   zIndex: number;
@@ -107,14 +113,19 @@ export type RaidScreenVisualConfig = {
 export type VisualConfigManifest = {
   version: number;
   referenceViewport: VisualViewport;
-  studioSnapshots?: Partial<Record<VisualScreenId, {
-    assetKey: string | null;
-    capturedAt: string;
-    viewport: VisualViewport;
-    referenceViewport: VisualViewport;
-    elementFrames: Record<string, VisualElementFrame>;
-    elementRules: Record<string, VisualElementRule>;
-  }>>;
+  studioSnapshots?: Partial<
+    Record<
+      VisualScreenId,
+      {
+        assetKey: string | null;
+        capturedAt: string;
+        viewport: VisualViewport;
+        referenceViewport: VisualViewport;
+        elementFrames: Record<string, VisualElementFrame>;
+        elementRules: Record<string, VisualElementRule>;
+      }
+    >
+  >;
   screens: {
     level: LevelScreenVisualConfig;
     endless: EndlessScreenVisualConfig;
@@ -148,89 +159,93 @@ export const VISUAL_DEVICE_PROFILES: VisualDeviceProfile[] = [
   {
     id: 'galaxy-s23-ultra',
     label: 'Galaxy S23 Ultra',
-    viewport: {width: 412, height: 915, safeTop: 34, safeBottom: 34},
+    viewport: { width: 412, height: 915, safeTop: 34, safeBottom: 34 },
   },
   {
     id: 'galaxy-a54',
     label: 'Galaxy A54',
-    viewport: {width: 411, height: 891, safeTop: 32, safeBottom: 24},
+    viewport: { width: 411, height: 891, safeTop: 32, safeBottom: 24 },
   },
   {
     id: 'galaxy-fold-cover',
     label: 'Galaxy Fold Cover',
-    viewport: {width: 360, height: 780, safeTop: 30, safeBottom: 24},
+    viewport: { width: 360, height: 780, safeTop: 30, safeBottom: 24 },
   },
   {
     id: 'iphone-15-pro',
     label: 'iPhone 15 Pro',
-    viewport: {width: 393, height: 852, safeTop: 59, safeBottom: 34},
+    viewport: { width: 393, height: 852, safeTop: 59, safeBottom: 34 },
   },
   {
     id: 'iphone-15-pro-max',
     label: 'iPhone 15 Pro Max',
-    viewport: {width: 430, height: 932, safeTop: 59, safeBottom: 34},
+    viewport: { width: 430, height: 932, safeTop: 59, safeBottom: 34 },
   },
   {
     id: 'small-android',
     label: '소형 안드로이드',
-    viewport: {width: 360, height: 800, safeTop: 28, safeBottom: 24},
+    viewport: { width: 360, height: 800, safeTop: 28, safeBottom: 24 },
   },
   {
     id: 'tablet-portrait',
     label: '태블릿 세로',
-    viewport: {width: 800, height: 1280, safeTop: 24, safeBottom: 20},
+    viewport: { width: 800, height: 1280, safeTop: 24, safeBottom: 20 },
   },
 ];
 
-export const VISUAL_ELEMENT_LABELS: Record<VisualScreenId, {id: string; label: string}[]> =
-  {
-    level: [
-      {id: 'header', label: '상단 헤더'},
-      {id: 'battle_lane', label: '전투 HUD'},
-      {id: 'board', label: '보드'},
-      {id: 'piece_tray', label: '하단 블록 트레이'},
-      {id: 'item_bar', label: '아이템 바'},
-      {id: 'combo_gauge', label: '콤보 게이지'},
-    ],
-    endless: [
-      {id: 'header', label: '상단 헤더'},
-      {id: 'status_bar', label: '상태 바'},
-      {id: 'summon_panel', label: '소환 패널'},
-      {id: 'next_preview', label: '다음 블록'},
-      {id: 'board', label: '보드'},
-      {id: 'piece_tray', label: '하단 블록 트레이'},
-      {id: 'item_bar', label: '아이템 바'},
-      {id: 'combo_gauge', label: '콤보 게이지'},
-    ],
-    battle: [
-      {id: 'back_button', label: '???? ??'},
-      {id: 'opponent_panel', label: '?? ??'},
-      {id: 'attack_bar', label: '?? ?'},
-      {id: 'board', label: '??'},
-      {id: 'piece_tray', label: '?? ?? ???'},
-    ],
-    raidNormal: [
-      {id: 'top_panel', label: '?? ??? ??'},
-      {id: 'skill_bar', label: '?? ?'},
-      {id: 'info_bar', label: '?? ?'},
-      {id: 'board', label: '??'},
-      {id: 'piece_tray', label: '?? ?? ???'},
-      {id: 'combo_gauge', label: '?? ???'},
-    ],
-    raidBoss: [
-      {id: 'top_panel', label: '?? ??? ??'},
-      {id: 'skill_bar', label: '?? ?'},
-      {id: 'info_bar', label: '?? ?'},
-      {id: 'board', label: '??'},
-      {id: 'piece_tray', label: '?? ?? ???'},
-      {id: 'combo_gauge', label: '?? ???'},
-    ],
-  };
+export const VISUAL_ELEMENT_LABELS: Record<
+  VisualScreenId,
+  { id: string; label: string }[]
+> = {
+  level: [
+    { id: 'header', label: '상단 헤더' },
+    { id: 'battle_lane', label: '전투 HUD' },
+    { id: 'board', label: '보드' },
+    { id: 'piece_tray', label: '하단 블록 트레이' },
+    { id: 'item_bar', label: '아이템 바' },
+    { id: 'combo_gauge', label: '콤보 게이지' },
+  ],
+  endless: [
+    { id: 'header', label: '상단 헤더' },
+    { id: 'status_bar', label: '상태 바' },
+    { id: 'summon_panel', label: '소환 패널' },
+    { id: 'next_preview', label: '다음 블록' },
+    { id: 'board', label: '보드' },
+    { id: 'piece_tray', label: '하단 블록 트레이' },
+    { id: 'item_bar', label: '아이템 바' },
+    { id: 'combo_gauge', label: '콤보 게이지' },
+  ],
+  battle: [
+    { id: 'back_button', label: '???? ??' },
+    { id: 'opponent_panel', label: '?? ??' },
+    { id: 'attack_bar', label: '?? ?' },
+    { id: 'board', label: '??' },
+    { id: 'piece_tray', label: '?? ?? ???' },
+  ],
+  raidNormal: [
+    { id: 'top_panel', label: '?? ??? ??' },
+    { id: 'skill_bar', label: '?? ?' },
+    { id: 'info_bar', label: '?? ?' },
+    { id: 'board', label: '??' },
+    { id: 'piece_tray', label: '?? ?? ???' },
+    { id: 'combo_gauge', label: '?? ???' },
+  ],
+  raidBoss: [
+    { id: 'top_panel', label: '?? ??? ??' },
+    { id: 'skill_bar', label: '?? ?' },
+    { id: 'info_bar', label: '?? ?' },
+    { id: 'board', label: '??' },
+    { id: 'piece_tray', label: '?? ?? ???' },
+    { id: 'combo_gauge', label: '?? ???' },
+  ],
+};
 
 export const DEFAULT_VISUAL_ELEMENT_RULE: VisualElementRule = {
   offsetX: 0,
   offsetY: 0,
   scale: 1,
+  widthScale: 1,
+  heightScale: 1,
   opacity: 1,
   visible: true,
   zIndex: 0,
@@ -245,7 +260,7 @@ export const DEFAULT_VISUAL_BACKGROUND_OVERRIDE: VisualBackgroundOverride = {
 };
 
 function cloneRule(): VisualElementRule {
-  return {...DEFAULT_VISUAL_ELEMENT_RULE};
+  return { ...DEFAULT_VISUAL_ELEMENT_RULE };
 }
 
 function createRules<T extends string>(ids: T[]): Record<T, VisualElementRule> {
@@ -264,6 +279,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'header',
         'battle_lane',
         'board',
+        'skill_effect',
         'piece_tray',
         'item_bar',
         'combo_gauge',
@@ -280,16 +296,19 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'summon_panel',
         'next_preview',
         'board',
+        'skill_effect',
         'piece_tray',
         'item_bar',
         'combo_gauge',
       ]),
-    },    battle: {
+    },
+    battle: {
       elements: createRules<BattleElementId>([
         'back_button',
         'opponent_panel',
         'attack_bar',
         'board',
+        'skill_effect',
         'piece_tray',
       ]),
     },
@@ -299,6 +318,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'skill_bar',
         'info_bar',
         'board',
+        'skill_effect',
         'piece_tray',
         'combo_gauge',
       ]),
@@ -312,6 +332,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'skill_bar',
         'info_bar',
         'board',
+        'skill_effect',
         'piece_tray',
         'combo_gauge',
       ]),
@@ -338,6 +359,8 @@ function sanitizeElementRule(
     offsetX: Math.round(clamp(Number(merged.offsetX) || 0, -480, 480)),
     offsetY: Math.round(clamp(Number(merged.offsetY) || 0, -720, 720)),
     scale: clamp(Number(merged.scale) || 1, 0.3, 3),
+    widthScale: clamp(Number(merged.widthScale) || 1, 0.3, 3),
+    heightScale: clamp(Number(merged.heightScale) || 1, 0.3, 3),
     opacity: clamp(Number(merged.opacity) || 1, 0, 1),
     visible: merged.visible !== false,
     zIndex: Math.round(clamp(Number(merged.zIndex) || 0, -20, 60)),
@@ -354,9 +377,19 @@ function sanitizeViewport(
   };
 
   return {
-    width: Math.round(clamp(Number(merged.width) || DEFAULT_VISUAL_REFERENCE_VIEWPORT.width, 280, 1600)),
+    width: Math.round(
+      clamp(
+        Number(merged.width) || DEFAULT_VISUAL_REFERENCE_VIEWPORT.width,
+        280,
+        1600,
+      ),
+    ),
     height: Math.round(
-      clamp(Number(merged.height) || DEFAULT_VISUAL_REFERENCE_VIEWPORT.height, 480, 3200),
+      clamp(
+        Number(merged.height) || DEFAULT_VISUAL_REFERENCE_VIEWPORT.height,
+        480,
+        3200,
+      ),
     ),
     safeTop: Math.round(clamp(Number(merged.safeTop) || 0, 0, 200)),
     safeBottom: Math.round(clamp(Number(merged.safeBottom) || 0, 0, 200)),
@@ -412,9 +445,11 @@ function sanitizeStudioSnapshots(
     }
 
     const elementFrames: Record<string, VisualElementFrame> = {};
-    Object.entries(snapshot.elementFrames ?? {}).forEach(([elementId, frame]) => {
-      elementFrames[elementId] = sanitizeElementFrame(frame);
-    });
+    Object.entries(snapshot.elementFrames ?? {}).forEach(
+      ([elementId, frame]) => {
+        elementFrames[elementId] = sanitizeElementFrame(frame);
+      },
+    );
 
     const elementRules: Record<string, VisualElementRule> = {};
     Object.entries(snapshot.elementRules ?? {}).forEach(([elementId, rule]) => {
@@ -423,11 +458,13 @@ function sanitizeStudioSnapshots(
 
     return {
       assetKey:
-        typeof snapshot.assetKey === 'string' && snapshot.assetKey.trim().length > 0
+        typeof snapshot.assetKey === 'string' &&
+        snapshot.assetKey.trim().length > 0
           ? snapshot.assetKey.trim()
           : null,
       capturedAt:
-        typeof snapshot.capturedAt === 'string' && snapshot.capturedAt.trim().length > 0
+        typeof snapshot.capturedAt === 'string' &&
+        snapshot.capturedAt.trim().length > 0
           ? snapshot.capturedAt
           : '',
       viewport: sanitizeViewport(snapshot.viewport),
@@ -523,7 +560,8 @@ function sanitizeBackgroundMap(
 export function sanitizeVisualConfigManifest(
   value?: Partial<VisualConfigManifest> | null,
 ): VisualConfigManifest {
-  const legacyRaidScreen = (value?.screens as Record<string, any> | undefined)?.raid;
+  const legacyRaidScreen = (value?.screens as Record<string, any> | undefined)
+    ?.raid;
 
   return {
     version: Math.max(0, Math.round(Number(value?.version) || 0)),
@@ -538,8 +576,12 @@ export function sanitizeVisualConfigManifest(
             | undefined,
         ),
         backgrounds: {
-          byWorld: sanitizeBackgroundMap(value?.screens?.level?.backgrounds?.byWorld),
-          byLevel: sanitizeBackgroundMap(value?.screens?.level?.backgrounds?.byLevel),
+          byWorld: sanitizeBackgroundMap(
+            value?.screens?.level?.backgrounds?.byWorld,
+          ),
+          byLevel: sanitizeBackgroundMap(
+            value?.screens?.level?.backgrounds?.byLevel,
+          ),
         },
       },
       endless: {
@@ -561,7 +603,8 @@ export function sanitizeVisualConfigManifest(
       raidNormal: {
         elements: sanitizeElementMap(
           DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidNormal.elements,
-          (value?.screens?.raidNormal?.elements ?? legacyRaidScreen?.elements) as
+          (value?.screens?.raidNormal?.elements ??
+            legacyRaidScreen?.elements) as
             | Partial<Record<RaidElementId, Partial<VisualElementRule>>>
             | undefined,
         ),
@@ -613,7 +656,9 @@ export function getRaidBackgroundOverride(
   bossStage: number,
   isNormalRaid = false,
 ) {
-  const raidScreen = isNormalRaid ? manifest.screens.raidNormal : manifest.screens.raidBoss;
+  const raidScreen = isNormalRaid
+    ? manifest.screens.raidNormal
+    : manifest.screens.raidBoss;
   return raidScreen.backgrounds.byBossStage[String(bossStage)] ?? null;
 }
 
@@ -631,16 +676,20 @@ export function collectReferencedVisualAssetKeys(
       keys.add(rule.assetKey);
     }
   });
-  Object.values(manifest.screens.raidNormal.backgrounds.byBossStage).forEach(rule => {
-    if (rule.assetKey) {
-      keys.add(rule.assetKey);
-    }
-  });
-  Object.values(manifest.screens.raidBoss.backgrounds.byBossStage).forEach(rule => {
-    if (rule.assetKey) {
-      keys.add(rule.assetKey);
-    }
-  });
+  Object.values(manifest.screens.raidNormal.backgrounds.byBossStage).forEach(
+    rule => {
+      if (rule.assetKey) {
+        keys.add(rule.assetKey);
+      }
+    },
+  );
+  Object.values(manifest.screens.raidBoss.backgrounds.byBossStage).forEach(
+    rule => {
+      if (rule.assetKey) {
+        keys.add(rule.assetKey);
+      }
+    },
+  );
   Object.values(manifest.studioSnapshots ?? {}).forEach(snapshot => {
     if (snapshot?.assetKey) {
       keys.add(snapshot.assetKey);
@@ -657,9 +706,7 @@ export function getVisualElementRule(
   const screen = manifest.screens[screenId] as {
     elements: Record<string, VisualElementRule>;
   };
-  return (
-    screen?.elements?.[elementId] ?? DEFAULT_VISUAL_ELEMENT_RULE
-  );
+  return screen?.elements?.[elementId] ?? DEFAULT_VISUAL_ELEMENT_RULE;
 }
 
 export function buildVisualTintColor(color: string, opacity: number) {
@@ -692,12 +739,16 @@ export function resolveVisualOffset(
   const safeHeightCurrent = Math.max(
     1,
     currentViewport.height -
-      (safeAreaAware ? currentViewport.safeTop + currentViewport.safeBottom : 0),
+      (safeAreaAware
+        ? currentViewport.safeTop + currentViewport.safeBottom
+        : 0),
   );
   const safeHeightReference = Math.max(
     1,
     referenceViewport.height -
-      (safeAreaAware ? referenceViewport.safeTop + referenceViewport.safeBottom : 0),
+      (safeAreaAware
+        ? referenceViewport.safeTop + referenceViewport.safeBottom
+        : 0),
   );
 
   return {
@@ -707,5 +758,7 @@ export function resolveVisualOffset(
 }
 
 export function getVisualDeviceProfile(profileId: string) {
-  return VISUAL_DEVICE_PROFILES.find(profile => profile.id === profileId) ?? null;
+  return (
+    VISUAL_DEVICE_PROFILES.find(profile => profile.id === profileId) ?? null
+  );
 }

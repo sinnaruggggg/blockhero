@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -9,60 +9,97 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
-import {getWorldMonsterSprite} from '../assets/monsterSprites';
+import { getWorldMonsterSprite } from '../assets/monsterSprites';
 import {
   INFINITE_HEARTS_VALUE,
   LEVELS,
   WORLDS,
   formatHeartValue,
 } from '../constants';
-import {useCreatorConfig} from '../hooks/useCreatorConfig';
-import {getCreatorLevelConfig, getCreatorRaidConfig} from '../game/creatorManifest';
-import {getNextUnlockedLevel, getWorldProgressSummary} from '../game/levelProgress';
-import {getAdminStatus} from '../services/adminSync';
+import { useCreatorConfig } from '../hooks/useCreatorConfig';
+import { getCharacterSkillEffects } from '../game/characterSkillEffects';
+import { getLevelModeBreakthroughBonusRate } from '../game/levelModeBreakthrough';
+import {
+  getCreatorLevelConfig,
+  getCreatorRaidConfig,
+} from '../game/creatorManifest';
+import {
+  getNextUnlockedLevel,
+  getWorldProgressSummary,
+} from '../game/levelProgress';
+import { getAdminStatus } from '../services/adminSync';
 import {
   GameData,
   LevelProgress,
+  clearLevelModeBreakthroughIfChallengeBroken,
+  getLevelModeBreakthroughState,
+  getSelectedCharacter,
+  loadCharacterData,
   loadGameData,
   loadLevelProgress,
+  resetLevelModeBreakthrough,
   useHeart as consumeHeart,
 } from '../stores/gameStore';
 
-const {width: screenWidth} = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 const cellSize = (screenWidth - 32 - 5 * 8) / 6;
 
-export default function LevelsScreen({navigation}: any) {
-  const {manifest: creatorManifest} = useCreatorConfig();
+export default function LevelsScreen({ navigation }: any) {
+  const { manifest: creatorManifest } = useCreatorConfig();
   const [progress, setProgress] = useState<LevelProgress>({});
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [expandedWorld, setExpandedWorld] = useState<number>(1);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
+    null,
+  );
+  const [
+    levelModeBreakthroughAttackPerClear,
+    setLevelModeBreakthroughAttackPerClear,
+  ] = useState(0);
 
   const hasInfiniteHearts = (gameData?.hearts ?? 0) >= INFINITE_HEARTS_VALUE;
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', async () => {
-      const [nextProgress, nextGameData, nextIsAdmin] = await Promise.all([
-        loadLevelProgress(),
-        loadGameData(),
-        getAdminStatus().catch(() => false),
-      ]);
+      const [nextProgress, nextGameData, nextIsAdmin, nextSelectedCharacterId] =
+        await Promise.all([
+          loadLevelProgress(),
+          loadGameData(),
+          getAdminStatus().catch(() => false),
+          getSelectedCharacter(),
+        ]);
+
+      let nextAttackPerClear = 0;
+      if (nextSelectedCharacterId) {
+        const characterData = await loadCharacterData(nextSelectedCharacterId);
+        nextAttackPerClear = getCharacterSkillEffects(
+          nextSelectedCharacterId,
+          characterData,
+          { mode: 'level' },
+        ).levelModeBreakthroughAttackPerClear;
+      }
 
       setProgress(nextProgress);
       setGameData(nextGameData);
       setIsAdmin(nextIsAdmin);
+      setSelectedCharacterId(nextSelectedCharacterId);
+      setLevelModeBreakthroughAttackPerClear(nextAttackPerClear);
     });
 
     return unsubscribe;
   }, [navigation]);
 
-  const unlockedLevel = isAdmin ? LEVELS.length : getNextUnlockedLevel(progress);
+  const unlockedLevel = isAdmin
+    ? LEVELS.length
+    : getNextUnlockedLevel(progress);
 
   useEffect(() => {
     if (unlockedLevel <= LEVELS.length) {
-      const worldId = LEVELS.find(level => level.id === unlockedLevel)?.world ?? 1;
+      const worldId =
+        LEVELS.find(level => level.id === unlockedLevel)?.world ?? 1;
       setExpandedWorld(worldId);
     }
   }, [unlockedLevel]);
@@ -76,6 +113,45 @@ export default function LevelsScreen({navigation}: any) {
     });
     return disabled;
   }, [creatorManifest.levels]);
+
+  const levelModeBreakthroughState = useMemo(
+    () => getLevelModeBreakthroughState(gameData),
+    [gameData],
+  );
+
+  const levelModeBreakthroughBonusRate = useMemo(() => {
+    if (
+      selectedCharacterId !== 'knight' ||
+      !levelModeBreakthroughState ||
+      levelModeBreakthroughAttackPerClear <= 0
+    ) {
+      return 0;
+    }
+
+    return getLevelModeBreakthroughBonusRate(
+      levelModeBreakthroughState,
+      levelModeBreakthroughAttackPerClear,
+    );
+  }, [
+    levelModeBreakthroughAttackPerClear,
+    levelModeBreakthroughState,
+    selectedCharacterId,
+  ]);
+
+  const levelModeBreakthroughWorldId = useMemo(() => {
+    if (!levelModeBreakthroughState || levelModeBreakthroughBonusRate <= 0) {
+      return null;
+    }
+
+    const anchorLevelId =
+      levelModeBreakthroughState.nextLevelId ??
+      levelModeBreakthroughState.lastClearedLevelId;
+    if (!anchorLevelId) {
+      return null;
+    }
+
+    return LEVELS.find(level => level.id === anchorLevelId)?.world ?? null;
+  }, [levelModeBreakthroughBonusRate, levelModeBreakthroughState]);
 
   const handleLevelPress = useCallback(
     async (levelId: number) => {
@@ -103,10 +179,27 @@ export default function LevelsScreen({navigation}: any) {
         return;
       }
 
-      setGameData(updatedGameData);
-      navigation.navigate('SingleGame', {levelId});
+      const preparedGameData =
+        selectedCharacterId === 'knight' &&
+        levelModeBreakthroughAttackPerClear > 0
+          ? await clearLevelModeBreakthroughIfChallengeBroken(
+              updatedGameData,
+              levelId,
+            )
+          : await resetLevelModeBreakthrough(updatedGameData);
+
+      setGameData(preparedGameData);
+      navigation.navigate('SingleGame', { levelId });
     },
-    [disabledLevelIds, gameData, hasInfiniteHearts, navigation, unlockedLevel],
+    [
+      disabledLevelIds,
+      gameData,
+      hasInfiniteHearts,
+      levelModeBreakthroughAttackPerClear,
+      navigation,
+      selectedCharacterId,
+      unlockedLevel,
+    ],
   );
 
   return (
@@ -124,7 +217,10 @@ export default function LevelsScreen({navigation}: any) {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {WORLDS.map(world => {
-          const {cleared, total, completed} = getWorldProgressSummary(progress, world.id);
+          const { cleared, total, completed } = getWorldProgressSummary(
+            progress,
+            world.id,
+          );
           const isExpanded = expandedWorld === world.id;
           const worldFirstLevel = (world.id - 1) * 30 + 1;
           const isWorldUnlocked = unlockedLevel >= worldFirstLevel;
@@ -141,23 +237,41 @@ export default function LevelsScreen({navigation}: any) {
                 disabled={!isWorldUnlocked}
                 style={[
                   styles.worldHeader,
-                  {borderColor: `${world.color}80`},
+                  { borderColor: `${world.color}80` },
                   !isWorldUnlocked && styles.worldHeaderLocked,
                 ]}
-                onPress={() => setExpandedWorld(isExpanded ? 0 : world.id)}>
+                onPress={() => setExpandedWorld(isExpanded ? 0 : world.id)}
+              >
                 <Text style={styles.worldEmoji}>{world.emoji}</Text>
                 <View style={styles.worldHeaderInfo}>
                   <Text
                     style={[
                       styles.worldName,
-                      {color: isWorldUnlocked ? world.color : '#4b5563'},
-                    ]}>
+                      { color: isWorldUnlocked ? world.color : '#4b5563' },
+                    ]}
+                  >
                     {world.id}. {world.name}
                   </Text>
                   <Text style={styles.worldProgress}>
                     {isWorldUnlocked ? `${cleared} / ${total}` : '잠금'}
                   </Text>
                 </View>
+                {world.id === levelModeBreakthroughWorldId &&
+                  levelModeBreakthroughState &&
+                  levelModeBreakthroughBonusRate > 0 && (
+                    <View style={styles.breakthroughBuffBadge}>
+                      <Text style={styles.breakthroughBuffTitle}>
+                        {`진격의 깃발 +${Math.round(
+                          levelModeBreakthroughBonusRate * 100,
+                        )}%`}
+                      </Text>
+                      <Text style={styles.breakthroughBuffSubtitle}>
+                        {levelModeBreakthroughState.nextLevelId
+                          ? `${levelModeBreakthroughState.consecutiveClears}연속 · 다음 ${levelModeBreakthroughState.nextLevelId}레벨`
+                          : `${levelModeBreakthroughState.consecutiveClears}연속 유지 중`}
+                      </Text>
+                    </View>
+                  )}
                 {completed && <Text style={styles.worldComplete}>완료</Text>}
                 <Text style={styles.expandArrow}>{isExpanded ? '▲' : '▼'}</Text>
               </TouchableOpacity>
@@ -178,73 +292,85 @@ export default function LevelsScreen({navigation}: any) {
 
               {isExpanded && isWorldUnlocked && (
                 <View style={styles.levelGrid}>
-                  {LEVELS.filter(level => level.world === world.id).map(level => {
-                    const stageProgress = progress[level.id];
-                    const isDisabled = disabledLevelIds.has(level.id);
-                    const isLocked = level.id > unlockedLevel || isDisabled;
-                    const isCurrent = level.id === unlockedLevel;
-                    const stageInWorld = ((level.id - 1) % 30) + 1;
-                    const isBoss = stageInWorld === 30;
-                    const creatorLevel = getCreatorLevelConfig(
-                      creatorManifest,
-                      level.id,
-                    );
-                    const bossEmoji =
-                      creatorLevel?.enemyOverrides.monsterEmoji ??
-                      creatorLevel?.enemyOverrides.displayName ??
-                      level.goal.monsterEmoji;
+                  {LEVELS.filter(level => level.world === world.id).map(
+                    level => {
+                      const stageProgress = progress[level.id];
+                      const isDisabled = disabledLevelIds.has(level.id);
+                      const isLocked = level.id > unlockedLevel || isDisabled;
+                      const isCurrent = level.id === unlockedLevel;
+                      const stageInWorld = ((level.id - 1) % 30) + 1;
+                      const isBoss = stageInWorld === 30;
+                      const creatorLevel = getCreatorLevelConfig(
+                        creatorManifest,
+                        level.id,
+                      );
+                      const bossEmoji =
+                        creatorLevel?.enemyOverrides.monsterEmoji ??
+                        creatorLevel?.enemyOverrides.displayName ??
+                        level.goal.monsterEmoji;
 
-                    return (
-                      <TouchableOpacity
-                        key={level.id}
-                        disabled={isLocked}
-                        style={[
-                          styles.levelBtn,
-                          {width: cellSize, height: cellSize},
-                          stageProgress?.cleared && styles.clearedLevel,
-                          isCurrent && styles.currentLevel,
-                          isLocked && styles.lockedLevel,
-                          isBoss && styles.bossLevel,
-                        ]}
-                        onPress={() => handleLevelPress(level.id)}>
-                        {isBoss ? (
-                          <>
-                            {getWorldMonsterSprite(level.world) ? (
-                              <Image
-                                source={getWorldMonsterSprite(level.world)!}
-                                resizeMode="contain"
-                                fadeDuration={0}
-                                style={styles.bossSprite}
-                              />
-                            ) : (
-                              <Text style={styles.bossEmoji}>
-                                {typeof bossEmoji === 'string' ? bossEmoji : level.goal.monsterEmoji}
-                              </Text>
-                            )}
-                            <Text style={styles.bossLabel}>보스</Text>
-                          </>
-                        ) : (
-                          <Text
-                            style={[
-                              styles.levelNum,
-                              isLocked && styles.levelNumLocked,
-                            ]}>
-                            {stageInWorld}
-                          </Text>
-                        )}
+                      return (
+                        <TouchableOpacity
+                          key={level.id}
+                          disabled={isLocked}
+                          style={[
+                            styles.levelBtn,
+                            { width: cellSize, height: cellSize },
+                            stageProgress?.cleared && styles.clearedLevel,
+                            isCurrent && styles.currentLevel,
+                            isLocked && styles.lockedLevel,
+                            isBoss && styles.bossLevel,
+                          ]}
+                          onPress={() => handleLevelPress(level.id)}
+                        >
+                          {isBoss ? (
+                            <>
+                              {getWorldMonsterSprite(level.world) ? (
+                                <Image
+                                  source={getWorldMonsterSprite(level.world)!}
+                                  resizeMode="contain"
+                                  fadeDuration={0}
+                                  style={styles.bossSprite}
+                                />
+                              ) : (
+                                <Text style={styles.bossEmoji}>
+                                  {typeof bossEmoji === 'string'
+                                    ? bossEmoji
+                                    : level.goal.monsterEmoji}
+                                </Text>
+                              )}
+                              <Text style={styles.bossLabel}>보스</Text>
+                            </>
+                          ) : (
+                            <Text
+                              style={[
+                                styles.levelNum,
+                                isLocked && styles.levelNumLocked,
+                              ]}
+                            >
+                              {stageInWorld}
+                            </Text>
+                          )}
 
-                        {isLocked && !isBoss && (
-                          <Text style={styles.lockIcon}>{isDisabled ? 'OFF' : '🔒'}</Text>
-                        )}
-                        {stageProgress?.cleared && <Text style={styles.clearCheck}>✓</Text>}
-                      </TouchableOpacity>
-                    );
-                  })}
+                          {isLocked && !isBoss && (
+                            <Text style={styles.lockIcon}>
+                              {isDisabled ? 'OFF' : '🔒'}
+                            </Text>
+                          )}
+                          {stageProgress?.cleared && (
+                            <Text style={styles.clearCheck}>✓</Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    },
+                  )}
                 </View>
               )}
 
               {completed && (
-                <View style={[styles.bossRaidUnlock, {borderColor: world.color}]}>
+                <View
+                  style={[styles.bossRaidUnlock, { borderColor: world.color }]}
+                >
                   <Text style={styles.bossRaidText}>
                     {world.bossEmoji} 보스 레이드 해금:{' '}
                     {creatorBossRaid?.name ?? world.bossName}
@@ -260,7 +386,7 @@ export default function LevelsScreen({navigation}: any) {
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#0a0a1e'},
+  container: { flex: 1, backgroundColor: '#0a0a1e' },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -268,11 +394,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  backBtn: {color: 'transparent', fontSize: 1, lineHeight: 1, opacity: 0},
-  title: {color: '#e2e8f0', flex: 1, fontSize: 18, fontWeight: '800'},
-  hearts: {color: '#f87171', fontSize: 14, fontWeight: '700'},
-  scroll: {padding: 12},
-  worldSection: {marginBottom: 8},
+  backBtn: { color: 'transparent', fontSize: 1, lineHeight: 1, opacity: 0 },
+  title: { color: '#e2e8f0', flex: 1, fontSize: 18, fontWeight: '800' },
+  hearts: { color: '#f87171', fontSize: 14, fontWeight: '700' },
+  scroll: { padding: 12 },
+  worldSection: { marginBottom: 8 },
   worldHeader: {
     alignItems: 'center',
     backgroundColor: '#1e1b4b',
@@ -282,13 +408,36 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 12,
   },
-  worldHeaderLocked: {backgroundColor: '#111827', opacity: 0.5},
-  worldEmoji: {fontSize: 28},
-  worldHeaderInfo: {flex: 1},
-  worldName: {fontSize: 16, fontWeight: '800'},
-  worldProgress: {color: '#94a3b8', fontSize: 12, marginTop: 2},
-  worldComplete: {color: '#22c55e', fontSize: 14, fontWeight: '900'},
-  expandArrow: {color: '#6b7280', fontSize: 12},
+  worldHeaderLocked: { backgroundColor: '#111827', opacity: 0.5 },
+  worldEmoji: { fontSize: 28 },
+  worldHeaderInfo: { flex: 1 },
+  worldName: { fontSize: 16, fontWeight: '800' },
+  worldProgress: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  breakthroughBuffBadge: {
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(14, 116, 144, 0.16)',
+    borderColor: 'rgba(103, 232, 249, 0.7)',
+    borderRadius: 10,
+    borderWidth: 1,
+    flexShrink: 1,
+    marginRight: 6,
+    maxWidth: 166,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  breakthroughBuffTitle: {
+    color: '#a5f3fc',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  breakthroughBuffSubtitle: {
+    color: '#cffafe',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  worldComplete: { color: '#22c55e', fontSize: 14, fontWeight: '900' },
+  expandArrow: { color: '#6b7280', fontSize: 12 },
   worldProgressBar: {
     backgroundColor: '#1f2937',
     borderRadius: 2,
@@ -297,7 +446,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     overflow: 'hidden',
   },
-  worldProgressFill: {borderRadius: 2, height: 3},
+  worldProgressFill: { borderRadius: 2, height: 3 },
   levelGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -313,13 +462,19 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     justifyContent: 'center',
   },
-  clearedLevel: {backgroundColor: 'rgba(34,197,94,0.15)', borderColor: '#22c55e'},
-  currentLevel: {backgroundColor: 'rgba(251,191,36,0.1)', borderColor: '#fbbf24'},
-  lockedLevel: {backgroundColor: '#111827', opacity: 0.35},
-  bossLevel: {backgroundColor: 'rgba(239,68,68,0.1)', borderColor: '#ef4444'},
-  levelNum: {color: '#e2e8f0', fontSize: 13, fontWeight: '800'},
-  levelNumLocked: {color: '#4b5563'},
-  lockIcon: {fontSize: 10, position: 'absolute'},
+  clearedLevel: {
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    borderColor: '#22c55e',
+  },
+  currentLevel: {
+    backgroundColor: 'rgba(251,191,36,0.1)',
+    borderColor: '#fbbf24',
+  },
+  lockedLevel: { backgroundColor: '#111827', opacity: 0.35 },
+  bossLevel: { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: '#ef4444' },
+  levelNum: { color: '#e2e8f0', fontSize: 13, fontWeight: '800' },
+  levelNumLocked: { color: '#4b5563' },
+  lockIcon: { fontSize: 10, position: 'absolute' },
   clearCheck: {
     color: '#22c55e',
     fontSize: 9,
@@ -328,9 +483,9 @@ const styles = StyleSheet.create({
     right: 4,
     top: 2,
   },
-  bossEmoji: {fontSize: 18},
-  bossSprite: {width: 22, height: 22},
-  bossLabel: {color: '#ef4444', fontSize: 9, fontWeight: '900'},
+  bossEmoji: { fontSize: 18 },
+  bossSprite: { width: 22, height: 22 },
+  bossLabel: { color: '#ef4444', fontSize: 9, fontWeight: '900' },
   bossRaidUnlock: {
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.03)',
@@ -341,5 +496,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  bossRaidText: {color: '#94a3b8', flex: 1, fontSize: 12},
+  bossRaidText: { color: '#94a3b8', flex: 1, fontSize: 12 },
 });

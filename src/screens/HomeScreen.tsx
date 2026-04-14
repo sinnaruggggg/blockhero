@@ -71,6 +71,7 @@ const IMG_RANKING = require('../assets/ui/ranking.png');
 const IMG_BATTLE = require('../assets/ui/battle.png');
 const IMG_RAID = require('../assets/ui/raid.png');
 const IMG_CURRENCY = require('../assets/ui/currency_bar.png');
+
 const MODE_BTN_SIZE = W * 0.23;
 const TOP_ICON_SIZE = W * 0.12;
 const KNIGHT_SIZE = W * 0.57 * 1.5;
@@ -124,7 +125,6 @@ const CHARACTER_THEMES: Record<
     frame: '#b47c2e',
   },
 };
-
 
 export default function HomeScreen({navigation}: any) {
   const windowSize = useWindowDimensions();
@@ -409,28 +409,56 @@ export default function HomeScreen({navigation}: any) {
       loadGameData(),
       getSelectedCharacter(),
     ]);
-    const rosterEntries = await Promise.all(
-      CHARACTER_CLASSES.map(async characterClass => [
-        characterClass.id,
-        await loadCharacterData(characterClass.id),
-      ] as const),
-    );
-    const nextCharDataMap = Object.fromEntries(rosterEntries);
 
     unstable_batchedUpdates(() => {
       setGameData(data);
-      setCharDataMap(nextCharDataMap);
       if (!charId) {
         setShowCharSelect(true);
+        setSelectedCharState(null);
+        setCharData(null);
       } else {
         setSelectedCharState(charId);
-        setCharData(nextCharDataMap[charId] ?? null);
       }
     });
 
+    if (charId) {
+      const hydrateSelectedCharacter = async () => {
+        try {
+          const loadedCharData = await loadCharacterData(charId);
+          unstable_batchedUpdates(() => {
+            setCharDataMap(previous => ({
+              ...previous,
+              [charId]: loadedCharData,
+            }));
+            setCharData(loadedCharData);
+          });
+        } catch {}
+      };
+      hydrateSelectedCharacter().catch(() => {});
+    }
+
+    const hydrateCharacterRoster = async () => {
+      try {
+        const rosterEntries = await Promise.all(
+          CHARACTER_CLASSES.map(async characterClass => [
+            characterClass.id,
+            await loadCharacterData(characterClass.id),
+          ] as const),
+        );
+        const nextCharDataMap = Object.fromEntries(rosterEntries);
+        unstable_batchedUpdates(() => {
+          setCharDataMap(nextCharDataMap);
+          if (charId) {
+            setCharData(nextCharDataMap[charId] ?? null);
+          }
+        });
+      } catch {}
+    };
+    hydrateCharacterRoster().catch(() => {});
+
     if (!pendingGrantsCheckedRef.current) {
       pendingGrantsCheckedRef.current = true;
-      void (async () => {
+      const claimGrants = async () => {
         try {
           const result = await claimPendingGrants();
           if (result.claimed.length > 0) {
@@ -443,12 +471,13 @@ export default function HomeScreen({navigation}: any) {
         } catch {
           pendingGrantsCheckedRef.current = false;
         }
-      })();
+      };
+      claimGrants().catch(() => {});
     }
 
     if (!announcementsLoadedRef.current) {
       announcementsLoadedRef.current = true;
-      void (async () => {
+      const hydrateAnnouncements = async () => {
         try {
           const announcements = await fetchAnnouncements();
           if (announcements.length > 0) {
@@ -457,7 +486,8 @@ export default function HomeScreen({navigation}: any) {
         } catch {
           announcementsLoadedRef.current = false;
         }
-      })();
+      };
+      hydrateAnnouncements().catch(() => {});
     }
   }, []);
 
@@ -917,7 +947,6 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1091,7 +1120,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.22)',
     marginTop: 10,
   },
-
   announceBanner: {
     backgroundColor: 'rgba(99, 102, 241, 0.2)',
     borderRadius: 10,

@@ -10,6 +10,7 @@ interface ComboGaugeOverlayProps {
   feverMaxMs?: number;
   style?: StyleProp<ViewStyle>;
   compact?: boolean;
+  visualAutomationLabel?: string;
 }
 
 function toPercent(remainingMs: number, maxMs: number): `${number}%` {
@@ -29,6 +30,7 @@ export default function ComboGaugeOverlay({
   feverMaxMs = 0,
   style,
   compact = false,
+  visualAutomationLabel,
 }: ComboGaugeOverlayProps) {
   const showComboGauge = combo > 0 && comboRemainingMs > 0;
   const showFeverGauge = feverActive && feverRemainingMs > 0;
@@ -38,7 +40,19 @@ export default function ComboGaugeOverlay({
   }
 
   return (
-    <View pointerEvents="none" style={[styles.overlay, compact && styles.overlayCompact, style]}>
+    <View
+      pointerEvents="none"
+      collapsable={false}
+      style={[styles.overlay, compact && styles.overlayCompact, style]}>
+      {visualAutomationLabel ? (
+        <View
+          pointerEvents="none"
+          accessible
+          accessibilityLabel={visualAutomationLabel}
+          collapsable={false}
+          style={styles.automationTag}
+        />
+      ) : null}
       {showComboGauge ? (
         <View style={[styles.card, compact && styles.cardCompact]}>
           <View style={styles.header}>
@@ -146,6 +160,10 @@ const styles = StyleSheet.create({
   fill: {
     height: '100%',
     borderRadius: 999,
+  },
+  automationTag: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.01,
   },
   comboFill: {
     backgroundColor: '#fbbf24',

@@ -6,6 +6,18 @@ interface PresenceRow {
   last_seen: string;
 }
 
+function isMissingSessionIdColumnError(error: unknown) {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+
+  return (
+    message.includes('session_id') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
 function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
@@ -222,15 +234,27 @@ export async function updatePresence(
   isOnline: boolean,
   sessionId?: string | null,
 ) {
-  return supabase.from('user_presence').upsert(
+  const basePayload = {
+    player_id: playerId,
+    last_seen: new Date().toISOString(),
+    is_online: isOnline,
+  };
+
+  const result = await supabase.from('user_presence').upsert(
     {
-      player_id: playerId,
-      last_seen: new Date().toISOString(),
-      is_online: isOnline,
+      ...basePayload,
       session_id: typeof sessionId === 'undefined' ? undefined : sessionId,
     },
     { onConflict: 'player_id' },
   );
+
+  if (!result.error || !isMissingSessionIdColumnError(result.error)) {
+    return result;
+  }
+
+  return supabase.from('user_presence').upsert(basePayload, {
+    onConflict: 'player_id',
+  });
 }
 
 export async function getFriendIds(playerId: string): Promise<string[]> {

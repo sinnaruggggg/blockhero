@@ -1,35 +1,72 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
-import {View, Text, StyleSheet, Alert, TouchableOpacity, Animated, Vibration, Dimensions} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  Animated,
+  Vibration,
+  Dimensions,
+  useWindowDimensions,
+} from 'react-native';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
-import {submitBattleLeaderboard} from '../services/rankingService';
+import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
+import { submitBattleLeaderboard } from '../services/rankingService';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView from '../components/VisualElementView';
-import {useDragDrop} from '../game/useDragDrop';
-import {ATTACKS} from '../constants';
+import { useBattleNotice } from '../hooks/useBattleNotice';
+import { useDragDrop } from '../game/useDragDrop';
+import { ATTACKS } from '../constants';
 import {
-  createBoard, generateSeededPieces, placePiece,
-  checkAndClearLines, countBlocks, canPlaceAnyPiece,
-  generateAttackLines, Piece, Board as BoardType,
+  createBoard,
+  generateSeededPieces,
+  placePiece,
+  checkAndClearLines,
+  countBlocks,
+  canPlaceAnyPiece,
+  generateAttackLines,
+  Piece,
+  Board as BoardType,
 } from '../game/engine';
-import {getPlayerId, getNickname} from '../stores/gameStore';
+import {
+  getPlayerId,
+  getNickname,
+  getSelectedCharacter,
+  loadCharacterData,
+} from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {supabase} from '../services/supabase';
-import {t} from '../i18n';
+import { supabase } from '../services/supabase';
+import { t } from '../i18n';
+import { getCharacterSkillEffects } from '../game/characterSkillEffects';
 import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
-
-const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
+import { scaleGameplayUnit } from '../game/layoutScale';
 
 // Neon spark particle effect - sparks scatter fast from placed block area
-function PlaceEffect({x, y, color, onDone}: {x: number; y: number; color: string; onDone: () => void}) {
+function PlaceEffect({
+  x,
+  y,
+  color,
+  onDone,
+}: {
+  x: number;
+  y: number;
+  color: string;
+  onDone: () => void;
+}) {
   const sparkCount = 14;
   const sparks = useRef(
-    Array.from({length: sparkCount}, () => {
+    Array.from({ length: sparkCount }, () => {
       const angle = Math.random() * Math.PI * 2;
       const speed = 60 + Math.random() * 100;
       return {
@@ -46,45 +83,107 @@ function PlaceEffect({x, y, color, onDone}: {x: number; y: number; color: string
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(flash, {toValue: 0, duration: 200, useNativeDriver: true}),
+      Animated.timing(flash, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
       ...sparks.map(s =>
-        Animated.timing(s.anim, {toValue: 1, duration: 250 + Math.random() * 200, useNativeDriver: true}),
+        Animated.timing(s.anim, {
+          toValue: 1,
+          duration: 250 + Math.random() * 200,
+          useNativeDriver: true,
+        }),
       ),
     ]).start(onDone);
   }, [flash, onDone, sparks]);
 
   return (
-    <View style={[StyleSheet.absoluteFill, {pointerEvents: 'none'}]}>
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
       {/* Bright flash */}
-      <Animated.View style={{
-        position: 'absolute', left: x - 25, top: y - 25, width: 50, height: 50,
-        borderRadius: 25, backgroundColor: '#fff', opacity: flash,
-        transform: [{scale: flash.interpolate({inputRange: [0, 1], outputRange: [1.5, 0.3]})}],
-      }} />
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: x - 25,
+          top: y - 25,
+          width: 50,
+          height: 50,
+          borderRadius: 25,
+          backgroundColor: '#fff',
+          opacity: flash,
+          transform: [
+            {
+              scale: flash.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1.5, 0.3],
+              }),
+            },
+          ],
+        }}
+      />
       {/* Neon sparks */}
       {sparks.map((s, i) => (
-        <Animated.View key={i} style={{
-          position: 'absolute', left: x - s.size / 2, top: y - s.size / 2,
-          width: s.size, height: s.isNeon ? s.size * 2.5 : s.size,
-          borderRadius: s.size / 2,
-          backgroundColor: s.isNeon ? color : '#fff',
-          shadowColor: color, shadowRadius: 6, shadowOpacity: 0.8,
-          elevation: 4,
-          opacity: s.anim.interpolate({inputRange: [0, 0.3, 1], outputRange: [1, 0.9, 0]}),
-          transform: [
-            {translateX: s.anim.interpolate({inputRange: [0, 1], outputRange: [0, s.dx]})},
-            {translateY: s.anim.interpolate({inputRange: [0, 1], outputRange: [0, s.dy]})},
-            {scale: s.anim.interpolate({inputRange: [0, 0.2, 1], outputRange: [0.5, 1.3, 0]})},
-            {rotate: s.anim.interpolate({inputRange: [0, 1], outputRange: ['0deg', `${Math.random() * 360}deg`]})},
-          ],
-        }} />
+        <Animated.View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: x - s.size / 2,
+            top: y - s.size / 2,
+            width: s.size,
+            height: s.isNeon ? s.size * 2.5 : s.size,
+            borderRadius: s.size / 2,
+            backgroundColor: s.isNeon ? color : '#fff',
+            shadowColor: color,
+            shadowRadius: 6,
+            shadowOpacity: 0.8,
+            elevation: 4,
+            opacity: s.anim.interpolate({
+              inputRange: [0, 0.3, 1],
+              outputRange: [1, 0.9, 0],
+            }),
+            transform: [
+              {
+                translateX: s.anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, s.dx],
+                }),
+              },
+              {
+                translateY: s.anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, s.dy],
+                }),
+              },
+              {
+                scale: s.anim.interpolate({
+                  inputRange: [0, 0.2, 1],
+                  outputRange: [0.5, 1.3, 0],
+                }),
+              },
+              {
+                rotate: s.anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', `${Math.random() * 360}deg`],
+                }),
+              },
+            ],
+          }}
+        />
       ))}
     </View>
   );
 }
 
 // Single missile component
-function SingleMissile({delay, startX, onDone}: {delay: number; startX: number; onDone?: () => void}) {
+function SingleMissile({
+  delay,
+  startX,
+  onDone,
+}: {
+  delay: number;
+  startX: number;
+  onDone?: () => void;
+}) {
   const pos = useRef(new Animated.Value(0)).current;
   const flash = useRef(new Animated.Value(0)).current;
   const trailWiggle = useRef(new Animated.Value(0)).current;
@@ -94,18 +193,38 @@ function SingleMissile({delay, startX, onDone}: {delay: number; startX: number; 
       // Trail wiggle animation
       Animated.loop(
         Animated.sequence([
-          Animated.timing(trailWiggle, {toValue: 1, duration: 80, useNativeDriver: true}),
-          Animated.timing(trailWiggle, {toValue: -1, duration: 80, useNativeDriver: true}),
+          Animated.timing(trailWiggle, {
+            toValue: 1,
+            duration: 80,
+            useNativeDriver: true,
+          }),
+          Animated.timing(trailWiggle, {
+            toValue: -1,
+            duration: 80,
+            useNativeDriver: true,
+          }),
         ]),
       ).start();
 
       Animated.sequence([
         // Missile flies UP from bottom (my board) to top (opponent section) with acceleration
-        Animated.timing(pos, {toValue: 1, duration: 500, useNativeDriver: true}),
+        Animated.timing(pos, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
         // Explosion flash at top
         Animated.sequence([
-          Animated.timing(flash, {toValue: 1, duration: 80, useNativeDriver: true}),
-          Animated.timing(flash, {toValue: 0, duration: 150, useNativeDriver: true}),
+          Animated.timing(flash, {
+            toValue: 1,
+            duration: 80,
+            useNativeDriver: true,
+          }),
+          Animated.timing(flash, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+          }),
         ]),
       ]).start(() => onDone?.());
     }, delay);
@@ -118,51 +237,109 @@ function SingleMissile({delay, startX, onDone}: {delay: number; startX: number; 
   return (
     <>
       {/* Missile body - flies from bottom up */}
-      <Animated.View style={{
-        position: 'absolute', left: startX, width: 10, height: 18,
-        backgroundColor: '#ef4444', borderRadius: 5,
-        transform: [{
-          translateY: pos.interpolate({
-            inputRange: [0, 0.3, 1],
-            outputRange: [500, 350, 30],  // bottom to top (accelerating)
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: startX,
+          width: 10,
+          height: 18,
+          backgroundColor: '#ef4444',
+          borderRadius: 5,
+          transform: [
+            {
+              translateY: pos.interpolate({
+                inputRange: [0, 0.3, 1],
+                outputRange: [500, 350, 30], // bottom to top (accelerating)
+              }),
+            },
+            {
+              scale: pos.interpolate({
+                inputRange: [0, 0.5, 1],
+                outputRange: [0.6, 1.2, 0.4],
+              }),
+            },
+          ],
+          opacity: pos.interpolate({
+            inputRange: [0, 0.9, 1],
+            outputRange: [1, 1, 0],
           }),
-        }, {
-          scale: pos.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [0.6, 1.2, 0.4],
-          }),
-        }],
-        opacity: pos.interpolate({inputRange: [0, 0.9, 1], outputRange: [1, 1, 0]}),
-      }}>
+        }}
+      >
         {/* Trailing fire */}
-        <Animated.View style={{
-          position: 'absolute', bottom: -trailLength, left: -2, width: 14, height: trailLength,
-          backgroundColor: trailColor, borderRadius: 7, opacity: 0.7,
-          transform: [{translateX: trailWiggle.interpolate({
-            inputRange: [-1, 1], outputRange: [-3, 3],
-          })}],
-        }} />
-        <Animated.View style={{
-          position: 'absolute', bottom: -(trailLength + 8), left: 1, width: 8, height: trailLength * 0.6,
-          backgroundColor: '#fde68a', borderRadius: 4, opacity: 0.4,
-          transform: [{translateX: trailWiggle.interpolate({
-            inputRange: [-1, 1], outputRange: [2, -2],
-          })}],
-        }} />
+        <Animated.View
+          style={{
+            position: 'absolute',
+            bottom: -trailLength,
+            left: -2,
+            width: 14,
+            height: trailLength,
+            backgroundColor: trailColor,
+            borderRadius: 7,
+            opacity: 0.7,
+            transform: [
+              {
+                translateX: trailWiggle.interpolate({
+                  inputRange: [-1, 1],
+                  outputRange: [-3, 3],
+                }),
+              },
+            ],
+          }}
+        />
+        <Animated.View
+          style={{
+            position: 'absolute',
+            bottom: -(trailLength + 8),
+            left: 1,
+            width: 8,
+            height: trailLength * 0.6,
+            backgroundColor: '#fde68a',
+            borderRadius: 4,
+            opacity: 0.4,
+            transform: [
+              {
+                translateX: trailWiggle.interpolate({
+                  inputRange: [-1, 1],
+                  outputRange: [2, -2],
+                }),
+              },
+            ],
+          }}
+        />
       </Animated.View>
       {/* Explosion at top (opponent area) */}
-      <Animated.View style={{
-        position: 'absolute', top: 20, left: startX - 40, width: 90, height: 90,
-        borderRadius: 45, backgroundColor: 'rgba(239,68,68,0.5)',
-        opacity: flash,
-        transform: [{scale: flash.interpolate({inputRange: [0, 1], outputRange: [0.3, 1.8]})}],
-      }} />
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 20,
+          left: startX - 40,
+          width: 90,
+          height: 90,
+          borderRadius: 45,
+          backgroundColor: 'rgba(239,68,68,0.5)',
+          opacity: flash,
+          transform: [
+            {
+              scale: flash.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.3, 1.8],
+              }),
+            },
+          ],
+        }}
+      />
     </>
   );
 }
 
 // Attack missile animation - multiple missiles matching line count
-function MissileEffect({count, onDone}: {count: number; onDone: () => void}) {
+function MissileEffect({
+  count,
+  onDone,
+}: {
+  count: number;
+  onDone: () => void;
+}) {
   const missileCount = Math.max(1, Math.min(4, count));
   const doneCount = useRef(0);
   const screenWidth = Dimensions.get('window').width;
@@ -172,13 +349,16 @@ function MissileEffect({count, onDone}: {count: number; onDone: () => void}) {
     if (doneCount.current >= missileCount) onDone();
   }, [missileCount, onDone]);
 
-  const missiles = Array.from({length: missileCount}, (_, i) => ({
+  const missiles = Array.from({ length: missileCount }, (_, i) => ({
     delay: i * 180, // staggered timing
-    startX: (screenWidth / (missileCount + 1)) * (i + 1) - 5 + (Math.random() - 0.5) * 30,
+    startX:
+      (screenWidth / (missileCount + 1)) * (i + 1) -
+      5 +
+      (Math.random() - 0.5) * 30,
   }));
 
   return (
-    <View style={[StyleSheet.absoluteFill, {pointerEvents: 'none'}]}>
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
       {missiles.map((m, i) => (
         <SingleMissile
           key={i}
@@ -211,22 +391,55 @@ function useShake() {
   const triggerShake = useCallback(() => {
     if (vibrationRef.current) Vibration.vibrate([0, 100, 50, 100]);
     Animated.sequence([
-      Animated.timing(shakeAnim, {toValue: 10, duration: 50, useNativeDriver: true}),
-      Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
-      Animated.timing(shakeAnim, {toValue: 8, duration: 50, useNativeDriver: true}),
-      Animated.timing(shakeAnim, {toValue: -8, duration: 50, useNativeDriver: true}),
-      Animated.timing(shakeAnim, {toValue: 4, duration: 50, useNativeDriver: true}),
-      Animated.timing(shakeAnim, {toValue: 0, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 8,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -8,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 4,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: true,
+      }),
     ]).start();
   }, [shakeAnim]);
 
-  return {shakeAnim, triggerShake};
+  return { shakeAnim, triggerShake };
 }
 
 // Reconnection constants
 const HEARTBEAT_INTERVAL = 5000; // 5 seconds
-export default function BattleScreen({route, navigation}: any) {
-  const {roomCode, isHost} = route.params;
+export default function BattleScreen({ route, navigation }: any) {
+  const windowDimensions = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const visualViewport = {
+    width: windowDimensions.width,
+    height: windowDimensions.height,
+    safeTop: insets.top,
+    safeBottom: insets.bottom,
+  };
+  const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
+  const { roomCode, isHost } = route.params;
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [opponentBoard, setOpponentBoard] = useState<BoardType>(createBoard());
@@ -237,7 +450,10 @@ export default function BattleScreen({route, navigation}: any) {
   const [gameOver, setGameOver] = useState(false);
   const [opponentName, setOpponentName] = useState(t('battle.opponent'));
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
-  const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
+  const [boardLayout, setBoardLayout] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const boardRef = useRef<View>(null);
 
   // Effects state
@@ -249,7 +465,7 @@ export default function BattleScreen({route, navigation}: any) {
   const [rematchAccepted, setRematchAccepted] = useState(false);
   const [opponentRematchAccepted, setOpponentRematchAccepted] = useState(false);
   const [rematchStarting, setRematchStarting] = useState(false);
-  const {shakeAnim, triggerShake} = useShake();
+  const { shakeAnim, triggerShake } = useShake();
 
   // Reconnection state
   const [opponentDisconnected, setOpponentDisconnected] = useState(false);
@@ -271,7 +487,17 @@ export default function BattleScreen({route, navigation}: any) {
   const rematchStartingRef = useRef(false);
   const isRematchRoundRef = useRef(false);
   const battleResultSubmittedRef = useRef(false);
-  const resetBattleStateRef = useRef<((nextSeed: number) => Promise<void>) | null>(null);
+  const skillEffectsRef = useRef(
+    getCharacterSkillEffects(null, null, { mode: 'battle' }),
+  );
+  const {
+    message: battleNoticeMessage,
+    messageKey: battleNoticeKey,
+    showNotice: showBattleNotice,
+  } = useBattleNotice(2200);
+  const resetBattleStateRef = useRef<
+    ((nextSeed: number) => Promise<void>) | null
+  >(null);
   const startRematchRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -280,10 +506,23 @@ export default function BattleScreen({route, navigation}: any) {
     battleResultSubmittedRef.current = false;
     (async () => {
       try {
-        playerIdRef.current = await getPlayerId();
-        nicknameRef.current = await getNickname();
+        const [playerId, nickname, selectedCharacterId] = await Promise.all([
+          getPlayerId(),
+          getNickname(),
+          getSelectedCharacter(),
+        ]);
+        playerIdRef.current = playerId;
+        nicknameRef.current = nickname;
+        const characterData = selectedCharacterId
+          ? await loadCharacterData(selectedCharacterId)
+          : null;
+        skillEffectsRef.current = getCharacterSkillEffects(
+          selectedCharacterId,
+          characterData,
+          { mode: 'battle' },
+        );
 
-        const {data: roomData} = await supabase
+        const { data: roomData } = await supabase
           .from('rooms')
           .select('seed')
           .eq('code', roomCode)
@@ -301,31 +540,41 @@ export default function BattleScreen({route, navigation}: any) {
 
         const channel = supabase
           .channel(`battle:${roomCode}`)
-          .on('postgres_changes', {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'players',
-            filter: `room_code=eq.${roomCode}`,
-          }, (payload: any) => {
-            if (!mounted) return;
-            const row = payload.new;
-            if (row.player_id !== playerIdRef.current) {
-              if (row.board) setOpponentBoard(row.board);
-              if (row.nickname) setOpponentName(row.nickname);
-              if (row.game_over && !gameOverRef.current) {
-                rematchAcceptedRef.current = false;
-                opponentRematchAcceptedRef.current = false;
-                setResult('win');
-                setGameOver(true);
-                setRematchAccepted(false);
-                setOpponentRematchAccepted(false);
-                gameOverRef.current = true;
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'players',
+              filter: `room_code=eq.${roomCode}`,
+            },
+            (payload: any) => {
+              if (!mounted) return;
+              const row = payload.new;
+              if (row.player_id !== playerIdRef.current) {
+                if (row.board) setOpponentBoard(row.board);
+                if (row.nickname) setOpponentName(row.nickname);
+                if (row.game_over && !gameOverRef.current) {
+                  rematchAcceptedRef.current = false;
+                  opponentRematchAcceptedRef.current = false;
+                  setResult('win');
+                  setGameOver(true);
+                  setRematchAccepted(false);
+                  setOpponentRematchAccepted(false);
+                  gameOverRef.current = true;
+                }
               }
-            }
-          })
-          .on('broadcast', {event: 'attack'}, ({payload}: any) => {
+            },
+          )
+          .on('broadcast', { event: 'attack' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             if (payload.senderId !== playerIdRef.current) {
+              const shouldCounterAttack =
+                !payload.isCounter &&
+                (payload.lines ?? 0) > 0 &&
+                skillEffectsRef.current.battleCounterAttackChance > 0 &&
+                Math.random() <
+                  skillEffectsRef.current.battleCounterAttackChance;
               // Attack received - shake + vibrate (NO missiles on receive)
               triggerShake();
               setBoard(prev => {
@@ -333,8 +582,13 @@ export default function BattleScreen({route, navigation}: any) {
                 // Check game over after attack lines
                 setTimeout(() => {
                   setPieces(currentPieces => {
-                    const active = currentPieces.filter(p => p !== null) as Piece[];
-                    if (active.length > 0 && !canPlaceAnyPiece(newBoard, active)) {
+                    const active = currentPieces.filter(
+                      p => p !== null,
+                    ) as Piece[];
+                    if (
+                      active.length > 0 &&
+                      !canPlaceAnyPiece(newBoard, active)
+                    ) {
                       if (!gameOverRef.current) {
                         rematchAcceptedRef.current = false;
                         opponentRematchAcceptedRef.current = false;
@@ -345,7 +599,7 @@ export default function BattleScreen({route, navigation}: any) {
                         setOpponentRematchAccepted(false);
                         supabase
                           .from('players')
-                          .update({game_over: true})
+                          .update({ game_over: true })
                           .eq('room_code', roomCode)
                           .eq('player_id', playerIdRef.current)
                           .then();
@@ -356,9 +610,22 @@ export default function BattleScreen({route, navigation}: any) {
                 }, 100);
                 return newBoard;
               });
+              if (shouldCounterAttack) {
+                showBattleNotice('반격 발동');
+                setMissileEffect(1);
+                channelRef.current?.send({
+                  type: 'broadcast',
+                  event: 'attack',
+                  payload: {
+                    senderId: playerIdRef.current,
+                    lines: 1,
+                    isCounter: true,
+                  },
+                });
+              }
             }
           })
-          .on('broadcast', {event: 'heartbeat'}, ({payload}: any) => {
+          .on('broadcast', { event: 'heartbeat' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             if (payload.playerId !== playerIdRef.current) {
               opponentLastSeen.current = Date.now();
@@ -368,35 +635,51 @@ export default function BattleScreen({route, navigation}: any) {
               }
             }
           })
-          .on('broadcast', {event: 'rematch_response'}, ({payload}: any) => {
-            if (!mounted || !payload || payload.playerId === playerIdRef.current) {
-              return;
-            }
-
-            if (payload.accepted) {
-              opponentRematchAcceptedRef.current = true;
-              setOpponentRematchAccepted(true);
-              if (isHost && rematchAcceptedRef.current) {
-                const pendingStart = startRematchRef.current?.();
-                pendingStart?.catch(error => {
-                  console.warn('BattleScreen host startRematch error:', error);
-                });
+          .on(
+            'broadcast',
+            { event: 'rematch_response' },
+            ({ payload }: any) => {
+              if (
+                !mounted ||
+                !payload ||
+                payload.playerId === playerIdRef.current
+              ) {
+                return;
               }
-              return;
-            }
 
-            Alert.alert('재도전 종료', '상대가 재도전을 원하지 않아 대전 로비로 돌아갑니다.', [
-              {
-                text: '확인',
-                onPress: () => navigation.replace('Lobby'),
-              },
-            ]);
-          })
-          .on('broadcast', {event: 'rematch_start'}, ({payload}: any) => {
+              if (payload.accepted) {
+                opponentRematchAcceptedRef.current = true;
+                setOpponentRematchAccepted(true);
+                if (isHost && rematchAcceptedRef.current) {
+                  const pendingStart = startRematchRef.current?.();
+                  pendingStart?.catch(error => {
+                    console.warn(
+                      'BattleScreen host startRematch error:',
+                      error,
+                    );
+                  });
+                }
+                return;
+              }
+
+              Alert.alert(
+                '재도전 종료',
+                '상대가 재도전을 원하지 않아 대전 로비로 돌아갑니다.',
+                [
+                  {
+                    text: '확인',
+                    onPress: () => navigation.replace('Lobby'),
+                  },
+                ],
+              );
+            },
+          )
+          .on('broadcast', { event: 'rematch_start' }, ({ payload }: any) => {
             if (!mounted) {
               return;
             }
-            const nextSeed = typeof payload?.seed === 'number' ? payload.seed : null;
+            const nextSeed =
+              typeof payload?.seed === 'number' ? payload.seed : null;
             if (nextSeed == null) {
               return;
             }
@@ -416,12 +699,17 @@ export default function BattleScreen({route, navigation}: any) {
         // Start heartbeat
         heartbeatTimer.current = setInterval(() => {
           channel.send({
-            type: 'broadcast', event: 'heartbeat',
-            payload: {playerId: playerIdRef.current},
+            type: 'broadcast',
+            event: 'heartbeat',
+            payload: { playerId: playerIdRef.current },
           });
           // Check opponent timeout
           const elapsed = Date.now() - opponentLastSeen.current;
-          if (elapsed > 15000 && !opponentDisconnectedRef.current && !gameOverRef.current) {
+          if (
+            elapsed > 15000 &&
+            !opponentDisconnectedRef.current &&
+            !gameOverRef.current
+          ) {
             opponentDisconnectedRef.current = true;
             setOpponentDisconnected(true);
             setReconnectCountdown(60);
@@ -450,7 +738,10 @@ export default function BattleScreen({route, navigation}: any) {
         console.warn('BattleScreen init error:', e);
         if (mounted) {
           Alert.alert(t('common.error'), t('battle.connectionFail'), [
-            {text: t('common.goHome'), onPress: () => navigation.replace('Home')},
+            {
+              text: t('common.goHome'),
+              onPress: () => navigation.replace('Home'),
+            },
           ]);
         }
       }
@@ -461,30 +752,40 @@ export default function BattleScreen({route, navigation}: any) {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       if (reconnectTimer.current) clearInterval(reconnectTimer.current);
     };
-  }, [isHost, navigation, roomCode, triggerShake]);
+  }, [isHost, navigation, roomCode, showBattleNotice, triggerShake]);
 
-  const syncBoardToDB = useCallback((b: BoardType) => {
-    supabase
-      .from('players')
-      .update({board: b})
-      .eq('room_code', roomCode)
-      .eq('player_id', playerIdRef.current)
-      .then();
-  }, [roomCode]);
+  const syncBoardToDB = useCallback(
+    (b: BoardType) => {
+      supabase
+        .from('players')
+        .update({ board: b })
+        .eq('room_code', roomCode)
+        .eq('player_id', playerIdRef.current)
+        .then();
+    },
+    [roomCode],
+  );
 
   const showPlacementEffect = useCallback(
     (piece: Piece, row: number, col: number) => {
       if (!boardLayout) {
         return;
       }
-      const cells = buildPiecePlacementEffectCells(boardLayout, piece, row, col, true);
+      const cells = buildPiecePlacementEffectCells(
+        boardLayout,
+        piece,
+        row,
+        col,
+        true,
+        visualViewport,
+      );
       if (cells.length === 0) {
         return;
       }
       placementEffectIdRef.current += 1;
-      setPlacementEffect({id: placementEffectIdRef.current, cells});
+      setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
-    [boardLayout],
+    [boardLayout, visualViewport],
   );
 
   const resetBattleState = useCallback(
@@ -522,9 +823,9 @@ export default function BattleScreen({route, navigation}: any) {
       setOpponentRematchAccepted(false);
       setRematchStarting(false);
 
-      const {error} = await supabase
+      const { error } = await supabase
         .from('players')
-        .update({board: freshBoard, game_over: false})
+        .update({ board: freshBoard, game_over: false })
         .eq('room_code', roomCode)
         .eq('player_id', playerIdRef.current);
       if (error) {
@@ -543,7 +844,10 @@ export default function BattleScreen({route, navigation}: any) {
       rematchStartingRef.current = true;
       setRematchStarting(true);
       const nextSeed = Math.floor(Math.random() * 1000000);
-      const {error} = await supabase.from('rooms').update({seed: nextSeed}).eq('code', roomCode);
+      const { error } = await supabase
+        .from('rooms')
+        .update({ seed: nextSeed })
+        .eq('code', roomCode);
       if (error) {
         throw error;
       }
@@ -551,16 +855,20 @@ export default function BattleScreen({route, navigation}: any) {
       channelRef.current?.send({
         type: 'broadcast',
         event: 'rematch_start',
-        payload: {seed: nextSeed},
+        payload: { seed: nextSeed },
       });
     } catch (error) {
       console.warn('BattleScreen startRematch error:', error);
-      Alert.alert('재도전 실패', '새 대전을 시작하지 못했습니다. 대전 로비로 돌아갑니다.', [
-        {
-          text: '확인',
-          onPress: () => navigation.replace('Lobby'),
-        },
-      ]);
+      Alert.alert(
+        '재도전 실패',
+        '새 대전을 시작하지 못했습니다. 대전 로비로 돌아갑니다.',
+        [
+          {
+            text: '확인',
+            onPress: () => navigation.replace('Lobby'),
+          },
+        ],
+      );
     } finally {
       rematchStartingRef.current = false;
       setRematchStarting(false);
@@ -581,7 +889,7 @@ export default function BattleScreen({route, navigation}: any) {
     setOpponentRematchAccepted(false);
     supabase
       .from('players')
-      .update({game_over: true})
+      .update({ game_over: true })
       .eq('room_code', roomCode)
       .eq('player_id', playerIdRef.current)
       .then();
@@ -651,12 +959,20 @@ export default function BattleScreen({route, navigation}: any) {
     [board, pieces, showPlacementEffect, syncBoardToDB, handleGameOver],
   );
 
-  const dragDrop = useDragDrop(board, pieces, boardLayout, handlePlace, true, 1);
+  const dragDrop = useDragDrop(
+    board,
+    pieces,
+    boardLayout,
+    handlePlace,
+    true,
+    1,
+    visualViewport,
+  );
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 100);
   }, []);
@@ -664,7 +980,7 @@ export default function BattleScreen({route, navigation}: any) {
   useEffect(() => {
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 500);
   }, [round]);
@@ -673,40 +989,70 @@ export default function BattleScreen({route, navigation}: any) {
     (attackIdx: number) => {
       const attack = ATTACKS[attackIdx];
       if (attackPoints < attack.cost) return;
+      const extraLines =
+        skillEffectsRef.current.battleExtraAttackLineChance > 0 &&
+        Math.random() < skillEffectsRef.current.battleExtraAttackLineChance
+          ? 1
+          : 0;
+      const totalLines = attack.lines + extraLines;
       setAttackPoints(prev => prev - attack.cost);
+      if (extraLines > 0) {
+        showBattleNotice('추가 공격 발동');
+      }
       // Launch missiles from MY board toward opponent (visual)
-      setMissileEffect(attack.lines);
+      setMissileEffect(totalLines);
       channelRef.current?.send({
-        type: 'broadcast', event: 'attack',
-        payload: {senderId: playerIdRef.current, lines: attack.lines},
+        type: 'broadcast',
+        event: 'attack',
+        payload: {
+          senderId: playerIdRef.current,
+          lines: totalLines,
+          isCounter: false,
+        },
       });
     },
-    [attackPoints],
+    [attackPoints, showBattleNotice],
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          paddingTop: modeVerticalGutter,
+          paddingBottom: modeVerticalGutter,
+        },
+      ]}
+    >
       {!gameOver && (
-        <VisualElementView screenId="battle" elementId="back_button" style={styles.backButtonDock}>
+        <VisualElementView
+          screenId="battle"
+          elementId="back_button"
+          style={styles.backButtonDock}
+        >
           <BackImageButton
             onPress={() => {
-              Alert.alert('대전 나가기', '지금 나가면 패배 처리됩니다. 나가시겠습니까?', [
-                {text: '취소', style: 'cancel'},
-                {
-                  text: '나가기',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await supabase
-                        .from('players')
-                        .update({game_over: true})
-                        .eq('room_code', roomCode)
-                        .eq('player_id', playerIdRef.current);
-                    } catch {}
-                    navigation.replace('Lobby');
+              Alert.alert(
+                '대전 나가기',
+                '지금 나가면 패배 처리됩니다. 나가시겠습니까?',
+                [
+                  { text: '취소', style: 'cancel' },
+                  {
+                    text: '나가기',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await supabase
+                          .from('players')
+                          .update({ game_over: true })
+                          .eq('room_code', roomCode)
+                          .eq('player_id', playerIdRef.current);
+                      } catch {}
+                      navigation.replace('Lobby');
+                    },
                   },
-                },
-              ]);
+                ],
+              );
             }}
             size={42}
           />
@@ -715,57 +1061,89 @@ export default function BattleScreen({route, navigation}: any) {
       <VisualElementView
         screenId="battle"
         elementId="opponent_panel"
-        style={styles.visualWrapper}>
-      <View style={styles.opponentSection}>
-        <Text style={styles.opponentName}>상대 {opponentName}</Text>
-        <Board board={opponentBoard} small />
-      </View>
+        style={styles.visualWrapper}
+      >
+        <View style={styles.opponentSection}>
+          <Text style={styles.opponentName}>상대 {opponentName}</Text>
+          <Board board={opponentBoard} small viewport={visualViewport} />
+        </View>
       </VisualElementView>
 
       <VisualElementView
         screenId="battle"
         elementId="attack_bar"
-        style={styles.visualWrapper}>
-      <View style={styles.attackBar}>
-        <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
-        {ATTACKS.map((atk, i) => (
-          <TouchableOpacity
-            key={i}
-            style={[styles.attackBtn, attackPoints < atk.cost && styles.attackDisabled]}
-            onPress={() => sendAttack(i)}
-            disabled={attackPoints < atk.cost || gameOverRef.current}>
-            <Text style={styles.attackLines}>{t('battle.lines', atk.lines)}</Text>
-            <Text style={styles.attackCost}>{atk.cost}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        style={styles.visualWrapper}
+      >
+        <View style={styles.attackBar}>
+          <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
+          {ATTACKS.map((atk, i) => (
+            <TouchableOpacity
+              key={i}
+              style={[
+                styles.attackBtn,
+                attackPoints < atk.cost && styles.attackDisabled,
+              ]}
+              onPress={() => sendAttack(i)}
+              disabled={attackPoints < atk.cost || gameOverRef.current}
+            >
+              <Text style={styles.attackLines}>
+                {t('battle.lines', atk.lines)}
+              </Text>
+              <Text style={styles.attackCost}>{atk.cost}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </VisualElementView>
 
-      <VisualElementView screenId="battle" elementId="board" style={styles.visualWrapper}>
-      <Animated.View
-        style={[styles.boardContainer, {
-          transform: [{translateX: shakeAnim}],
-        }]}
-        onLayout={handleBoardLayout}>
-        <Board
-          ref={boardRef}
-          board={board}
-          compact
-          previewCells={dragDrop.previewCells}
-          invalidPreview={dragDrop.invalidPreview}
-          clearGuideCells={dragDrop.clearGuideCells}
-        />
-      </Animated.View>
+      <VisualElementView
+        screenId="battle"
+        elementId="board"
+        style={styles.visualWrapper}
+      >
+        <Animated.View
+          style={[
+            styles.boardContainer,
+            {
+              transform: [{ translateX: shakeAnim }],
+            },
+          ]}
+          onLayout={handleBoardLayout}
+        >
+          <Board
+            ref={boardRef}
+            board={board}
+            viewport={visualViewport}
+            compact
+            previewCells={dragDrop.previewCells}
+            invalidPreview={dragDrop.invalidPreview}
+            clearGuideCells={dragDrop.clearGuideCells}
+          />
+          <VisualElementView
+            screenId="battle"
+            elementId="skill_effect"
+            style={styles.skillEffectLayer}
+            pointerEvents="none"
+            viewport={visualViewport}
+          >
+            <SkillTriggerBoardEffect
+              message={battleNoticeMessage}
+              triggerKey={battleNoticeKey}
+            />
+          </VisualElementView>
+        </Animated.View>
       </VisualElementView>
 
       <VisualElementView screenId="battle" elementId="piece_tray">
-      <PieceSelector
-        pieces={pieces}
-        onDragStart={dragDrop.onDragStart}
-        onDragMove={dragDrop.onDragMove}
-        onDragEnd={dragDrop.onDragEnd}
-        onDragCancel={dragDrop.onDragCancel}
-      />
+        <PieceSelector
+          pieces={pieces}
+          onDragStart={dragDrop.onDragStart}
+          onDragMove={dragDrop.onDragMove}
+          onDragEnd={dragDrop.onDragEnd}
+          onDragCancel={dragDrop.onDragCancel}
+          compact
+          boardCompact
+          viewport={visualViewport}
+        />
       </VisualElementView>
 
       {placementEffect && (
@@ -779,9 +1157,18 @@ export default function BattleScreen({route, navigation}: any) {
         />
       )}
 
+      <BattleNoticeOverlay
+        message={battleNoticeMessage}
+        messageKey={battleNoticeKey}
+        bottom={120}
+      />
+
       {/* Missile attack effect - flies from my board UP to opponent */}
       {missileEffect !== null && (
-        <MissileEffect count={missileEffect} onDone={() => setMissileEffect(null)} />
+        <MissileEffect
+          count={missileEffect}
+          onDone={() => setMissileEffect(null)}
+        />
       )}
 
       {/* Opponent disconnected banner */}
@@ -802,14 +1189,14 @@ export default function BattleScreen({route, navigation}: any) {
             {opponentDisconnected
               ? '상대 연결이 끊겨 재도전을 진행할 수 없습니다.'
               : rematchStarting
-                ? '새 대전을 준비 중입니다.'
-                : rematchAccepted
-                  ? opponentRematchAccepted
-                    ? '상대 수락 확인 중입니다.'
-                    : '상대의 재도전 응답을 기다리는 중입니다.'
-                  : opponentRematchAccepted
-                    ? '상대가 재도전을 원합니다.'
-                    : '같은 상대와 다시 대결할 수 있습니다.'}
+              ? '새 대전을 준비 중입니다.'
+              : rematchAccepted
+              ? opponentRematchAccepted
+                ? '상대 수락 확인 중입니다.'
+                : '상대의 재도전 응답을 기다리는 중입니다.'
+              : opponentRematchAccepted
+              ? '상대가 재도전을 원합니다.'
+              : '같은 상대와 다시 대결할 수 있습니다.'}
           </Text>
           {!opponentDisconnected && !rematchAccepted && !rematchStarting && (
             <TouchableOpacity
@@ -820,14 +1207,18 @@ export default function BattleScreen({route, navigation}: any) {
                 channelRef.current?.send({
                   type: 'broadcast',
                   event: 'rematch_response',
-                  payload: {playerId: playerIdRef.current, accepted: true},
+                  payload: { playerId: playerIdRef.current, accepted: true },
                 });
                 if (isHost && opponentRematchAcceptedRef.current) {
                   startRematch().catch(error => {
-                    console.warn('BattleScreen local startRematch error:', error);
+                    console.warn(
+                      'BattleScreen local startRematch error:',
+                      error,
+                    );
                   });
                 }
-              }}>
+              }}
+            >
               <Text style={styles.exitBtnText}>재도전</Text>
             </TouchableOpacity>
           )}
@@ -837,10 +1228,11 @@ export default function BattleScreen({route, navigation}: any) {
               channelRef.current?.send({
                 type: 'broadcast',
                 event: 'rematch_response',
-                payload: {playerId: playerIdRef.current, accepted: false},
+                payload: { playerId: playerIdRef.current, accepted: false },
               });
               navigation.replace('Lobby');
-            }}>
+            }}
+          >
             <Text style={styles.exitBtnText}>대전 로비로</Text>
           </TouchableOpacity>
         </View>
@@ -859,11 +1251,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a0a3e',
-    paddingTop: MODE_VERTICAL_GUTTER,
-    paddingBottom: MODE_VERTICAL_GUTTER,
   },
   visualWrapper: {
     alignSelf: 'stretch',
+  },
+  skillEffectLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
   },
   backButtonDock: {
     position: 'absolute',
@@ -872,21 +1267,40 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   opponentSection: {
-    alignItems: 'center', paddingVertical: 4, backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    paddingVertical: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  opponentName: {color: '#e2e8f0', fontSize: 12, fontWeight: '600', marginBottom: 2},
+  opponentName: {
+    color: '#e2e8f0',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
   attackBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 5, backgroundColor: 'rgba(30,27,75,0.6)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(30,27,75,0.6)',
   },
-  attackLabel: {color: '#ef4444', fontSize: 15, fontWeight: '900', marginRight: 2},
+  attackLabel: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontWeight: '900',
+    marginRight: 2,
+  },
   attackBtn: {
-    backgroundColor: '#7c3aed', borderRadius: 8, paddingHorizontal: 10,
-    paddingVertical: 4, alignItems: 'center',
+    backgroundColor: '#7c3aed',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignItems: 'center',
   },
-  attackDisabled: {opacity: 0.3},
-  attackLines: {color: '#fff', fontSize: 12, fontWeight: '700'},
-  attackCost: {color: '#fbbf24', fontSize: 9},
+  attackDisabled: { opacity: 0.3 },
+  attackLines: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  attackCost: { color: '#fbbf24', fontSize: 9 },
   boardContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -897,9 +1311,10 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  resultText: {color: '#fff', fontSize: 36, fontWeight: '900'},
+  resultText: { color: '#fff', fontSize: 36, fontWeight: '900' },
   rematchInfoText: {
     color: '#cbd5e1',
     fontSize: 14,
@@ -910,18 +1325,27 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   exitBtn: {
-    marginTop: 24, backgroundColor: '#6366f1', paddingHorizontal: 32,
-    paddingVertical: 14, borderRadius: 12,
+    marginTop: 24,
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
   },
   rematchBtn: {
     backgroundColor: '#16a34a',
   },
-  exitBtnText: {color: '#fff', fontSize: 18, fontWeight: '800'},
-  waitingText: {color: '#e2e8f0', fontSize: 18, fontWeight: '600'},
+  exitBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  waitingText: { color: '#e2e8f0', fontSize: 18, fontWeight: '600' },
   disconnectBanner: {
-    position: 'absolute', top: '40%', left: 20, right: 20,
-    backgroundColor: 'rgba(239,68,68,0.9)', borderRadius: 12,
-    paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center',
+    position: 'absolute',
+    top: '40%',
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(239,68,68,0.9)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
   },
-  disconnectText: {color: '#fff', fontSize: 14, fontWeight: '700'},
+  disconnectText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

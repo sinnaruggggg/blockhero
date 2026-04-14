@@ -1,13 +1,15 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {Animated, StyleSheet, Text, View} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 
 interface BattleNoticeOverlayProps {
   message: string | null;
+  messageKey?: number;
   bottom?: number;
 }
 
 export default function BattleNoticeOverlay({
   message,
+  messageKey = 0,
   bottom = 118,
 }: BattleNoticeOverlayProps) {
   const [displayMessage, setDisplayMessage] = useState<string | null>(null);
@@ -50,27 +52,28 @@ export default function BattleNoticeOverlay({
         duration: 220,
         useNativeDriver: true,
       }),
-    ]).start(({finished}) => {
+    ]).start(({ finished }) => {
       if (finished) {
         setDisplayMessage(null);
       }
     });
-  }, [displayMessage, message, opacity, translateY]);
+  }, [displayMessage, message, messageKey, opacity, translateY]);
 
   if (!displayMessage) {
     return null;
   }
 
   return (
-    <View pointerEvents="none" style={[styles.overlay, {bottom}]}>
+    <View pointerEvents="none" style={[styles.overlay, { bottom }]}>
       <Animated.View
         style={[
           styles.chip,
           {
             opacity,
-            transform: [{translateY}],
+            transform: [{ translateY }],
           },
-        ]}>
+        ]}
+      >
         <Text style={styles.text}>{displayMessage}</Text>
       </Animated.View>
     </View>
@@ -95,7 +98,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.18,
     shadowRadius: 12,
-    shadowOffset: {width: 0, height: 8},
+    shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
   text: {

@@ -3,7 +3,7 @@ import {
   type CharacterSkillEffects,
   type SkillEffectContext,
 } from './characterSkillEffects';
-import type {CharacterData} from '../stores/gameStore';
+import type { CharacterData } from '../stores/gameStore';
 
 export type SkillDetailCategory = 'personal' | 'party';
 
@@ -53,6 +53,23 @@ const DETAIL_FIELDS = [
   'doubleAttackChance',
   'previewCountBonus',
   'itemCapacityPerTypeBonus',
+  'adjacentLineClearChance',
+  'extraLineClearChance',
+  'fillerCellChance',
+  'fillerCellCount',
+  'randomLineClearChance',
+  'randomLineClearComboThreshold',
+  'fastPlacementDamageBonus',
+  'fastPlacementWindowMs',
+  'multiLineDamageBonus',
+  'placementDamageReduction',
+  'placementDamageReductionWindowMs',
+  'rewardJackpotChance',
+  'rewardJackpotMultiplier',
+  'raidActiveSkillDamageBonus',
+  'battleExtraAttackLineChance',
+  'battleCounterAttackChance',
+  'levelModeBreakthroughAttackPerClear',
 ] as const satisfies ReadonlyArray<keyof CharacterSkillEffects>;
 
 function cloneCharacterData(data: CharacterData): CharacterData {
@@ -63,20 +80,33 @@ function cloneCharacterData(data: CharacterData): CharacterData {
   };
 }
 
-function getDetailContext(category: SkillDetailCategory): {
-  context: SkillEffectContext;
+function getDetailContexts(
+  characterId: string,
+  category: SkillDetailCategory,
+): {
+  contexts: Array<{
+    context: SkillEffectContext;
+    linePrefix?: string;
+  }>;
   contextNote: string | null;
 } {
   if (category === 'party') {
     return {
-      context: {mode: 'raid', partySize: 4, bossHpRatio: 0.2},
-      contextNote: '레이드 4인 기준, 조건부 효과는 발동 상황 기준으로 표시됩니다.',
+      contexts: [{ context: { mode: 'raid', partySize: 4, bossHpRatio: 0.2 } }],
+      contextNote:
+        '레이드 4인 기준, 조건부 효과는 발동 상황 기준으로 표시됩니다.',
     };
   }
 
   return {
-    context: {mode: 'level'},
-    contextNote: null,
+    contexts: [
+      { context: { mode: 'level' } },
+      { context: { mode: 'battle' }, linePrefix: '[대전] ' },
+    ],
+    contextNote:
+      characterId === 'knight'
+        ? '[대전] 표시는 대전 모드 전용 효과입니다.'
+        : null,
   };
 }
 
@@ -118,7 +148,9 @@ function formatEffectDelta(
     }
     case 'raidSkillChargeGainMultiplier': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `레이드 스킬 게이지 획득 +${formatPercent(diff)}` : null;
+      return diff > 0
+        ? `레이드 스킬 게이지 획득 +${formatPercent(diff)}`
+        : null;
     }
     case 'comboDamageBonus': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -170,7 +202,9 @@ function formatEffectDelta(
     }
     case 'endlessDifficultySlowRate': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `무한 모드 난이도 증가 ${formatPercent(diff)} 완화` : null;
+      return diff > 0
+        ? `무한 모드 난이도 증가 ${formatPercent(diff)} 완화`
+        : null;
     }
     case 'endlessObstacleSpawnMultiplier': {
       const diff = (previousValue as number) - (currentValue as number);
@@ -261,6 +295,94 @@ function formatEffectDelta(
       const diff = (currentValue as number) - (previousValue as number);
       return diff > 0 ? `아이템 보유 한도 +${diff}` : null;
     }
+    case 'adjacentLineClearChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0
+        ? `배치 시 인접 줄 정리 확률 +${formatPercent(diff)}`
+        : null;
+    }
+    case 'extraLineClearChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0
+        ? `클리어 후 추가 줄 정리 확률 +${formatPercent(diff)}`
+        : null;
+    }
+    case 'fillerCellChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `보조 블록 생성 확률 +${formatPercent(diff)}` : null;
+    }
+    case 'fillerCellCount': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `보조 블록 생성 수 +${diff}칸` : null;
+    }
+    case 'randomLineClearChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `랜덤 줄 정리 확률 +${formatPercent(diff)}` : null;
+    }
+    case 'randomLineClearComboThreshold': {
+      const currentThreshold = currentValue as number;
+      const previousThreshold = previousValue as number;
+      return currentThreshold > 0 && previousThreshold === 0
+        ? `${currentThreshold}콤보 이상 시 랜덤 줄 정리 발동`
+        : null;
+    }
+    case 'fastPlacementDamageBonus': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `빠른 배치 추가 피해 +${formatPercent(diff)}` : null;
+    }
+    case 'fastPlacementWindowMs': {
+      const currentMs = currentValue as number;
+      const previousMs = previousValue as number;
+      return currentMs > 0 && previousMs === 0
+        ? `빠른 배치 판정 시간 ${formatSeconds(currentMs)}`
+        : null;
+    }
+    case 'multiLineDamageBonus': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `2줄 이상 클리어 피해 +${formatPercent(diff)}` : null;
+    }
+    case 'placementDamageReduction': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `배치 직후 피해 감소 ${formatPercent(diff)}` : null;
+    }
+    case 'placementDamageReductionWindowMs': {
+      const currentMs = currentValue as number;
+      const previousMs = previousValue as number;
+      return currentMs > 0 && previousMs === 0
+        ? `배치 직후 보호 시간 ${formatSeconds(currentMs)}`
+        : null;
+    }
+    case 'rewardJackpotChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `보상 잭팟 확률 +${formatPercent(diff)}` : null;
+    }
+    case 'rewardJackpotMultiplier': {
+      const currentMultiplier = currentValue as number;
+      const previousMultiplier = previousValue as number;
+      return currentMultiplier > previousMultiplier && currentMultiplier > 1
+        ? `보상 잭팟 배수 x${currentMultiplier}`
+        : null;
+    }
+    case 'raidActiveSkillDamageBonus': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0
+        ? `레이드 액티브 스킬 피해 +${formatPercent(diff)}`
+        : null;
+    }
+    case 'battleExtraAttackLineChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0
+        ? `공격 시 추가 1줄 발사 확률 +${formatPercent(diff)}`
+        : null;
+    }
+    case 'battleCounterAttackChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `피격 시 반격 확률 +${formatPercent(diff)}` : null;
+    }
+    case 'levelModeBreakthroughAttackPerClear': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `연속 돌파 1회당 공격력 +${formatPercent(diff)}` : null;
+    }
     default:
       return null;
   }
@@ -281,7 +403,7 @@ export function getSkillEffectDetail(
   category: SkillDetailCategory,
   skillIndex: number,
 ): SkillEffectDetail {
-  const {context, contextNote} = getDetailContext(category);
+  const { contexts, contextNote } = getDetailContexts(characterId, category);
   const currentData = cloneCharacterData(data);
   const zeroedData = cloneCharacterData(data);
   const nextData = cloneCharacterData(data);
@@ -302,16 +424,52 @@ export function getSkillEffectDetail(
   zeroedAllocations[skillIndex] = 0;
   nextAllocations[skillIndex] = Math.min(5, currentLevel + 1);
 
-  const currentEffects = getCharacterSkillEffects(characterId, currentData, context);
-  const zeroedEffects = getCharacterSkillEffects(characterId, zeroedData, context);
-  const nextEffects = getCharacterSkillEffects(characterId, nextData, context);
+  const currentLines: string[] = [];
+  const nextLines: string[] = [];
+  const currentSeen = new Set<string>();
+  const nextSeen = new Set<string>();
+
+  for (const { context, linePrefix } of contexts) {
+    const currentEffects = getCharacterSkillEffects(
+      characterId,
+      currentData,
+      context,
+    );
+    const zeroedEffects = getCharacterSkillEffects(
+      characterId,
+      zeroedData,
+      context,
+    );
+    const nextEffects = getCharacterSkillEffects(
+      characterId,
+      nextData,
+      context,
+    );
+
+    if (currentLevel > 0) {
+      for (const line of summarizeEffectDelta(currentEffects, zeroedEffects)) {
+        if (currentSeen.has(line)) {
+          continue;
+        }
+        currentSeen.add(line);
+        currentLines.push(linePrefix ? `${linePrefix}${line}` : line);
+      }
+    }
+
+    if (currentLevel < 5) {
+      for (const line of summarizeEffectDelta(nextEffects, currentEffects)) {
+        if (nextSeen.has(line)) {
+          continue;
+        }
+        nextSeen.add(line);
+        nextLines.push(linePrefix ? `${linePrefix}${line}` : line);
+      }
+    }
+  }
 
   return {
-    currentLines: currentLevel > 0 ? summarizeEffectDelta(currentEffects, zeroedEffects) : [],
-    nextLines:
-      currentLevel < 5
-        ? summarizeEffectDelta(nextEffects, currentEffects)
-        : [],
+    currentLines,
+    nextLines,
     contextNote,
   };
 }

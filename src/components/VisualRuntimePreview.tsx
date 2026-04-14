@@ -1,4 +1,4 @@
-import React, {useMemo, useRef} from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   ImageBackground,
   PanResponder,
@@ -16,7 +16,8 @@ import ItemBar from './ItemBar';
 import NextPiecePreview from './NextPiecePreview';
 import PieceSelector from './PieceSelector';
 import SkillBar from './SkillBar';
-import {buildVisualElementStyle} from './VisualElementView';
+import { buildVisualElementStyle } from './VisualElementView';
+import { scaleGameplayUnit } from '../game/layoutScale';
 import {
   buildVisualTintColor,
   getLevelBackgroundOverride,
@@ -30,7 +31,7 @@ import {
   type VisualScreenId,
   type VisualViewport,
 } from '../game/visualConfig';
-import {createBoard, type Piece} from '../game/engine';
+import { createBoard, type Piece } from '../game/engine';
 
 const LEVEL_BG = require('../assets/ui/grassland_bg.jpg');
 
@@ -47,36 +48,64 @@ const SAMPLE_ITEMS = {
 };
 
 const SAMPLE_PIECES: Piece[] = [
-  {id: 1001, color: '#22c55e', shape: [[1, 1, 1], [0, 1, 0]]},
-  {id: 1002, color: '#f59e0b', shape: [[1], [1], [1], [1]]},
-  {id: 1003, color: '#38bdf8', shape: [[1, 1], [1, 1]]},
+  {
+    id: 1001,
+    color: '#22c55e',
+    shape: [
+      [1, 1, 1],
+      [0, 1, 0],
+    ],
+  },
+  { id: 1002, color: '#f59e0b', shape: [[1], [1], [1], [1]] },
+  {
+    id: 1003,
+    color: '#38bdf8',
+    shape: [
+      [1, 1],
+      [1, 1],
+    ],
+  },
 ];
 
 const SAMPLE_NEXT_PIECES: Piece[] = [
-  {id: 2001, color: '#fb7185', shape: [[1, 1, 1]]},
-  {id: 2002, color: '#a78bfa', shape: [[1, 1], [0, 1]]},
-  {id: 2003, color: '#facc15', shape: [[1, 1], [1, 0]]},
+  { id: 2001, color: '#fb7185', shape: [[1, 1, 1]] },
+  {
+    id: 2002,
+    color: '#a78bfa',
+    shape: [
+      [1, 1],
+      [0, 1],
+    ],
+  },
+  {
+    id: 2003,
+    color: '#facc15',
+    shape: [
+      [1, 1],
+      [1, 0],
+    ],
+  },
 ];
 
 function buildPreviewBoard() {
   const board = createBoard();
   const blocks = [
-    {row: 7, col: 0, color: '#38bdf8'},
-    {row: 7, col: 1, color: '#38bdf8'},
-    {row: 7, col: 2, color: '#38bdf8'},
-    {row: 6, col: 4, color: '#22c55e'},
-    {row: 5, col: 4, color: '#22c55e'},
-    {row: 6, col: 5, color: '#22c55e'},
-    {row: 5, col: 5, color: '#22c55e'},
-    {row: 4, col: 1, color: '#f59e0b'},
-    {row: 4, col: 2, color: '#f59e0b'},
-    {row: 4, col: 3, color: '#f59e0b'},
-    {row: 3, col: 6, color: '#fb7185'},
-    {row: 2, col: 6, color: '#fb7185'},
+    { row: 7, col: 0, color: '#38bdf8' },
+    { row: 7, col: 1, color: '#38bdf8' },
+    { row: 7, col: 2, color: '#38bdf8' },
+    { row: 6, col: 4, color: '#22c55e' },
+    { row: 5, col: 4, color: '#22c55e' },
+    { row: 6, col: 5, color: '#22c55e' },
+    { row: 5, col: 5, color: '#22c55e' },
+    { row: 4, col: 1, color: '#f59e0b' },
+    { row: 4, col: 2, color: '#f59e0b' },
+    { row: 4, col: 3, color: '#f59e0b' },
+    { row: 3, col: 6, color: '#fb7185' },
+    { row: 2, col: 6, color: '#fb7185' },
   ];
 
   blocks.forEach(block => {
-    board[block.row][block.col] = {color: block.color};
+    board[block.row][block.col] = { color: block.color };
   });
   return board;
 }
@@ -86,7 +115,7 @@ function buildSmallPreviewBoard() {
   for (let row = 5; row < 8; row += 1) {
     for (let col = 1; col < 5; col += 1) {
       if ((row + col) % 2 === 0) {
-        board[row][col] = {color: '#60a5fa'};
+        board[row][col] = { color: '#60a5fa' };
       }
     }
   }
@@ -136,7 +165,7 @@ function EditorFrame({
     manifest.referenceViewport,
     rule.safeAreaAware === true,
   );
-  const dragOriginRef = useRef({x: rule.offsetX, y: rule.offsetY});
+  const dragOriginRef = useRef({ x: rule.offsetX, y: rule.offsetY });
 
   const panResponder = useMemo(
     () =>
@@ -148,14 +177,16 @@ function EditorFrame({
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: () => {
-          dragOriginRef.current = {x: rule.offsetX, y: rule.offsetY};
+          dragOriginRef.current = { x: rule.offsetX, y: rule.offsetY };
           onInteractionChange?.(true);
         },
         onPanResponderMove: (_event, gestureState) => {
           onMove(
             elementId,
-            dragOriginRef.current.x + gestureState.dx / Math.max(displayScale, 0.001),
-            dragOriginRef.current.y + gestureState.dy / Math.max(displayScale, 0.001),
+            dragOriginRef.current.x +
+              gestureState.dx / Math.max(displayScale, 0.001),
+            dragOriginRef.current.y +
+              gestureState.dy / Math.max(displayScale, 0.001),
           );
         },
         onPanResponderRelease: () => {
@@ -188,12 +219,18 @@ function EditorFrame({
       ]}
       onLayout={event => {
         const layout = event.nativeEvent.layout;
-        const scaledWidth = layout.width * rule.scale;
-        const scaledHeight = layout.height * rule.scale;
+        const scaleX = rule.scale * (rule.widthScale ?? 1);
+        const scaleY = rule.scale * (rule.heightScale ?? 1);
+        const scaledWidth = layout.width * scaleX;
+        const scaledHeight = layout.height * scaleY;
         const scaledX =
-          layout.x + resolvedOffset.x - Math.round((scaledWidth - layout.width) / 2);
+          layout.x +
+          resolvedOffset.x -
+          Math.round((scaledWidth - layout.width) / 2);
         const scaledY =
-          layout.y + resolvedOffset.y - Math.round((scaledHeight - layout.height) / 2);
+          layout.y +
+          resolvedOffset.y -
+          Math.round((scaledHeight - layout.height) / 2);
 
         onMeasure?.(elementId, {
           frame: {
@@ -205,13 +242,15 @@ function EditorFrame({
           rule,
         });
       }}
-      {...(selected ? panResponder.panHandlers : {})}>
+      {...(selected ? panResponder.panHandlers : {})}
+    >
       <TouchableOpacity activeOpacity={1} onPress={() => onSelect(elementId)}>
         <View style={styles.frameInner}>
           <View pointerEvents="none">{children}</View>
           <View
             pointerEvents="none"
-            style={[styles.outline, selected && styles.outlineSelected]}>
+            style={[styles.outline, selected && styles.outlineSelected]}
+          >
             <Text style={styles.outlineLabel}>{label}</Text>
           </View>
         </View>
@@ -226,14 +265,14 @@ function SampleBattleLane() {
       <View style={styles.unitCard}>
         <Text style={styles.unitName}>기사</Text>
         <View style={styles.hpTrack}>
-          <View style={[styles.hpFill, {width: '74%'}]} />
+          <View style={[styles.hpFill, { width: '74%' }]} />
         </View>
         <Text style={styles.hpText}>148 / 200</Text>
       </View>
       <View style={styles.unitCard}>
-        <Text style={[styles.unitName, {color: '#f97316'}]}>슬라임 킹</Text>
+        <Text style={[styles.unitName, { color: '#f97316' }]}>슬라임 킹</Text>
         <View style={styles.hpTrack}>
-          <View style={[styles.hpFill, styles.enemyHpFill, {width: '58%'}]} />
+          <View style={[styles.hpFill, styles.enemyHpFill, { width: '58%' }]} />
         </View>
         <Text style={styles.hpText}>740 / 1280</Text>
       </View>
@@ -266,7 +305,11 @@ export default function VisualRuntimePreview({
   viewport: VisualViewport;
   displayScale?: number;
   onSelectElement: (elementId: VisualElementId) => void;
-  onMoveElement: (elementId: VisualElementId, nextOffsetX: number, nextOffsetY: number) => void;
+  onMoveElement: (
+    elementId: VisualElementId,
+    nextOffsetX: number,
+    nextOffsetY: number,
+  ) => void;
   onMeasureElement?: (
     screenId: VisualScreenId,
     elementId: VisualElementId,
@@ -298,26 +341,31 @@ export default function VisualRuntimePreview({
     levelBackgroundOverride?.removeImage === true
       ? null
       : levelBackgroundOverride?.assetKey &&
-          assetUris[levelBackgroundOverride.assetKey]
-        ? {uri: assetUris[levelBackgroundOverride.assetKey]}
-        : LEVEL_BG;
-  const buildRaidBackgroundSource = (backgroundOverride: ReturnType<typeof getRaidBackgroundOverride>) =>
+        assetUris[levelBackgroundOverride.assetKey]
+      ? { uri: assetUris[levelBackgroundOverride.assetKey] }
+      : LEVEL_BG;
+  const buildRaidBackgroundSource = (
+    backgroundOverride: ReturnType<typeof getRaidBackgroundOverride>,
+  ) =>
     backgroundOverride?.removeImage === true
       ? null
-      : backgroundOverride?.assetKey &&
-          assetUris[backgroundOverride.assetKey]
-        ? {uri: assetUris[backgroundOverride.assetKey]}
-        : LEVEL_BG;
-  const raidNormalBackgroundSource = buildRaidBackgroundSource(raidNormalBackgroundOverride);
-  const raidBossBackgroundSource = buildRaidBackgroundSource(raidBossBackgroundOverride);
+      : backgroundOverride?.assetKey && assetUris[backgroundOverride.assetKey]
+      ? { uri: assetUris[backgroundOverride.assetKey] }
+      : LEVEL_BG;
+  const raidNormalBackgroundSource = buildRaidBackgroundSource(
+    raidNormalBackgroundOverride,
+  );
+  const raidBossBackgroundSource = buildRaidBackgroundSource(
+    raidBossBackgroundOverride,
+  );
   const backgroundSource =
     screenId === 'level'
       ? levelBackgroundSource
       : screenId === 'raidNormal'
-        ? raidNormalBackgroundSource
-        : screenId === 'raidBoss'
-          ? raidBossBackgroundSource
-        : null;
+      ? raidNormalBackgroundSource
+      : screenId === 'raidBoss'
+      ? raidBossBackgroundSource
+      : null;
   const tintColor =
     screenId === 'level' && levelBackgroundOverride
       ? buildVisualTintColor(
@@ -325,54 +373,84 @@ export default function VisualRuntimePreview({
           levelBackgroundOverride.tintOpacity,
         )
       : screenId === 'raidNormal' && raidNormalBackgroundOverride
-        ? buildVisualTintColor(
-            raidNormalBackgroundOverride.tintColor,
-            raidNormalBackgroundOverride.tintOpacity,
-          )
-        : screenId === 'raidBoss' && raidBossBackgroundOverride
-          ? buildVisualTintColor(
-            raidBossBackgroundOverride.tintColor,
-            raidBossBackgroundOverride.tintOpacity,
-          )
-        : 'transparent';
+      ? buildVisualTintColor(
+          raidNormalBackgroundOverride.tintColor,
+          raidNormalBackgroundOverride.tintOpacity,
+        )
+      : screenId === 'raidBoss' && raidBossBackgroundOverride
+      ? buildVisualTintColor(
+          raidBossBackgroundOverride.tintColor,
+          raidBossBackgroundOverride.tintOpacity,
+        )
+      : 'transparent';
 
   const contentPadding = {
-    paddingTop: viewport.safeTop + Math.round(viewport.height * 0.05),
-    paddingBottom: viewport.safeBottom + Math.round(viewport.height * 0.05),
-    paddingHorizontal: Math.max(12, Math.round(viewport.width * 0.035)),
+    paddingTop: viewport.safeTop + scaleGameplayUnit(46, viewport, 16),
+    paddingBottom: viewport.safeBottom + scaleGameplayUnit(46, viewport, 16),
   };
 
-  const comboGaugeLevel = getVisualElementRule(manifest, 'level', 'combo_gauge');
-  const comboGaugeEndless = getVisualElementRule(manifest, 'endless', 'combo_gauge');
-  const comboGaugeRaidNormal = getVisualElementRule(manifest, 'raidNormal', 'combo_gauge');
-  const comboGaugeRaidBoss = getVisualElementRule(manifest, 'raidBoss', 'combo_gauge');
+  const comboGaugeLevel = getVisualElementRule(
+    manifest,
+    'level',
+    'combo_gauge',
+  );
+  const comboGaugeEndless = getVisualElementRule(
+    manifest,
+    'endless',
+    'combo_gauge',
+  );
+  const comboGaugeRaidNormal = getVisualElementRule(
+    manifest,
+    'raidNormal',
+    'combo_gauge',
+  );
+  const comboGaugeRaidBoss = getVisualElementRule(
+    manifest,
+    'raidBoss',
+    'combo_gauge',
+  );
   const reportLevelMeasure = useMemo(
     () =>
-      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+      (
+        elementId: VisualElementId,
+        payload: { frame: VisualElementFrame; rule: VisualElementRule },
+      ) =>
         onMeasureElement?.('level', elementId, payload),
     [onMeasureElement],
   );
   const reportEndlessMeasure = useMemo(
     () =>
-      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+      (
+        elementId: VisualElementId,
+        payload: { frame: VisualElementFrame; rule: VisualElementRule },
+      ) =>
         onMeasureElement?.('endless', elementId, payload),
     [onMeasureElement],
   );
   const reportBattleMeasure = useMemo(
     () =>
-      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+      (
+        elementId: VisualElementId,
+        payload: { frame: VisualElementFrame; rule: VisualElementRule },
+      ) =>
         onMeasureElement?.('battle', elementId, payload),
     [onMeasureElement],
   );
   const reportRaidNormalMeasure = useMemo(
     () =>
-      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+      (
+        elementId: VisualElementId,
+        payload: { frame: VisualElementFrame; rule: VisualElementRule },
+      ) =>
         onMeasureElement?.('raidNormal', elementId, payload),
     [onMeasureElement],
   );
   const reportRaidBossMeasure = useMemo(
     () =>
-      (elementId: VisualElementId, payload: {frame: VisualElementFrame; rule: VisualElementRule}) =>
+      (
+        elementId: VisualElementId,
+        payload: { frame: VisualElementFrame; rule: VisualElementRule },
+      ) =>
         onMeasureElement?.('raidBoss', elementId, payload),
     [onMeasureElement],
   );
@@ -389,7 +467,8 @@ export default function VisualRuntimePreview({
         screenId="level"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportLevelMeasure}>
+        onMeasure={reportLevelMeasure}
+      >
         <View style={styles.levelHeader}>
           <BackImageButton onPress={() => undefined} size={40} />
           <Text style={styles.levelTitle}>레벨 모드 1-1</Text>
@@ -408,7 +487,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportLevelMeasure}
-        style={styles.sectionGap}>
+        style={styles.sectionGap}
+      >
         <SampleBattleLane />
       </EditorFrame>
 
@@ -423,9 +503,10 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportLevelMeasure}
-        style={[styles.sectionGap, styles.centered]}>
+        style={[styles.sectionGap, styles.centered]}
+      >
         <View>
-          <Board board={board} viewportWidth={viewport.width} />
+          <Board board={board} viewport={viewport} />
           {comboGaugeLevel.visible ? (
             <ComboGaugeOverlay
               combo={7}
@@ -453,13 +534,15 @@ export default function VisualRuntimePreview({
         screenId="level"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportLevelMeasure}>
+        onMeasure={reportLevelMeasure}
+      >
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
           onDragMove={() => undefined}
           onDragEnd={() => undefined}
           onDragCancel={() => undefined}
+          viewport={viewport}
         />
       </EditorFrame>
 
@@ -474,7 +557,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportLevelMeasure}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <ItemBar
           items={SAMPLE_ITEMS}
           selectedItem={null}
@@ -497,7 +581,8 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportEndlessMeasure}>
+        onMeasure={reportEndlessMeasure}
+      >
         <GameHeader
           score={12840}
           combo={6}
@@ -521,7 +606,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportEndlessMeasure}
-        style={styles.sectionGap}>
+        style={styles.sectionGap}
+      >
         <View style={styles.statusBar}>
           <Text style={styles.statusBarText}>이번 판 획득 골드: 120</Text>
           <Text style={styles.statusBarSub}>다음: 15,000점</Text>
@@ -539,8 +625,9 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportEndlessMeasure}
-        style={styles.sectionGapSmall}>
-        <NextPiecePreview pieces={SAMPLE_NEXT_PIECES} />
+        style={styles.sectionGapSmall}
+      >
+        <NextPiecePreview pieces={SAMPLE_NEXT_PIECES} viewport={viewport} />
       </EditorFrame>
 
       <EditorFrame
@@ -554,12 +641,13 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportEndlessMeasure}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <View style={styles.summonCard}>
           <Text style={styles.summonTitle}>소환수</Text>
           <Text style={styles.summonSub}>번개정령 Lv.3</Text>
           <View style={styles.summonTrack}>
-            <View style={[styles.summonFill, {width: '62%'}]} />
+            <View style={[styles.summonFill, { width: '62%' }]} />
           </View>
         </View>
       </EditorFrame>
@@ -575,9 +663,10 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportEndlessMeasure}
-        style={[styles.sectionGap, styles.centered]}>
+        style={[styles.sectionGap, styles.centered]}
+      >
         <View>
-          <Board board={board} viewportWidth={viewport.width} />
+          <Board board={board} compact viewport={viewport} />
           {comboGaugeEndless.visible ? (
             <ComboGaugeOverlay
               combo={6}
@@ -605,13 +694,17 @@ export default function VisualRuntimePreview({
         screenId="endless"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportEndlessMeasure}>
+        onMeasure={reportEndlessMeasure}
+      >
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
           onDragMove={() => undefined}
           onDragEnd={() => undefined}
           onDragCancel={() => undefined}
+          compact
+          boardCompact
+          viewport={viewport}
         />
       </EditorFrame>
 
@@ -626,7 +719,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportEndlessMeasure}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <ItemBar
           items={SAMPLE_ITEMS}
           selectedItem={null}
@@ -649,7 +743,8 @@ export default function VisualRuntimePreview({
         screenId="battle"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportBattleMeasure}>
+        onMeasure={reportBattleMeasure}
+      >
         <View style={styles.backDock}>
           <BackImageButton onPress={() => undefined} size={42} />
         </View>
@@ -666,10 +761,11 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportBattleMeasure}
-        style={styles.sectionGap}>
+        style={styles.sectionGap}
+      >
         <View style={styles.opponentSection}>
           <Text style={styles.opponentName}>상대 PlayerTwo</Text>
-          <Board board={enemyBoard} small viewportWidth={viewport.width} />
+          <Board board={enemyBoard} small viewport={viewport} />
         </View>
       </EditorFrame>
 
@@ -684,7 +780,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportBattleMeasure}
-        style={styles.sectionGap}>
+        style={styles.sectionGap}
+      >
         <View style={styles.attackBar}>
           <Text style={styles.attackLabel}>공격 포인트 24</Text>
           <View style={styles.attackChipRow}>
@@ -708,8 +805,9 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportBattleMeasure}
-        style={[styles.sectionGap, styles.centered]}>
-        <Board board={board} compact viewportWidth={viewport.width} />
+        style={[styles.sectionGap, styles.centered]}
+      >
+        <Board board={board} compact viewport={viewport} />
       </EditorFrame>
 
       <View style={styles.flexFill} />
@@ -724,7 +822,8 @@ export default function VisualRuntimePreview({
         screenId="battle"
         onSelect={onSelectElement}
         onMove={onMoveElement}
-        onMeasure={reportBattleMeasure}>
+        onMeasure={reportBattleMeasure}
+      >
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -732,6 +831,8 @@ export default function VisualRuntimePreview({
           onDragEnd={() => undefined}
           onDragCancel={() => undefined}
           compact
+          boardCompact
+          viewport={viewport}
         />
       </EditorFrame>
     </View>
@@ -750,11 +851,16 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportRaidNormalMeasure}
-        onInteractionChange={onInteractionChange}>
+        onInteractionChange={onInteractionChange}
+      >
         <View style={styles.raidNormalTopPanel}>
           <View style={styles.raidPartyColumn}>
-            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
-            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
+            <View style={styles.raidPartySlot}>
+              <Text style={styles.raidPartySlotText}>??</Text>
+            </View>
+            <View style={styles.raidPartySlot}>
+              <Text style={styles.raidPartySlotText}>??</Text>
+            </View>
           </View>
           <View style={styles.raidNormalBossCard}>
             <Text style={styles.raidNormalBossName}>????</Text>
@@ -762,13 +868,17 @@ export default function VisualRuntimePreview({
               <Text style={styles.raidNormalBossEmoji}>??</Text>
             </View>
             <View style={styles.raidNormalHpTrack}>
-              <View style={[styles.raidNormalHpFill, {width: '71%'}]} />
+              <View style={[styles.raidNormalHpFill, { width: '71%' }]} />
             </View>
             <Text style={styles.raidNormalHpText}>98,758 / 100,000</Text>
           </View>
           <View style={styles.raidPartyColumn}>
-            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
-            <View style={styles.raidPartySlot}><Text style={styles.raidPartySlotText}>??</Text></View>
+            <View style={styles.raidPartySlot}>
+              <Text style={styles.raidPartySlotText}>??</Text>
+            </View>
+            <View style={styles.raidPartySlot}>
+              <Text style={styles.raidPartySlotText}>??</Text>
+            </View>
           </View>
         </View>
       </EditorFrame>
@@ -785,12 +895,13 @@ export default function VisualRuntimePreview({
         onMove={onMoveElement}
         onMeasure={reportRaidNormalMeasure}
         onInteractionChange={onInteractionChange}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <SkillBar
           currentGauge={0}
-          charges={{3: 1, 7: 0, 12: 0, 20: 0, 50: 0}}
+          charges={{ 3: 1, 7: 0, 12: 0, 20: 0, 50: 0 }}
           activeMultiplier={1}
-          skillLevels={{1: 1, 3: 2, 7: 0, 12: 0, 20: 0, 50: 0}}
+          skillLevels={{ 1: 1, 3: 2, 7: 0, 12: 0, 20: 0, 50: 0 }}
           onSelectSkill={() => undefined}
           disabled={false}
         />
@@ -808,7 +919,8 @@ export default function VisualRuntimePreview({
         onMove={onMoveElement}
         onMeasure={reportRaidNormalMeasure}
         onInteractionChange={onInteractionChange}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <View style={styles.statusBar}>
           <Text style={styles.statusBarText}>? ?? ??? 1,242</Text>
           <Text style={styles.statusBarSub}>??? 0</Text>
@@ -827,9 +939,10 @@ export default function VisualRuntimePreview({
         onMove={onMoveElement}
         onMeasure={reportRaidNormalMeasure}
         onInteractionChange={onInteractionChange}
-        style={[styles.sectionGap, styles.centered]}>
+        style={[styles.sectionGap, styles.centered]}
+      >
         <View>
-          <Board board={board} compact viewportWidth={viewport.width} />
+          <Board board={board} compact viewport={viewport} />
           {comboGaugeRaidNormal.visible ? (
             <ComboGaugeOverlay
               combo={1}
@@ -859,7 +972,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportRaidNormalMeasure}
-        onInteractionChange={onInteractionChange}>
+        onInteractionChange={onInteractionChange}
+      >
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -867,6 +981,8 @@ export default function VisualRuntimePreview({
           onDragEnd={() => undefined}
           onDragCancel={() => undefined}
           compact
+          boardCompact
+          viewport={viewport}
         />
       </EditorFrame>
     </View>
@@ -885,7 +1001,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportRaidBossMeasure}
-        onInteractionChange={onInteractionChange}>
+        onInteractionChange={onInteractionChange}
+      >
         <BossDisplay
           bossName="????"
           bossEmoji="??"
@@ -894,9 +1011,9 @@ export default function VisualRuntimePreview({
           maxHp={14000}
           stage={1}
           participants={[
-            {rank: 1, nickname: 'Player', totalDamage: 5820},
-            {rank: 2, nickname: 'GuildA', totalDamage: 4770},
-            {rank: 3, nickname: 'GuildB', totalDamage: 3210},
+            { rank: 1, nickname: 'Player', totalDamage: 5820 },
+            { rank: 2, nickname: 'GuildA', totalDamage: 4770 },
+            { rank: 3, nickname: 'GuildB', totalDamage: 3210 },
           ]}
         />
       </EditorFrame>
@@ -913,12 +1030,13 @@ export default function VisualRuntimePreview({
         onMove={onMoveElement}
         onMeasure={reportRaidBossMeasure}
         onInteractionChange={onInteractionChange}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <SkillBar
           currentGauge={17}
-          charges={{3: 1, 7: 0, 12: 0, 20: 0, 50: 0}}
+          charges={{ 3: 1, 7: 0, 12: 0, 20: 0, 50: 0 }}
           activeMultiplier={3}
-          skillLevels={{1: 2, 3: 3, 7: 1, 12: 0, 20: 0, 50: 0}}
+          skillLevels={{ 1: 2, 3: 3, 7: 1, 12: 0, 20: 0, 50: 0 }}
           onSelectSkill={() => undefined}
           disabled={false}
         />
@@ -936,7 +1054,8 @@ export default function VisualRuntimePreview({
         onMove={onMoveElement}
         onMeasure={reportRaidBossMeasure}
         onInteractionChange={onInteractionChange}
-        style={styles.sectionGapSmall}>
+        style={styles.sectionGapSmall}
+      >
         <View style={styles.statusBar}>
           <Text style={styles.statusBarText}>? ?? ??? 8,420</Text>
           <Text style={styles.statusBarSub}>??? 17</Text>
@@ -955,9 +1074,10 @@ export default function VisualRuntimePreview({
         onMove={onMoveElement}
         onMeasure={reportRaidBossMeasure}
         onInteractionChange={onInteractionChange}
-        style={[styles.sectionGap, styles.centered]}>
+        style={[styles.sectionGap, styles.centered]}
+      >
         <View>
-          <Board board={board} compact viewportWidth={viewport.width} />
+          <Board board={board} compact viewport={viewport} />
           {comboGaugeRaidBoss.visible ? (
             <ComboGaugeOverlay
               combo={9}
@@ -990,7 +1110,8 @@ export default function VisualRuntimePreview({
         onSelect={onSelectElement}
         onMove={onMoveElement}
         onMeasure={reportRaidBossMeasure}
-        onInteractionChange={onInteractionChange}>
+        onInteractionChange={onInteractionChange}
+      >
         <PieceSelector
           pieces={SAMPLE_PIECES}
           onDragStart={() => undefined}
@@ -998,6 +1119,8 @@ export default function VisualRuntimePreview({
           onDragEnd={() => undefined}
           onDragCancel={() => undefined}
           compact
+          boardCompact
+          viewport={viewport}
         />
       </EditorFrame>
     </View>
@@ -1007,12 +1130,12 @@ export default function VisualRuntimePreview({
     screenId === 'level'
       ? renderLevel()
       : screenId === 'endless'
-        ? renderEndless()
-        : screenId === 'battle'
-          ? renderBattle()
-          : screenId === 'raidNormal'
-            ? renderRaidNormal()
-            : renderRaidBoss();
+      ? renderEndless()
+      : screenId === 'battle'
+      ? renderBattle()
+      : screenId === 'raidNormal'
+      ? renderRaidNormal()
+      : renderRaidBoss();
 
   return (
     <View style={styles.previewHost}>
@@ -1023,32 +1146,40 @@ export default function VisualRuntimePreview({
             width: viewport.width * displayScale,
             height: viewport.height * displayScale,
           },
-        ]}>
+        ]}
+      >
         <View
           style={[
             styles.scaledCanvas,
             {
               width: viewport.width,
               height: viewport.height,
-              transform: [{scale: displayScale}],
+              transform: [{ scale: displayScale }],
             },
-          ]}>
+          ]}
+        >
           {backgroundSource ? (
             <ImageBackground
               source={backgroundSource}
               resizeMode="cover"
-              style={styles.background}>
-              <View style={[styles.backgroundTint, {backgroundColor: tintColor}]}>
+              style={styles.background}
+            >
+              <View
+                style={[styles.backgroundTint, { backgroundColor: tintColor }]}
+              >
                 {screenContent}
               </View>
             </ImageBackground>
           ) : (
             <View style={styles.background}>{screenContent}</View>
           )}
-          <View pointerEvents="none" style={[styles.safeInsetTop, {height: viewport.safeTop}]} />
           <View
             pointerEvents="none"
-            style={[styles.safeInsetBottom, {height: viewport.safeBottom}]}
+            style={[styles.safeInsetTop, { height: viewport.safeTop }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.safeInsetBottom, { height: viewport.safeBottom }]}
           />
         </View>
       </View>
@@ -1070,7 +1201,7 @@ const styles = StyleSheet.create({
     shadowColor: '#1f1208',
     shadowOpacity: 0.35,
     shadowRadius: 16,
-    shadowOffset: {width: 0, height: 10},
+    shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
   scaledCanvas: {
@@ -1127,10 +1258,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  sectionGap: {marginTop: 12},
-  sectionGapSmall: {marginTop: 8},
-  centered: {alignSelf: 'center'},
-  flexFill: {flex: 1},
+  sectionGap: { marginTop: 12 },
+  sectionGapSmall: { marginTop: 8 },
+  centered: { alignSelf: 'center' },
+  flexFill: { flex: 1 },
   raidNormalTopPanel: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -1213,7 +1344,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
   },
-  headerSpacer: {width: 44},
+  headerSpacer: { width: 44 },
   levelBattleLane: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -1248,7 +1379,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#60a5fa',
     borderRadius: 999,
   },
-  enemyHpFill: {backgroundColor: '#f97316'},
+  enemyHpFill: { backgroundColor: '#f97316' },
   hpText: {
     color: '#cbd5e1',
     fontSize: 12,

@@ -41,6 +41,7 @@ import AdminScreen from '../screens/AdminScreen';
 import BattleScreen from '../screens/BattleScreen';
 import BossCodexScreen from '../screens/BossCodexScreen';
 import EndlessScreen from '../screens/EndlessScreen';
+import FriendChatScreen from '../screens/FriendChatScreen';
 import FriendsScreen from '../screens/FriendsScreen';
 import HomeScreen from '../screens/HomeScreen';
 import IntroScreen from '../screens/IntroScreen';
@@ -62,26 +63,33 @@ import UiStudioScreen from '../screens/UiStudioScreen';
 
 const Stack = createNativeStackNavigator();
 
-type AppState = 'intro' | 'boot' | 'login' | 'app';
+type AppState = 'intro' | 'login' | 'app';
 
 const SESSION_ID = `${Date.now()}_${Math.random()
   .toString(36)
   .substring(2, 10)}`;
-const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const UPDATE_CHECK_SUCCESS_INTERVAL_MS = 15 * 60 * 1000;
+const UPDATE_CHECK_FAILURE_RETRY_MS = 2 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = 1200;
 
 installGameAlertBridge();
 
 export default function AppNavigator() {
   const [appState, setAppState] = useState<AppState>('intro');
+  const [introReadyToExit, setIntroReadyToExit] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const introExitedRef = useRef(false);
+  const introBootstrapStartedRef = useRef(false);
+  const introNextStateRef = useRef<Exclude<AppState, 'intro'>>('login');
   const appStateRef = useRef<AppState>('intro');
   const sessionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const updateCheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const lastUpdateCheckAtRef = useRef(0);
+  const updateCheckInFlightRef = useRef(false);
+  const lastSuccessfulUpdateCheckAtRef = useRef(0);
+  const lastFailedUpdateCheckAtRef = useRef(0);
+  const lastPromptedUpdateVersionRef = useRef<string | null>(null);
   const startupBootstrapPromiseRef = useRef<Promise<void> | null>(null);
   const presenceUserIdRef = useRef<string | null>(null);
 
@@ -136,7 +144,22 @@ export default function AppNavigator() {
 
   const scheduleUpdateCheck = useCallback(() => {
     const now = Date.now();
-    if (now - lastUpdateCheckAtRef.current < UPDATE_CHECK_INTERVAL_MS) {
+    if (updateCheckInFlightRef.current) {
+      return;
+    }
+
+    if (
+      lastSuccessfulUpdateCheckAtRef.current > 0 &&
+      now - lastSuccessfulUpdateCheckAtRef.current <
+        UPDATE_CHECK_SUCCESS_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    if (
+      lastFailedUpdateCheckAtRef.current > 0 &&
+      now - lastFailedUpdateCheckAtRef.current < UPDATE_CHECK_FAILURE_RETRY_MS
+    ) {
       return;
     }
 
@@ -146,14 +169,36 @@ export default function AppNavigator() {
 
     updateCheckTimeoutRef.current = setTimeout(() => {
       updateCheckTimeoutRef.current = null;
-      lastUpdateCheckAtRef.current = Date.now();
+
+      if (updateCheckInFlightRef.current) {
+        return;
+      }
+
+      updateCheckInFlightRef.current = true;
 
       void (async () => {
         try {
-          const update = await checkForUpdate();
+          const { update, errorMessage } = await checkForUpdate();
+          const completedAt = Date.now();
+
+          if (errorMessage) {
+            lastFailedUpdateCheckAtRef.current = completedAt;
+            console.warn('Auto update check failed:', errorMessage);
+            return;
+          }
+
+          lastSuccessfulUpdateCheckAtRef.current = completedAt;
+          lastFailedUpdateCheckAtRef.current = 0;
+
           if (!update) {
             return;
           }
+
+          if (lastPromptedUpdateVersionRef.current === update.versionName) {
+            return;
+          }
+
+          lastPromptedUpdateVersionRef.current = update.versionName;
 
           showUpdateDialog(update, nextUpdate => {
             setDownloadProgress(0);
@@ -167,7 +212,12 @@ export default function AppNavigator() {
               },
             );
           });
-        } catch {}
+        } catch (error) {
+          lastFailedUpdateCheckAtRef.current = Date.now();
+          console.warn('Unexpected auto update check error:', error);
+        } finally {
+          updateCheckInFlightRef.current = false;
+        }
       })();
     }, UPDATE_CHECK_DELAY_MS);
   }, []);
@@ -244,12 +294,8 @@ export default function AppNavigator() {
       }
 
       if (blockOnBootstrap) {
-        setAppState('boot');
-        try {
-          await runStartupBootstrap();
-        } finally {
-          setAppState('app');
-        }
+        await runStartupBootstrap();
+        setAppState('app');
         return;
       }
 
@@ -263,6 +309,50 @@ export default function AppNavigator() {
       setOfflinePresence,
     ],
   );
+
+  useEffect(() => {
+    if (appState !== 'intro' || introBootstrapStartedRef.current) {
+      return;
+    }
+
+    introBootstrapStartedRef.current = true;
+
+    void (async () => {
+      let hasSessionUser = false;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        hasSessionUser = Boolean(session?.user);
+
+        if (session?.user) {
+          void registerSession(session.user.id);
+        }
+
+        scheduleUpdateCheck();
+
+        if (!session?.user) {
+          await setOfflinePresence();
+          introNextStateRef.current = 'login';
+          return;
+        }
+
+        await runStartupBootstrap();
+        introNextStateRef.current = 'app';
+      } catch (error) {
+        console.warn('Initial intro bootstrap failed:', error);
+        introNextStateRef.current = hasSessionUser ? 'app' : 'login';
+      } finally {
+        setIntroReadyToExit(true);
+      }
+    })();
+  }, [
+    appState,
+    registerSession,
+    runStartupBootstrap,
+    scheduleUpdateCheck,
+    setOfflinePresence,
+  ]);
 
   useEffect(() => {
     const {
@@ -279,12 +369,8 @@ export default function AppNavigator() {
           event === 'SIGNED_IN' || appStateRef.current === 'login';
 
         if (needsBlockingBootstrap) {
-          setAppState('boot');
-          try {
-            await runStartupBootstrap();
-          } finally {
-            setAppState('app');
-          }
+          await runStartupBootstrap();
+          setAppState('app');
           return;
         }
 
@@ -361,29 +447,22 @@ export default function AppNavigator() {
     };
   }, [setOfflinePresence]);
 
-  const handleIntroPress = useCallback(() => {
+  const handleIntroFinish = useCallback(() => {
     if (introExitedRef.current) {
       return;
     }
 
     introExitedRef.current = true;
-    checkAuth({ blockOnBootstrap: true });
-  }, [checkAuth]);
+    setAppState(introNextStateRef.current);
+  }, []);
 
   if (appState === 'intro') {
     return (
       <>
-        <IntroScreen onPress={handleIntroPress} />
-        <GameDialogHost />
-        <UpdateProgressOverlay downloadProgress={downloadProgress} />
-      </>
-    );
-  }
-
-  if (appState === 'boot') {
-    return (
-      <>
-        <BootLoadingScreen />
+        <IntroScreen
+          readyToExit={introReadyToExit}
+          onFinish={handleIntroFinish}
+        />
         <GameDialogHost />
         <UpdateProgressOverlay downloadProgress={downloadProgress} />
       </>
@@ -429,6 +508,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Raid" component={RaidScreen} />
           <Stack.Screen name="Shop" component={ShopScreen} />
           <Stack.Screen name="Friends" component={FriendsScreen} />
+          <Stack.Screen name="FriendChat" component={FriendChatScreen} />
           <Stack.Screen name="BossCodex" component={BossCodexScreen} />
           <Stack.Screen
             name="SkinCollection"

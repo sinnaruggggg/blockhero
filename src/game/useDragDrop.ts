@@ -1,7 +1,14 @@
-import {useState, useCallback, useRef} from 'react';
-import {Board, Piece, canPlacePiece, PieceShape, predictClearLines} from './engine';
-import {ROWS, COLS} from '../constants';
-import {CELL_SIZE, CELL_GAP, BOARD_PADDING, COMPACT_SCALE} from '../components/Board';
+import { useState, useCallback, useRef } from 'react';
+import {
+  Board,
+  Piece,
+  canPlacePiece,
+  PieceShape,
+  predictClearLines,
+} from './engine';
+import { ROWS, COLS } from '../constants';
+import { getBoardMetrics } from '../components/Board';
+import type { VisualViewport } from './visualConfig';
 
 export interface PreviewCell {
   row: number;
@@ -31,15 +38,15 @@ function findNearestValid(
   shape: PieceShape,
   centerR: number,
   centerC: number,
-): {r: number; c: number} | null {
+): { r: number; c: number } | null {
   // Check exact position first
   if (canPlacePiece(board, shape, centerR, centerC)) {
-    return {r: centerR, c: centerC};
+    return { r: centerR, c: centerC };
   }
   // Search expanding radius
   for (let radius = 1; radius <= SNAP_RADIUS; radius++) {
     let bestDist = Infinity;
-    let bestPos: {r: number; c: number} | null = null;
+    let bestPos: { r: number; c: number } | null = null;
     for (let dr = -radius; dr <= radius; dr++) {
       for (let dc = -radius; dc <= radius; dc++) {
         if (Math.abs(dr) < radius && Math.abs(dc) < radius) continue;
@@ -49,7 +56,7 @@ function findNearestValid(
           const dist = dr * dr + dc * dc;
           if (dist < bestDist) {
             bestDist = dist;
-            bestPos = {r: nr, c: nc};
+            bestPos = { r: nr, c: nc };
           }
         }
       }
@@ -66,12 +73,15 @@ function screenToBoardFloat(
   y: number,
   boardX: number,
   boardY: number,
-  compact?: boolean,
-): {row: number; col: number} {
-  const scale = compact ? COMPACT_SCALE : 1;
-  const cs = CELL_SIZE * scale;
-  const cg = CELL_GAP * scale;
-  const bp = BOARD_PADDING * scale;
+  metrics: {
+    cellSize: number;
+    gap: number;
+    padding: number;
+  },
+): { row: number; col: number } {
+  const cs = metrics.cellSize;
+  const cg = metrics.gap;
+  const bp = metrics.padding;
   const localX = x - boardX - bp;
   const localY = y - boardY - bp;
   const cellStep = cs + cg;
@@ -84,25 +94,29 @@ function screenToBoardFloat(
 export function useDragDrop(
   board: Board,
   pieces: (Piece | null)[],
-  boardLayout: {x: number; y: number} | null,
+  boardLayout: { x: number; y: number } | null,
   onPlace: (pieceIndex: number, row: number, col: number) => void,
   compact?: boolean,
   yOffsetCells: number = 0,
+  viewport?: Partial<VisualViewport>,
 ) {
   const [previewCells, setPreviewCells] = useState<PreviewCell[]>([]);
   const [invalidPreview, setInvalidPreview] = useState(false);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [clearGuideCells, setClearGuideCells] = useState<ClearGuideCell[]>([]);
 
-  const lastPreviewPos = useRef<{row: number; col: number} | null>(null);
-  const lastRawPos = useRef<{r: number; c: number} | null>(null);
+  const lastPreviewPos = useRef<{ row: number; col: number } | null>(null);
+  const lastRawPos = useRef<{ r: number; c: number } | null>(null);
 
   // Calculate the top-left board position for centering piece on finger
   // Uses actual filled cell bounds, not shape array dimensions
   // Accepts floating-point board coordinates and rounds the final origin
   const getPieceOrigin = useCallback(
     (shape: PieceShape, boardRow: number, boardCol: number) => {
-      let minR = shape.length, maxR = 0, minC = shape[0].length, maxC = 0;
+      let minR = shape.length,
+        maxR = 0,
+        minC = shape[0].length,
+        maxC = 0;
       for (let r = 0; r < shape.length; r++) {
         for (let c = 0; c < shape[r].length; c++) {
           if (shape[r][c] === 1) {
@@ -118,18 +132,23 @@ export function useDragDrop(
       // Round the final origin (not the center) for precise centering
       const r = Math.round(boardRow - centerR);
       const c = Math.round(boardCol - centerC);
-      return {r, c};
+      return { r, c };
     },
     [],
   );
 
   const getPreviewCells = useCallback(
-    (shape: PieceShape, color: string, originR: number, originC: number): PreviewCell[] => {
+    (
+      shape: PieceShape,
+      color: string,
+      originR: number,
+      originC: number,
+    ): PreviewCell[] => {
       const cells: PreviewCell[] = [];
       for (let r = 0; r < shape.length; r++) {
         for (let c = 0; c < shape[r].length; c++) {
           if (shape[r][c] === 1) {
-            cells.push({row: originR + r, col: originC + c, color});
+            cells.push({ row: originR + r, col: originC + c, color });
           }
         }
       }
@@ -150,14 +169,20 @@ export function useDragDrop(
       const piece = pieces[index];
       if (!piece) return;
 
-      const scale = compact ? COMPACT_SCALE : 1;
-      const cellStep = (CELL_SIZE * scale + CELL_GAP * scale);
+      const metrics = getBoardMetrics(viewport, { compact });
+      const cellStep = metrics.cellSize + metrics.gap;
       const offsetY = absY - yOffsetCells * cellStep;
 
       // Use floating-point board coordinates for precise centering
-      const floatPos = screenToBoardFloat(absX, offsetY, boardLayout.x, boardLayout.y, compact);
+      const floatPos = screenToBoardFloat(
+        absX,
+        offsetY,
+        boardLayout.x,
+        boardLayout.y,
+        metrics,
+      );
 
-      const {r, c} = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
+      const { r, c } = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
 
       // Find nearest valid placement (magnet snap)
       const snapResult = findNearestValid(board, piece.shape, r, c);
@@ -172,7 +197,12 @@ export function useDragDrop(
           // If haven't moved enough AND current snap is still valid, keep it
           if (
             moved < STICKY_THRESHOLD &&
-            canPlacePiece(board, piece.shape, lastPreviewPos.current.row, lastPreviewPos.current.col)
+            canPlacePiece(
+              board,
+              piece.shape,
+              lastPreviewPos.current.row,
+              lastPreviewPos.current.col,
+            )
           ) {
             return;
           }
@@ -184,27 +214,37 @@ export function useDragDrop(
           lastPreviewPos.current.row === snapResult.r &&
           lastPreviewPos.current.col === snapResult.c
         ) {
-          lastRawPos.current = {r, c};
+          lastRawPos.current = { r, c };
           return;
         }
-        lastPreviewPos.current = {row: snapResult.r, col: snapResult.c};
-        lastRawPos.current = {r, c};
-        const cells = getPreviewCells(piece.shape, piece.color, snapResult.r, snapResult.c);
+        lastPreviewPos.current = { row: snapResult.r, col: snapResult.c };
+        lastRawPos.current = { r, c };
+        const cells = getPreviewCells(
+          piece.shape,
+          piece.color,
+          snapResult.r,
+          snapResult.c,
+        );
         setPreviewCells(cells);
         setInvalidPreview(false);
 
         // Predict clear lines
-        const {rows: clearRows, cols: clearCols} = predictClearLines(board, piece.shape, snapResult.r, snapResult.c);
+        const { rows: clearRows, cols: clearCols } = predictClearLines(
+          board,
+          piece.shape,
+          snapResult.r,
+          snapResult.c,
+        );
         const guide: ClearGuideCell[] = [];
         for (const row of clearRows) {
           for (let c = 0; c < COLS; c++) {
-            guide.push({row, col: c});
+            guide.push({ row, col: c });
           }
         }
         for (const col of clearCols) {
           for (let r = 0; r < ROWS; r++) {
             if (!clearRows.includes(r)) {
-              guide.push({row: r, col});
+              guide.push({ row: r, col });
             }
           }
         }
@@ -219,7 +259,16 @@ export function useDragDrop(
         }
       }
     },
-    [board, pieces, boardLayout, compact, yOffsetCells, getPieceOrigin, getPreviewCells],
+    [
+      board,
+      pieces,
+      boardLayout,
+      compact,
+      yOffsetCells,
+      viewport,
+      getPieceOrigin,
+      getPreviewCells,
+    ],
   );
 
   const onDragEnd = useCallback(
@@ -239,25 +288,43 @@ export function useDragDrop(
       if (!piece) return;
 
       // Use the sticky snap position if available and still valid
-      if (currentSnap && canPlacePiece(board, piece.shape, currentSnap.row, currentSnap.col)) {
+      if (
+        currentSnap &&
+        canPlacePiece(board, piece.shape, currentSnap.row, currentSnap.col)
+      ) {
         onPlace(index, currentSnap.row, currentSnap.col);
         return;
       }
 
-      const scale = compact ? COMPACT_SCALE : 1;
-      const cellStep = (CELL_SIZE * scale + CELL_GAP * scale);
+      const metrics = getBoardMetrics(viewport, { compact });
+      const cellStep = metrics.cellSize + metrics.gap;
       const offsetY = absY - yOffsetCells * cellStep;
 
       // Use floating-point board coordinates for precise centering
-      const floatPos = screenToBoardFloat(absX, offsetY, boardLayout.x, boardLayout.y, compact);
-      const {r, c} = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
+      const floatPos = screenToBoardFloat(
+        absX,
+        offsetY,
+        boardLayout.x,
+        boardLayout.y,
+        metrics,
+      );
+      const { r, c } = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
 
       const snapResult = findNearestValid(board, piece.shape, r, c);
       if (snapResult) {
         onPlace(index, snapResult.r, snapResult.c);
       }
     },
-    [board, pieces, boardLayout, compact, yOffsetCells, getPieceOrigin, onPlace],
+    [
+      board,
+      pieces,
+      boardLayout,
+      compact,
+      yOffsetCells,
+      viewport,
+      getPieceOrigin,
+      onPlace,
+    ],
   );
 
   const onDragCancel = useCallback((_index: number) => {

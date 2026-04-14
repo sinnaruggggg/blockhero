@@ -1,16 +1,34 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
-import type {Piece} from '../game/engine';
+import { StyleSheet, Text, View } from 'react-native';
+import type { Piece } from '../game/engine';
+import { getGameplayLayoutScale } from '../game/layoutScale';
+import type { VisualViewport } from '../game/visualConfig';
 
 function MiniPiece({
   piece,
   compact = false,
+  viewport,
 }: {
   piece: Piece;
   compact?: boolean;
+  viewport?: Partial<VisualViewport>;
 }) {
+  const layoutScale = getGameplayLayoutScale(viewport);
+  const boxSize = Math.max(34, Math.round((compact ? 44 : 46) * layoutScale));
+  const boxPadding = Math.max(2, Math.round((compact ? 3 : 4) * layoutScale));
+  const cellSize = Math.max(5, Math.round((compact ? 7 : 8) * layoutScale));
+
   return (
-    <View style={[styles.pieceBox, compact && styles.pieceBoxCompact]}>
+    <View
+      style={[
+        styles.pieceBox,
+        {
+          minWidth: boxSize,
+          minHeight: boxSize,
+          padding: boxPadding,
+        },
+      ]}
+    >
       {piece.shape.map((row, rowIndex) => (
         <View key={rowIndex} style={styles.row}>
           {row.map((cell, cellIndex) => (
@@ -18,9 +36,15 @@ function MiniPiece({
               key={cellIndex}
               style={[
                 styles.cell,
-                compact && styles.cellCompact,
+                {
+                  width: cellSize,
+                  height: cellSize,
+                },
                 cell === 1
-                  ? {backgroundColor: piece.color, borderColor: 'rgba(255,255,255,0.2)'}
+                  ? {
+                      backgroundColor: piece.color,
+                      borderColor: 'rgba(255,255,255,0.2)',
+                    }
                   : styles.emptyCell,
               ]}
             />
@@ -35,23 +59,55 @@ export default function NextPiecePreview({
   pieces,
   title = '다음 블록',
   variant = 'horizontal',
+  viewport,
 }: {
   pieces: Piece[];
   title?: string;
   variant?: 'horizontal' | 'side';
+  viewport?: Partial<VisualViewport>;
 }) {
   if (!pieces.length) {
     return null;
   }
 
   const compact = variant === 'side';
+  const layoutScale = getGameplayLayoutScale(viewport);
+  const sideWidth = Math.max(74, Math.round(94 * layoutScale));
+  const titleFontSize = Math.max(
+    9,
+    Math.round((compact ? 10 : 11) * layoutScale),
+  );
+  const titleMarginBottom = Math.max(
+    3,
+    Math.round((compact ? 4 : 6) * layoutScale),
+  );
+  const listGap = Math.max(4, Math.round((compact ? 6 : 8) * layoutScale));
 
   return (
-    <View style={[styles.container, compact && styles.containerSide]}>
-      <Text style={[styles.title, compact && styles.titleSide]}>{title}</Text>
-      <View style={[styles.list, compact && styles.listSide]}>
+    <View
+      style={[
+        styles.container,
+        compact && styles.containerSide,
+        compact ? { width: sideWidth } : null,
+      ]}
+    >
+      <Text
+        style={[
+          styles.title,
+          compact && styles.titleSide,
+          { fontSize: titleFontSize, marginBottom: titleMarginBottom },
+        ]}
+      >
+        {title}
+      </Text>
+      <View style={[styles.list, compact && styles.listSide, { gap: listGap }]}>
         {pieces.map(piece => (
-          <MiniPiece key={piece.id} piece={piece} compact={compact} />
+          <MiniPiece
+            key={piece.id}
+            piece={piece}
+            compact={compact}
+            viewport={viewport}
+          />
         ))}
       </View>
     </View>
@@ -104,11 +160,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 4,
   },
-  pieceBoxCompact: {
-    minWidth: 44,
-    minHeight: 44,
-    padding: 3,
-  },
   row: {
     flexDirection: 'row',
   },
@@ -118,10 +169,6 @@ const styles = StyleSheet.create({
     margin: 1,
     borderRadius: 2,
     borderWidth: 0.5,
-  },
-  cellCompact: {
-    width: 7,
-    height: 7,
   },
   emptyCell: {
     backgroundColor: 'transparent',

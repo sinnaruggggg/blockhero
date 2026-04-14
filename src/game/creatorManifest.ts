@@ -7,9 +7,18 @@ import {
   WORLDS,
   type LevelDef,
 } from '../constants';
-import {RAID_BOSSES} from '../constants/raidBosses';
-import {getLevelEnemyStats, getRaidBossAttackStats, type EnemyTier} from './battleBalance';
-import {getLevelClearRewards} from './levelProgress';
+import {
+  RAID_BOSSES,
+  getBossRaidMaxHp,
+  getNormalRaidMaxHp,
+} from '../constants/raidBosses';
+import {
+  getLevelEnemyStats,
+  getNormalRaidAttackStats,
+  getRaidBossAttackStats,
+  type EnemyTier,
+} from './battleBalance';
+import { getLevelClearRewards } from './levelProgress';
 
 export type CreatorRaidType = 'normal' | 'boss';
 export type CreatorGoalType = 'defeat_enemy';
@@ -243,7 +252,10 @@ function buildDefaultLevelEntry(level: LevelDef): {
       enemyOverrides: {},
       reward: {
         repeatGold: repeatReward.gold,
-        firstClearBonusGold: Math.max(0, firstClearReward.gold - repeatReward.gold),
+        firstClearBonusGold: Math.max(
+          0,
+          firstClearReward.gold - repeatReward.gold,
+        ),
         characterExp: firstClearReward.xp,
       },
       unlocksBossRaidStage: stageNumberInWorld === 30 ? level.world : undefined,
@@ -253,24 +265,29 @@ function buildDefaultLevelEntry(level: LevelDef): {
   };
 }
 
-function buildDefaultRaidEntry(raidType: CreatorRaidType, stage: number): {
+function buildDefaultRaidEntry(
+  raidType: CreatorRaidType,
+  stage: number,
+): {
   config: CreatorRaidConfig;
   encounter: CreatorEncounterTemplate;
 } {
-  const raidBoss = RAID_BOSSES.find(entry => entry.stage === stage) ?? RAID_BOSSES[0];
+  const raidBoss =
+    RAID_BOSSES.find(entry => entry.stage === stage) ?? RAID_BOSSES[0];
   const reward =
     NORMAL_RAID_REWARDS.find(entry => entry.stage === stage) ??
     NORMAL_RAID_REWARDS[NORMAL_RAID_REWARDS.length - 1];
-  const attackStats = getRaidBossAttackStats(stage);
+  const attackStats =
+    raidType === 'normal'
+      ? getNormalRaidAttackStats(stage)
+      : getRaidBossAttackStats(stage);
   const encounterId =
     raidType === 'normal'
       ? buildNormalRaidEncounterId(stage)
       : buildBossRaidEncounterId(stage);
   const worldId = raidType === 'boss' ? Math.min(stage, WORLDS.length) : null;
   const defaultTimeLimitMs =
-    raidType === 'normal'
-      ? 15 * 60 * 1000
-      : BOSS_RAID_WINDOW_MS;
+    raidType === 'normal' ? 15 * 60 * 1000 : BOSS_RAID_WINDOW_MS;
 
   const encounter: CreatorEncounterTemplate = {
     id: encounterId,
@@ -280,7 +297,10 @@ function buildDefaultRaidEntry(raidType: CreatorRaidType, stage: number): {
     monsterName: raidBoss.nameKey,
     monsterEmoji: raidBoss.emoji,
     monsterColor: raidBoss.color,
-    baseHp: raidBoss.maxHp,
+    baseHp:
+      raidType === 'normal'
+        ? getNormalRaidMaxHp(stage)
+        : getBossRaidMaxHp(stage),
     baseAttack: attackStats.attack,
     attackIntervalMs: attackStats.attackIntervalMs,
     attackPattern: 'basic_auto',
@@ -391,23 +411,30 @@ function sanitizeEncounterTemplate(
     id: fallback.id,
     kind: fallback.kind,
     displayName:
-      typeof merged.displayName === 'string' && merged.displayName.trim().length > 0
+      typeof merged.displayName === 'string' &&
+      merged.displayName.trim().length > 0
         ? merged.displayName.trim()
         : fallback.displayName,
     monsterName:
-      typeof merged.monsterName === 'string' && merged.monsterName.trim().length > 0
+      typeof merged.monsterName === 'string' &&
+      merged.monsterName.trim().length > 0
         ? merged.monsterName.trim()
         : fallback.monsterName,
     monsterEmoji:
-      typeof merged.monsterEmoji === 'string' && merged.monsterEmoji.trim().length > 0
+      typeof merged.monsterEmoji === 'string' &&
+      merged.monsterEmoji.trim().length > 0
         ? merged.monsterEmoji.trim()
         : fallback.monsterEmoji,
     monsterColor:
-      typeof merged.monsterColor === 'string' && merged.monsterColor.trim().length > 0
+      typeof merged.monsterColor === 'string' &&
+      merged.monsterColor.trim().length > 0
         ? merged.monsterColor.trim()
         : fallback.monsterColor,
     baseHp: Math.max(1, Math.round(Number(merged.baseHp) || fallback.baseHp)),
-    baseAttack: Math.max(1, Math.round(Number(merged.baseAttack) || fallback.baseAttack)),
+    baseAttack: Math.max(
+      1,
+      Math.round(Number(merged.baseAttack) || fallback.baseAttack),
+    ),
     attackIntervalMs: Math.max(
       500,
       Math.round(Number(merged.attackIntervalMs) || fallback.attackIntervalMs),
@@ -424,7 +451,9 @@ function sanitizeEncounterTemplate(
         ? merged.notes.trim()
         : fallback.notes,
     tier:
-      merged.tier === 'elite' || merged.tier === 'boss' || merged.tier === 'normal'
+      merged.tier === 'elite' ||
+      merged.tier === 'boss' ||
+      merged.tier === 'normal'
         ? merged.tier
         : fallback.tier,
   };
@@ -450,13 +479,20 @@ function sanitizeEncounterOverrides(
   if (typeof value.monsterColor === 'string' && value.monsterColor.trim()) {
     next.monsterColor = value.monsterColor.trim();
   }
-  if (value.tier === 'normal' || value.tier === 'elite' || value.tier === 'boss') {
+  if (
+    value.tier === 'normal' ||
+    value.tier === 'elite' ||
+    value.tier === 'boss'
+  ) {
     next.tier = value.tier;
   }
   if (typeof value.baseHp === 'number' && Number.isFinite(value.baseHp)) {
     next.baseHp = Math.max(1, Math.round(value.baseHp));
   }
-  if (typeof value.baseAttack === 'number' && Number.isFinite(value.baseAttack)) {
+  if (
+    typeof value.baseAttack === 'number' &&
+    Number.isFinite(value.baseAttack)
+  ) {
     next.baseAttack = Math.max(1, Math.round(value.baseAttack));
   }
   if (
@@ -490,19 +526,28 @@ function sanitizeLevelConfig(
     ...merged,
     id: fallback.id,
     levelId: fallback.levelId,
-    worldId: Math.max(1, Math.round(Number(merged.worldId) || fallback.worldId)),
+    worldId: Math.max(
+      1,
+      Math.round(Number(merged.worldId) || fallback.worldId),
+    ),
     stageNumberInWorld: Math.max(
       1,
-      Math.round(Number(merged.stageNumberInWorld) || fallback.stageNumberInWorld),
+      Math.round(
+        Number(merged.stageNumberInWorld) || fallback.stageNumberInWorld,
+      ),
     ),
     name:
       typeof merged.name === 'string' && merged.name.trim().length > 0
         ? merged.name.trim()
         : fallback.name,
     goalType: 'defeat_enemy',
-    goalValue: Math.max(1, Math.round(Number(merged.goalValue) || fallback.goalValue)),
+    goalValue: Math.max(
+      1,
+      Math.round(Number(merged.goalValue) || fallback.goalValue),
+    ),
     enemyTemplateId:
-      typeof merged.enemyTemplateId === 'string' && merged.enemyTemplateId.trim().length > 0
+      typeof merged.enemyTemplateId === 'string' &&
+      merged.enemyTemplateId.trim().length > 0
         ? merged.enemyTemplateId.trim()
         : fallback.enemyTemplateId,
     enemyOverrides: sanitizeEncounterOverrides(merged.enemyOverrides),
@@ -562,7 +607,8 @@ function sanitizeRaidConfig(
         : Math.max(
             1,
             Math.round(
-              Number(merged.worldId) || (fallback.worldId === null ? 1 : fallback.worldId),
+              Number(merged.worldId) ||
+                (fallback.worldId === null ? 1 : fallback.worldId),
             ),
           ),
     name:
@@ -601,7 +647,9 @@ function sanitizeRaidConfig(
     ),
     joinWindowMinutes: Math.max(
       1,
-      Math.round(Number(merged.joinWindowMinutes) || fallback.joinWindowMinutes),
+      Math.round(
+        Number(merged.joinWindowMinutes) || fallback.joinWindowMinutes,
+      ),
     ),
     maxParticipants: Math.max(
       1,
@@ -632,7 +680,8 @@ export function sanitizeCreatorManifest(
     encounters: {},
     meta: {
       generatedAt:
-        typeof value.meta?.generatedAt === 'string' && value.meta.generatedAt.length > 0
+        typeof value.meta?.generatedAt === 'string' &&
+        value.meta.generatedAt.length > 0
           ? value.meta.generatedAt
           : fallback.meta.generatedAt,
       seededFromCode:
@@ -640,7 +689,8 @@ export function sanitizeCreatorManifest(
           ? value.meta.seededFromCode
           : fallback.meta.seededFromCode,
       notes:
-        typeof value.meta?.notes === 'string' && value.meta.notes.trim().length > 0
+        typeof value.meta?.notes === 'string' &&
+        value.meta.notes.trim().length > 0
           ? value.meta.notes.trim()
           : fallback.meta.notes,
     },
@@ -658,7 +708,10 @@ export function sanitizeCreatorManifest(
   });
 
   Object.entries(fallback.raids.normal).forEach(([key, config]) => {
-    next.raids.normal[key] = sanitizeRaidConfig(config, value.raids?.normal?.[key]);
+    next.raids.normal[key] = sanitizeRaidConfig(
+      config,
+      value.raids?.normal?.[key],
+    );
   });
 
   Object.entries(fallback.raids.boss).forEach(([key, config]) => {
@@ -669,11 +722,18 @@ export function sanitizeCreatorManifest(
 }
 
 export function listCreatorLevels(manifest: CreatorManifest) {
-  return Object.values(manifest.levels).sort((left, right) => left.levelId - right.levelId);
+  return Object.values(manifest.levels).sort(
+    (left, right) => left.levelId - right.levelId,
+  );
 }
 
-export function listCreatorRaids(manifest: CreatorManifest, raidType: CreatorRaidType) {
-  return Object.values(manifest.raids[raidType]).sort((left, right) => left.stage - right.stage);
+export function listCreatorRaids(
+  manifest: CreatorManifest,
+  raidType: CreatorRaidType,
+) {
+  return Object.values(manifest.raids[raidType]).sort(
+    (left, right) => left.stage - right.stage,
+  );
 }
 
 export function listCreatorEncounters(manifest: CreatorManifest) {
@@ -682,7 +742,10 @@ export function listCreatorEncounters(manifest: CreatorManifest) {
   );
 }
 
-export function getCreatorLevelConfig(manifest: CreatorManifest, levelId: number) {
+export function getCreatorLevelConfig(
+  manifest: CreatorManifest,
+  levelId: number,
+) {
   return manifest.levels[String(levelId)] ?? null;
 }
 
@@ -729,7 +792,10 @@ export function resolveCreatorLevelRuntime(
     return null;
   }
 
-  const resolvedEncounter = applyEncounterOverrides(encounter, config.enemyOverrides);
+  const resolvedEncounter = applyEncounterOverrides(
+    encounter,
+    config.enemyOverrides,
+  );
   return {
     config,
     encounter: resolvedEncounter,

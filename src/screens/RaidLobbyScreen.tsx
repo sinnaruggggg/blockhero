@@ -14,6 +14,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GameBottomNav, {
@@ -30,7 +31,11 @@ import {
   loadCharacterData,
 } from '../stores/gameStore';
 import { t } from '../i18n';
-import { RAID_BOSSES } from '../constants/raidBosses';
+import {
+  RAID_BOSSES,
+  getBossRaidMaxHp,
+  getNormalRaidMaxHp,
+} from '../constants/raidBosses';
 import { getRaidBossSprite } from '../assets/monsterSprites';
 import {
   BOSS_RAID_MAX_PLAYERS,
@@ -66,6 +71,7 @@ import FriendInviteModal, {
   type InviteCandidate,
 } from '../components/FriendInviteModal';
 import LobbyChatPanel from '../components/LobbyChatPanel';
+import MenuFloatingBlocks from '../components/MenuFloatingBlocks';
 import {
   formatBossRaidCountdownLabel,
   getBossRaidWindowInfo,
@@ -119,6 +125,7 @@ interface LoadSummary {
 
 const QUERY_TIMEOUT_MS = 10000;
 const PARTIAL_LOAD_DETAIL = '일반 레이드는 계속 플레이할 수 있습니다.';
+const IMG_BG = require('../assets/ui/lobby_bg.jpg');
 const SOCIAL_LOAD_LABELS = new Set([
   'friendIds',
   'friends',
@@ -378,7 +385,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           name: raidDisplay?.name ?? raid.name,
           color: raidDisplay?.monsterColor ?? '#22c55e',
           emoji: raidDisplay?.monsterEmoji ?? '⚔',
-          maxHp: raidDisplay?.maxHp ?? 0,
+          maxHp: raidDisplay?.maxHp ?? getNormalRaidMaxHp(raid.stage),
           reward: raid.reward,
         };
       });
@@ -393,7 +400,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         name: t(boss.nameKey),
         color: boss.color,
         emoji: boss.emoji,
-        maxHp: boss.maxHp,
+        maxHp: getNormalRaidMaxHp(boss.stage),
         reward: {
           firstClearDiamondReward: reward.firstDia,
           repeatDiamondReward: reward.perKill,
@@ -414,7 +421,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
           name: raidDisplay?.name ?? raid.name,
           color: raidDisplay?.monsterColor ?? '#ef4444',
           emoji: raidDisplay?.monsterEmoji ?? '⚔',
-          maxHp: raidDisplay?.maxHp ?? 0,
+          maxHp:
+            (resolveCreatorRaidRuntime(creatorManifest, 'normal', raid.stage)
+              ?.maxHp ?? getNormalRaidMaxHp(raid.stage)) * 20,
         };
       });
     }
@@ -424,7 +433,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       name: t(boss.nameKey),
       color: boss.color,
       emoji: boss.emoji,
-      maxHp: boss.maxHp,
+      maxHp: getBossRaidMaxHp(boss.stage),
     }));
   }, [creatorBossRaids, creatorManifest]);
 
@@ -432,6 +441,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const nicknameRef = useRef('');
   const partyChannelRef = useRef<any>(null);
   const inviteChannelRef = useRef<any>(null);
+  const socialChannelRef = useRef<any>(null);
   const mountedRef = useRef(true);
   const loadRequestRef = useRef(0);
   const loadDataRef = useRef<() => Promise<void>>(async () => {});
@@ -451,13 +461,20 @@ export default function RaidLobbyScreen({ navigation }: any) {
         raidType,
         stage,
       );
+      const creatorNormalRaid = resolveCreatorRaidRuntime(
+        creatorManifest,
+        'normal',
+        stage,
+      );
       const staticBoss =
         RAID_BOSSES.find(entry => entry.stage === stage) ?? RAID_BOSSES[0];
+      const normalRaidMaxHp =
+        creatorNormalRaid?.maxHp ?? getNormalRaidMaxHp(stage);
       return {
         name: creatorRaid?.name ?? t(staticBoss.nameKey),
         color: creatorRaid?.monsterColor ?? staticBoss.color,
         emoji: creatorRaid?.monsterEmoji ?? staticBoss.emoji,
-        maxHp: creatorRaid?.maxHp ?? staticBoss.maxHp,
+        maxHp: raidType === 'normal' ? normalRaidMaxHp : normalRaidMaxHp * 20,
         timeLimitMs:
           creatorRaid?.timeLimitMs ??
           (raidType === 'normal' ? 15 * 60 * 1000 : BOSS_RAID_WINDOW_MS),
@@ -488,10 +505,18 @@ export default function RaidLobbyScreen({ navigation }: any) {
     }
   }, []);
 
+  const cleanupSocialChannel = useCallback(() => {
+    if (socialChannelRef.current) {
+      supabase.removeChannel(socialChannelRef.current);
+      socialChannelRef.current = null;
+    }
+  }, []);
+
   const cleanup = useCallback(() => {
     cleanupPartyChannel();
     cleanupInviteChannel();
-  }, [cleanupInviteChannel, cleanupPartyChannel]);
+    cleanupSocialChannel();
+  }, [cleanupInviteChannel, cleanupPartyChannel, cleanupSocialChannel]);
 
   const setupPartyChannel = useCallback(
     (nextPartyId: string) => {
@@ -772,6 +797,42 @@ export default function RaidLobbyScreen({ navigation }: any) {
       cleanupInviteChannel();
     };
   }, [chatPlayerId, cleanupInviteChannel]);
+
+  useEffect(() => {
+    cleanupSocialChannel();
+
+    if (!chatPlayerId) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`raid-lobby-social:${chatPlayerId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_presence' },
+        () => {
+          void loadDataRef.current();
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'friends' },
+        () => {
+          void loadDataRef.current();
+        },
+      )
+      .subscribe(status => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('RaidLobbyScreen social channel error:', chatPlayerId);
+        }
+      });
+
+    socialChannelRef.current = channel;
+
+    return () => {
+      cleanupSocialChannel();
+    };
+  }, [chatPlayerId, cleanupSocialChannel]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick(previous => previous + 1), 1000);
@@ -1167,49 +1228,57 @@ export default function RaidLobbyScreen({ navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerSpacer} />
-        <Text style={styles.title}>레이드</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Friends')}>
-          <Text style={styles.friendsBtn}>친구</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      <Image source={IMG_BG} style={styles.bgImage} resizeMode="cover" />
+      <MenuFloatingBlocks />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <View style={styles.headerSpacer} />
+          <Text style={styles.title}>레이드</Text>
+          <TouchableOpacity
+            style={styles.friendsBtnWrap}
+            onPress={() => navigation.navigate('Friends')}
+          >
+            <Text style={styles.friendsBtn}>친구</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.modeTabs}>
-        <TouchableOpacity
-          style={[
-            styles.modeTab,
-            raidMode === 'normal' && styles.modeTabActive,
-          ]}
-          onPress={() => setRaidMode('normal')}
-        >
-          <Text
+        <View style={styles.modeTabs}>
+          <TouchableOpacity
             style={[
-              styles.modeTabText,
-              raidMode === 'normal' && styles.modeTabTextActive,
+              styles.modeTab,
+              raidMode === 'normal' && styles.modeTabActive,
             ]}
+            onPress={() => setRaidMode('normal')}
           >
-            일반 레이드
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeTab, raidMode === 'boss' && styles.modeTabActive]}
-          onPress={() => setRaidMode('boss')}
+            <Text
+              style={[
+                styles.modeTabText,
+                raidMode === 'normal' && styles.modeTabTextActive,
+              ]}
+            >
+              일반 레이드
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeTab, raidMode === 'boss' && styles.modeTabActive]}
+            onPress={() => setRaidMode('boss')}
+          >
+            <Text
+              style={[
+                styles.modeTabText,
+                raidMode === 'boss' && styles.modeTabTextActive,
+              ]}
+            >
+              보스 레이드
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
         >
-          <Text
-            style={[
-              styles.modeTabText,
-              raidMode === 'boss' && styles.modeTabTextActive,
-            ]}
-          >
-            보스 레이드
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}>
         {loadSummary && (
           <View
             style={styles.loadErrorCard}
@@ -1528,96 +1597,127 @@ export default function RaidLobbyScreen({ navigation }: any) {
             setShowInviteModal(true);
           }}
         />
-      </ScrollView>
+        </ScrollView>
 
-      <GameBottomNav
-        navigation={navigation}
-        activeItem={null}
-        onHomePress={cleanup}
-      />
-
-      <FriendInviteModal
-        visible={showInviteModal}
-        friends={inviteableFriends}
-        searchQuery={inviteSearchQuery}
-        searchResults={inviteSearchResults}
-        searching={inviteSearching}
-        onChangeSearchQuery={setInviteSearchQuery}
-        onSearch={handleSearchInviteTargets}
-        onInvite={playerId => {
-          const candidate =
-            inviteableFriends.find(friend => friend.id === playerId) ||
-            inviteSearchResults.find(friend => friend.id === playerId);
-          void handleInvitePlayer(playerId, candidate?.nickname);
-        }}
-        onClose={resetInviteModal}
-      />
-
-      {!loading && chatPlayerId ? (
-        <LobbyChatPanel
-          title="레이드 모집 채팅"
-          accentColor={raidMode === 'boss' ? '#ef4444' : '#22c55e'}
-          isOpen={lobbyChat.isOpen}
-          connected={lobbyChat.connected}
-          currentChannelId={lobbyChat.currentChannelId}
-          currentOccupancy={lobbyChat.currentOccupancy}
-          capacity={lobbyChat.capacity}
-          channelOptions={lobbyChat.channelOptions}
-          draft={lobbyChat.draft}
-          messages={lobbyChat.messages}
-          onToggle={lobbyChat.toggleOpen}
-          onChangeDraft={lobbyChat.setDraft}
-          onSend={lobbyChat.sendMessage}
-          onSwitchChannel={(channelId: number) => {
-            lobbyChat.switchChannel(channelId).catch(error => {
-              console.warn('RaidLobbyScreen switchChannel error:', error);
-            });
-          }}
-          onRandomizeChannel={() => {
-            lobbyChat.joinRandomChannel().catch(error => {
-              console.warn('RaidLobbyScreen joinRandomChannel error:', error);
-            });
-          }}
-          onPressUser={handleInviteFromChat}
-          bottom={GAME_BOTTOM_NAV_CHAT_OFFSET}
+        <GameBottomNav
+          navigation={navigation}
+          activeItem={null}
+          onHomePress={cleanup}
         />
-      ) : null}
-    </SafeAreaView>
+
+        <FriendInviteModal
+          visible={showInviteModal}
+          friends={inviteableFriends}
+          searchQuery={inviteSearchQuery}
+          searchResults={inviteSearchResults}
+          searching={inviteSearching}
+          onChangeSearchQuery={setInviteSearchQuery}
+          onSearch={handleSearchInviteTargets}
+          onInvite={playerId => {
+            const candidate =
+              inviteableFriends.find(friend => friend.id === playerId) ||
+              inviteSearchResults.find(friend => friend.id === playerId);
+            void handleInvitePlayer(playerId, candidate?.nickname);
+          }}
+          onClose={resetInviteModal}
+        />
+
+        {!loading && chatPlayerId ? (
+          <LobbyChatPanel
+            title="레이드 모집 채팅"
+            accentColor={raidMode === 'boss' ? '#ef4444' : '#22c55e'}
+            isOpen={lobbyChat.isOpen}
+            connected={lobbyChat.connected}
+            currentChannelId={lobbyChat.currentChannelId}
+            currentOccupancy={lobbyChat.currentOccupancy}
+            capacity={lobbyChat.capacity}
+            channelOptions={lobbyChat.channelOptions}
+            draft={lobbyChat.draft}
+            messages={lobbyChat.messages}
+            onToggle={lobbyChat.toggleOpen}
+            onChangeDraft={lobbyChat.setDraft}
+            onSend={lobbyChat.sendMessage}
+            onSwitchChannel={(channelId: number) => {
+              lobbyChat.switchChannel(channelId).catch(error => {
+                console.warn('RaidLobbyScreen switchChannel error:', error);
+              });
+            }}
+            onRandomizeChannel={() => {
+              lobbyChat.joinRandomChannel().catch(error => {
+                console.warn('RaidLobbyScreen joinRandomChannel error:', error);
+              });
+            }}
+            onPressUser={handleInviteFromChat}
+            bottom={GAME_BOTTOM_NAV_CHAT_OFFSET}
+          />
+        ) : null}
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a1e' },
+  bgImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  safeArea: {
+    flex: 1,
+  },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
-  headerSpacer: { width: 58 },
-  title: { color: '#e2e8f0', fontSize: 18, fontWeight: '800' },
-  friendsBtn: { color: '#22c55e', fontSize: 13, fontWeight: '700' },
+  headerSpacer: {
+    width: 58,
+  },
+  title: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: '900',
+    textShadowColor: 'rgba(0,0,0,0.75)',
+    textShadowOffset: { width: 0, height: 3 },
+    textShadowRadius: 10,
+  },
+  friendsBtnWrap: {
+    minWidth: 58,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+    backgroundColor: 'rgba(196, 164, 255, 0.24)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+  },
+  friendsBtn: { color: '#f4f0ff', fontSize: 12, fontWeight: '800' },
   modeTabs: {
     flexDirection: 'row',
     marginHorizontal: 14,
     marginBottom: 10,
-    backgroundColor: '#1e1b4b',
-    borderRadius: 10,
-    padding: 3,
+    backgroundColor: 'rgba(54, 39, 108, 0.7)',
+    borderRadius: 14,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   modeTab: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 11,
   },
-  modeTabActive: { backgroundColor: '#dc2626' },
-  modeTabText: { color: '#94a3b8', fontSize: 13, fontWeight: '700' },
+  modeTabActive: { backgroundColor: 'rgba(128, 88, 255, 0.9)' },
+  modeTabText: { color: '#d3c9ff', fontSize: 13, fontWeight: '700' },
   modeTabTextActive: { color: '#fff' },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 28, paddingHorizontal: 14 },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: { paddingBottom: 20, paddingHorizontal: 14 },
   loadErrorCard: {
     backgroundColor: 'rgba(127,29,29,0.35)',
     borderRadius: 12,
@@ -1671,7 +1771,7 @@ const styles = StyleSheet.create({
   normalRaidCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e1b4b',
+    backgroundColor: 'rgba(66, 46, 135, 0.68)',
     borderRadius: 12,
     borderWidth: 1.5,
     paddingHorizontal: 12,
@@ -1703,11 +1803,11 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   bossRaidScheduleCard: {
-    backgroundColor: '#1e1b4b',
+    backgroundColor: 'rgba(66, 46, 135, 0.72)',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: '#dc2626',
+    borderColor: 'rgba(255, 139, 111, 0.9)',
     alignItems: 'center',
     marginBottom: 10,
   },
@@ -1725,7 +1825,7 @@ const styles = StyleSheet.create({
   },
   bossRaidTimer: {
     marginTop: 12,
-    backgroundColor: '#0a0a1e',
+    backgroundColor: 'rgba(18, 11, 48, 0.7)',
     borderRadius: 8,
     paddingHorizontal: 20,
     paddingVertical: 8,
@@ -1749,7 +1849,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#1e1b4b',
+    backgroundColor: 'rgba(66, 46, 135, 0.68)',
     borderRadius: 12,
     borderWidth: 1.5,
     paddingHorizontal: 12,
@@ -1768,7 +1868,7 @@ const styles = StyleSheet.create({
   bossGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   bossCard: {
     width: '47%',
-    backgroundColor: '#1e1b4b',
+    backgroundColor: 'rgba(66, 46, 135, 0.68)',
     borderRadius: 12,
     borderWidth: 1.5,
     padding: 12,
@@ -1802,10 +1902,10 @@ const styles = StyleSheet.create({
   unlocked: { color: '#22c55e' },
   locked: { color: '#f87171' },
   inviteInboxCard: {
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    backgroundColor: 'rgba(45, 34, 95, 0.82)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.35)',
+    borderColor: 'rgba(196, 164, 255, 0.32)',
     padding: 12,
     marginTop: 12,
     marginBottom: 12,
@@ -1861,7 +1961,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   partyHintCard: {
-    backgroundColor: 'rgba(30, 27, 75, 0.72)',
+    backgroundColor: 'rgba(66, 46, 135, 0.72)',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.28)',

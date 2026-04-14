@@ -6,10 +6,10 @@ import {
   INFINITE_HEARTS_VALUE,
   getConfiguredMaxHearts,
 } from '../constants';
-import {CHARACTER_CLASSES, xpToNextLevel} from '../constants/characters';
-import {t} from '../i18n';
-import {getCurrentUserId} from '../services/supabase';
-import {getAdminStatus, getCachedAdminStatus} from '../services/adminSync';
+import { CHARACTER_CLASSES, xpToNextLevel } from '../constants/characters';
+import { t } from '../i18n';
+import { getCurrentUserId } from '../services/supabase';
+import { getAdminStatus, getCachedAdminStatus } from '../services/adminSync';
 import {
   fetchPlayerState,
   loadOwnProfile,
@@ -33,6 +33,17 @@ import {
   ensureSummonProgressMap,
   type SummonProgressData,
 } from '../game/skinSummonRuntime';
+import {
+  getSpecialPieceShapeIndices,
+  SPECIAL_PIECE_UNLOCK_KEYS,
+  type SpecialPieceUnlockKey,
+} from '../constants/shopItems';
+import {
+  advanceLevelModeBreakthroughState,
+  normalizeLevelModeBreakthroughState,
+  shouldResetLevelModeBreakthroughOnChallenge,
+  type LevelModeBreakthroughState,
+} from '../game/levelModeBreakthrough';
 
 // Types
 export interface GameData {
@@ -40,6 +51,8 @@ export interface GameData {
   lastHeartTime: number;
   gold: number;
   diamonds: number;
+  unlockedSpecialPieces?: SpecialPieceUnlockKey[];
+  levelModeBreakthrough?: LevelModeBreakthroughState | null;
   items: {
     hammer: number;
     refresh: number;
@@ -82,7 +95,7 @@ export interface DailyStats {
 
 export interface MissionData {
   date: string;
-  claimed: {[missionId: string]: boolean};
+  claimed: { [missionId: string]: boolean };
 }
 
 export interface AchievementData {
@@ -95,7 +108,19 @@ const defaultGameData: GameData = {
   lastHeartTime: Date.now(),
   gold: 0,
   diamonds: 0,
-  items: {hammer: 0, refresh: 0, addTurns: 0, bomb: 0, piece_square3: 0, piece_rect: 0, piece_line5: 0, piece_num2: 0, piece_diag: 0},
+  unlockedSpecialPieces: [],
+  levelModeBreakthrough: null,
+  items: {
+    hammer: 0,
+    refresh: 0,
+    addTurns: 0,
+    bomb: 0,
+    piece_square3: 0,
+    piece_rect: 0,
+    piece_line5: 0,
+    piece_num2: 0,
+    piece_diag: 0,
+  },
 };
 
 const defaultEndlessStats: EndlessStats = {
@@ -120,6 +145,59 @@ const defaultMissionData = (): MissionData => ({
   date: new Date().toDateString(),
   claimed: {},
 });
+
+const LEGACY_SPECIAL_PIECE_ITEM_KEYS: Array<keyof GameData['items']> = [
+  'piece_square3',
+  'piece_rect',
+  'piece_line5',
+  'piece_num2',
+  'piece_diag',
+];
+
+function normalizeUnlockedSpecialPieces(
+  unlockedSpecialPieces: readonly string[] | undefined,
+): SpecialPieceUnlockKey[] {
+  const unlockSet = new Set<SpecialPieceUnlockKey>();
+  for (const key of unlockedSpecialPieces ?? []) {
+    if (SPECIAL_PIECE_UNLOCK_KEYS.includes(key as SpecialPieceUnlockKey)) {
+      unlockSet.add(key as SpecialPieceUnlockKey);
+    }
+  }
+
+  return SPECIAL_PIECE_UNLOCK_KEYS.filter(key => unlockSet.has(key));
+}
+
+export function normalizeGameDataSpecialPieceUnlocks(data: GameData): GameData {
+  const normalizedItems = {
+    ...defaultGameData.items,
+    ...(data.items ?? {}),
+  };
+  const unlockSet = new Set(
+    normalizeUnlockedSpecialPieces(data.unlockedSpecialPieces),
+  );
+
+  for (const itemKey of LEGACY_SPECIAL_PIECE_ITEM_KEYS) {
+    if ((normalizedItems[itemKey] ?? 0) > 0) {
+      unlockSet.add(itemKey as SpecialPieceUnlockKey);
+    }
+  }
+
+  const nextItems = { ...normalizedItems };
+  for (const itemKey of LEGACY_SPECIAL_PIECE_ITEM_KEYS) {
+    nextItems[itemKey] = 0;
+  }
+
+  return {
+    ...data,
+    items: nextItems,
+    levelModeBreakthrough: normalizeLevelModeBreakthroughState(
+      data.levelModeBreakthrough,
+    ),
+    unlockedSpecialPieces: SPECIAL_PIECE_UNLOCK_KEYS.filter(key =>
+      unlockSet.has(key),
+    ),
+  };
+}
 
 type PlayerStateColumn =
   | 'game_data'
@@ -189,7 +267,10 @@ async function loadLocalString(key: string): Promise<string | null> {
   }
 }
 
-async function saveLocalString(key: string, value: string | null): Promise<void> {
+async function saveLocalString(
+  key: string,
+  value: string | null,
+): Promise<void> {
   try {
     if (value === null) {
       await AsyncStorage.removeItem(key);
@@ -210,7 +291,10 @@ async function loadNicknameCache(userId: string): Promise<string | null> {
   return loadLocalString(getNicknameCacheKey(userId));
 }
 
-async function saveNicknameCache(userId: string, nickname: string | null): Promise<void> {
+async function saveNicknameCache(
+  userId: string,
+  nickname: string | null,
+): Promise<void> {
   await saveLocalString(getNicknameCacheKey(userId), nickname);
 }
 
@@ -219,8 +303,13 @@ async function buildLocalPlayerStatePatch(): Promise<
 > {
   const characterDataEntries = await Promise.all(
     CHARACTER_CLASSES.map(async characterClass => {
-      const raw = await readLocalJson<CharacterData>(`charData_${characterClass.id}`);
-      return [characterClass.id, raw ?? defaultCharacterData(characterClass.id)] as const;
+      const raw = await readLocalJson<CharacterData>(
+        `charData_${characterClass.id}`,
+      );
+      return [
+        characterClass.id,
+        raw ?? defaultCharacterData(characterClass.id),
+      ] as const;
     }),
   );
 
@@ -237,12 +326,18 @@ async function buildLocalPlayerStatePatch(): Promise<
       'endlessStats',
       defaultEndlessStats,
     ),
-    daily_stats: await loadLocalJson<DailyStats>('dailyStats', defaultDailyStats()),
+    daily_stats: await loadLocalJson<DailyStats>(
+      'dailyStats',
+      defaultDailyStats(),
+    ),
     mission_data: await loadLocalJson<MissionData>(
       'missionData',
       defaultMissionData(),
     ),
-    achievement_data: await loadLocalJson<AchievementData>('achievementData', {}),
+    achievement_data: await loadLocalJson<AchievementData>(
+      'achievementData',
+      {},
+    ),
     skin_data: await loadLocalJson<SkinData>('skinData', defaultSkinData),
     selected_character_id: selectedCharacter,
     character_data: Object.fromEntries(characterDataEntries),
@@ -425,7 +520,7 @@ async function save(key: string, value: any): Promise<void> {
         const row = peekPlayerStateCache() ?? (await ensurePlayerStateRow());
         const characterId = key.slice('charData_'.length);
         const current = hasStateValue(row?.character_data)
-          ? {...(row?.character_data as Record<string, CharacterData>)}
+          ? { ...(row?.character_data as Record<string, CharacterData>) }
           : {};
 
         current[characterId] = cloneValue(value);
@@ -433,7 +528,7 @@ async function save(key: string, value: any): Promise<void> {
         try {
           const userId = await getCurrentUserId();
           if (userId) {
-            stagePlayerStatePatch({character_data: current});
+            stagePlayerStatePatch({ character_data: current });
             schedulePlayerStateFlush(`save_${characterId}_character_data`);
             return;
           }
@@ -451,7 +546,9 @@ async function getSelectedCharacterEffects() {
   }
 
   const characterData = await loadCharacterData(characterId);
-  return getCharacterSkillEffects(characterId, characterData, {mode: 'level'});
+  return getCharacterSkillEffects(characterId, characterData, {
+    mode: 'level',
+  });
 }
 
 async function hasInfiniteHeartsAccess(): Promise<boolean> {
@@ -464,7 +561,7 @@ async function hasInfiniteHeartsAccess(): Promise<boolean> {
 
 // GameData operations
 export async function loadGameData(): Promise<GameData> {
-  const data = await load<GameData>('gameData', defaultGameData);
+  let data = await load<GameData>('gameData', defaultGameData);
   const effects = await getSelectedCharacterEffects();
   const isInfiniteHearts = await hasInfiniteHeartsAccess();
   const maxHearts = getConfiguredMaxHearts(
@@ -472,10 +569,21 @@ export async function loadGameData(): Promise<GameData> {
     isInfiniteHearts,
   );
   const heartRegenMs = getDynamicHeartRegenMs(HEART_REGEN_MS, effects);
+  let shouldSaveMigratedData = false;
   // Migration: stars → gold
   if ((data as any).stars !== undefined && (data as any).gold === undefined) {
     data.gold = (data as any).stars;
     delete (data as any).stars;
+    shouldSaveMigratedData = true;
+  }
+  const normalizedData = normalizeGameDataSpecialPieceUnlocks(data);
+  if (JSON.stringify(normalizedData) !== JSON.stringify(data)) {
+    data = normalizedData;
+    shouldSaveMigratedData = true;
+  } else {
+    data = normalizedData;
+  }
+  if (shouldSaveMigratedData) {
     await save('gameData', data);
   }
   if (isInfiniteHearts) {
@@ -505,10 +613,11 @@ export async function loadGameData(): Promise<GameData> {
 }
 
 export async function saveGameData(data: GameData): Promise<void> {
+  const normalizedData = normalizeGameDataSpecialPieceUnlocks(data);
   const isInfiniteHearts = await hasInfiniteHeartsAccess();
   if (isInfiniteHearts) {
     await save('gameData', {
-      ...data,
+      ...normalizedData,
       hearts: INFINITE_HEARTS_VALUE,
       lastHeartTime: Date.now(),
     });
@@ -520,8 +629,8 @@ export async function saveGameData(data: GameData): Promise<void> {
     false,
   );
   await save('gameData', {
-    ...data,
-    hearts: Math.min(maxHearts, Math.max(0, data.hearts)),
+    ...normalizedData,
+    hearts: Math.min(maxHearts, Math.max(0, normalizedData.hearts)),
   });
 }
 
@@ -551,15 +660,21 @@ export async function useHeart(data: GameData): Promise<GameData | null> {
   return updated;
 }
 
-export async function addGold(data: GameData, amount: number): Promise<GameData> {
-  const updated = {...data, gold: data.gold + amount};
+export async function addGold(
+  data: GameData,
+  amount: number,
+): Promise<GameData> {
+  const updated = { ...data, gold: data.gold + amount };
   await save('gameData', updated);
   return updated;
 }
 
-export async function useGold(data: GameData, amount: number): Promise<GameData | null> {
+export async function useGold(
+  data: GameData,
+  amount: number,
+): Promise<GameData | null> {
   if (data.gold < amount) return null;
-  const updated = {...data, gold: data.gold - amount};
+  const updated = { ...data, gold: data.gold - amount };
   await save('gameData', updated);
   return updated;
 }
@@ -579,7 +694,7 @@ export async function addItem(
   }
   const updated = {
     ...data,
-    items: {...data.items, [item]: nextCount},
+    items: { ...data.items, [item]: nextCount },
   };
   await save('gameData', updated);
   return updated;
@@ -608,7 +723,7 @@ export async function collectSpecialBlockRewards(
   const updated: GameData = {
     ...data,
     diamonds: data.diamonds + gemsFound,
-    items: {...data.items},
+    items: { ...data.items },
   };
   const itemsCollected: Array<keyof GameData['items']> = [];
   const itemsSkipped: Array<keyof GameData['items']> = [];
@@ -648,7 +763,7 @@ export async function useItem(
   }
   const updated = {
     ...data,
-    items: {...data.items, [item]: data.items[item] - 1},
+    items: { ...data.items, [item]: data.items[item] - 1 },
   };
   await save('gameData', updated);
   return updated;
@@ -661,7 +776,7 @@ export async function refillHearts(data: GameData): Promise<GameData> {
     getDynamicHeartCap(MAX_HEARTS, effects),
     isInfiniteHearts,
   );
-  const updated = {...data, hearts: maxHearts, lastHeartTime: Date.now()};
+  const updated = { ...data, hearts: maxHearts, lastHeartTime: Date.now() };
   await save('gameData', updated);
   return updated;
 }
@@ -748,7 +863,7 @@ export async function loadMissionData(): Promise<MissionData> {
     claimed: {},
   });
   if (data.date !== new Date().toDateString()) {
-    const fresh = {date: new Date().toDateString(), claimed: {}};
+    const fresh = { date: new Date().toDateString(), claimed: {} };
     await save('missionData', fresh);
     return fresh;
   }
@@ -761,7 +876,7 @@ export async function claimMission(
 ): Promise<MissionData> {
   const updated = {
     ...data,
-    claimed: {...data.claimed, [missionId]: true},
+    claimed: { ...data.claimed, [missionId]: true },
   };
   await save('missionData', updated);
   return updated;
@@ -776,7 +891,7 @@ export async function claimAchievement(
   data: AchievementData,
   achievementId: string,
 ): Promise<AchievementData> {
-  const updated = {...data, [achievementId]: true};
+  const updated = { ...data, [achievementId]: true };
   await save('achievementData', updated);
   return updated;
 }
@@ -789,7 +904,10 @@ export async function getPlayerId(): Promise<string> {
   } catch {}
   let id = await AsyncStorage.getItem('playerId');
   if (!id) {
-    id = 'player_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    id =
+      'player_' +
+      Math.random().toString(36).substring(2, 10) +
+      Date.now().toString(36);
     await AsyncStorage.setItem('playerId', id);
   }
   return id;
@@ -820,7 +938,7 @@ export async function getNickname(): Promise<string> {
 export async function setNickname(name: string): Promise<void> {
   try {
     const userId = await getCurrentUserId();
-    const updated = await updateOwnProfile({nickname: name});
+    const updated = await updateOwnProfile({ nickname: name });
     if (updated) {
       if (userId) {
         await saveNicknameCache(userId, name);
@@ -831,15 +949,118 @@ export async function setNickname(name: string): Promise<void> {
 }
 
 // Diamond operations
-export async function addDiamonds(data: GameData, amount: number): Promise<GameData> {
-  const updated = {...data, diamonds: data.diamonds + amount};
+export async function addDiamonds(
+  data: GameData,
+  amount: number,
+): Promise<GameData> {
+  const updated = { ...data, diamonds: data.diamonds + amount };
   await save('gameData', updated);
   return updated;
 }
 
-export async function useDiamonds(data: GameData, amount: number): Promise<GameData | null> {
+export async function useDiamonds(
+  data: GameData,
+  amount: number,
+): Promise<GameData | null> {
   if (data.diamonds < amount) return null;
-  const updated = {...data, diamonds: data.diamonds - amount};
+  const updated = { ...data, diamonds: data.diamonds - amount };
+  await save('gameData', updated);
+  return updated;
+}
+
+export function getLevelModeBreakthroughState(
+  data: GameData | null | undefined,
+): LevelModeBreakthroughState | null {
+  return normalizeLevelModeBreakthroughState(data?.levelModeBreakthrough);
+}
+
+export async function clearLevelModeBreakthroughIfChallengeBroken(
+  data: GameData,
+  levelId: number,
+): Promise<GameData> {
+  const currentState = getLevelModeBreakthroughState(data);
+  if (!shouldResetLevelModeBreakthroughOnChallenge(currentState, levelId)) {
+    return data;
+  }
+
+  const updated: GameData = {
+    ...normalizeGameDataSpecialPieceUnlocks(data),
+    levelModeBreakthrough: null,
+  };
+  await save('gameData', updated);
+  return updated;
+}
+
+export async function recordLevelModeBreakthroughSuccess(
+  data: GameData,
+  levelId: number,
+  totalLevels: number,
+): Promise<GameData> {
+  const updated: GameData = {
+    ...normalizeGameDataSpecialPieceUnlocks(data),
+    levelModeBreakthrough: advanceLevelModeBreakthroughState(
+      getLevelModeBreakthroughState(data),
+      levelId,
+      totalLevels,
+    ),
+  };
+  await save('gameData', updated);
+  return updated;
+}
+
+export async function resetLevelModeBreakthrough(
+  data: GameData,
+): Promise<GameData> {
+  if (!getLevelModeBreakthroughState(data)) {
+    return data;
+  }
+
+  const updated: GameData = {
+    ...normalizeGameDataSpecialPieceUnlocks(data),
+    levelModeBreakthrough: null,
+  };
+  await save('gameData', updated);
+  return updated;
+}
+
+export function isSpecialPieceUnlocked(
+  data: GameData | null | undefined,
+  key: SpecialPieceUnlockKey,
+): boolean {
+  if (!data) {
+    return false;
+  }
+
+  return normalizeUnlockedSpecialPieces(data.unlockedSpecialPieces).includes(
+    key,
+  );
+}
+
+export function getUnlockedSpecialPieceShapeIndices(
+  data: GameData | null | undefined,
+): number[] {
+  return getSpecialPieceShapeIndices(
+    normalizeUnlockedSpecialPieces(data?.unlockedSpecialPieces),
+  );
+}
+
+export async function unlockSpecialPiece(
+  data: GameData,
+  key: SpecialPieceUnlockKey,
+): Promise<GameData> {
+  const normalized = normalizeGameDataSpecialPieceUnlocks(data);
+  if (
+    normalizeUnlockedSpecialPieces(normalized.unlockedSpecialPieces).includes(
+      key,
+    )
+  ) {
+    return normalized;
+  }
+
+  const updated: GameData = {
+    ...normalized,
+    unlockedSpecialPieces: [...(normalized.unlockedSpecialPieces ?? []), key],
+  };
   await save('gameData', updated);
   return updated;
 }
@@ -859,11 +1080,14 @@ const defaultSkinData: SkinData = {
 
 export async function loadSkinData(): Promise<SkinData> {
   const data = await load<SkinData>('skinData', defaultSkinData);
-  const unlockedSkins = Array.isArray(data.unlockedSkins) && data.unlockedSkins.length > 0
-    ? Array.from(new Set(data.unlockedSkins)).sort((a, b) => a - b)
-    : [0];
+  const unlockedSkins =
+    Array.isArray(data.unlockedSkins) && data.unlockedSkins.length > 0
+      ? Array.from(new Set(data.unlockedSkins)).sort((a, b) => a - b)
+      : [0];
 
-  const activeSkinId = unlockedSkins.includes(data.activeSkinId) ? data.activeSkinId : 0;
+  const activeSkinId = unlockedSkins.includes(data.activeSkinId)
+    ? data.activeSkinId
+    : 0;
   const summonProgress = ensureSummonProgressMap(data.summonProgress);
 
   if (
@@ -964,7 +1188,9 @@ export async function updateLocalCodex(
       defeatCount: existing.defeatCount + 1,
       bestDamage: Math.max(existing.bestDamage, damage),
       fastestClearMs: clearTimeMs
-        ? (existing.fastestClearMs ? Math.min(existing.fastestClearMs, clearTimeMs) : clearTimeMs)
+        ? existing.fastestClearMs
+          ? Math.min(existing.fastestClearMs, clearTimeMs)
+          : clearTimeMs
         : existing.fastestClearMs,
       firstDefeatedAt: existing.firstDefeatedAt,
     };
@@ -993,7 +1219,7 @@ export async function loadActiveTitle(): Promise<string | null> {
   try {
     const profile = await loadOwnProfile();
     if (profile && 'title' in profile) {
-      return (profile as {title?: string | null}).title ?? null;
+      return (profile as { title?: string | null }).title ?? null;
     }
   } catch {}
 
@@ -1004,7 +1230,7 @@ export async function saveActiveTitle(title: string | null): Promise<void> {
   await save('activeTitle', title);
 
   try {
-    await updateOwnProfile({title});
+    await updateOwnProfile({ title });
   } catch {}
 }
 
@@ -1046,9 +1272,9 @@ export interface CharacterData {
   characterId: string;
   level: number;
   xp: number;
-  skillPoints: number;           // unspent skill points
+  skillPoints: number; // unspent skill points
   personalAllocations: number[]; // [5, 5, 3, 0, ...] length 10
-  partyAllocations: number[];    // length 10
+  partyAllocations: number[]; // length 10
 }
 
 function defaultCharacterData(characterId: string): CharacterData {
@@ -1062,9 +1288,14 @@ function defaultCharacterData(characterId: string): CharacterData {
   };
 }
 
-export async function loadCharacterData(characterId: string): Promise<CharacterData> {
+export async function loadCharacterData(
+  characterId: string,
+): Promise<CharacterData> {
   const key = `charData_${characterId}`;
-  const data = await load<CharacterData>(key, defaultCharacterData(characterId));
+  const data = await load<CharacterData>(
+    key,
+    defaultCharacterData(characterId),
+  );
   // Ensure arrays have correct length (migration safety)
   if (!data.personalAllocations || data.personalAllocations.length < 10) {
     data.personalAllocations = Array(10).fill(0);
@@ -1084,7 +1315,12 @@ export async function addCharacterXP(
   data: CharacterData,
   xpAmount: number,
 ): Promise<CharacterData> {
-  let d = {...data, xp: data.xp + xpAmount, personalAllocations: [...data.personalAllocations], partyAllocations: [...data.partyAllocations]};
+  let d = {
+    ...data,
+    xp: data.xp + xpAmount,
+    personalAllocations: [...data.personalAllocations],
+    partyAllocations: [...data.partyAllocations],
+  };
   // Level up loop
   let required = xpToNextLevel(d.level);
   while (d.xp >= required) {
@@ -1104,7 +1340,10 @@ export async function allocateSkillPoint(
   skillIndex: number,
 ): Promise<CharacterData | null> {
   if (data.skillPoints <= 0) return null;
-  const alloc = category === 'personal' ? [...data.personalAllocations] : [...data.partyAllocations];
+  const alloc =
+    category === 'personal'
+      ? [...data.personalAllocations]
+      : [...data.partyAllocations];
   // Unlock check: first skill always available; others require previous skill ≥ 5
   if (skillIndex > 0 && (alloc[skillIndex - 1] ?? 0) < 5) return null;
   // Max 5 points per skill
@@ -1113,7 +1352,8 @@ export async function allocateSkillPoint(
   const updated: CharacterData = {
     ...data,
     skillPoints: data.skillPoints - 1,
-    personalAllocations: category === 'personal' ? alloc : [...data.personalAllocations],
+    personalAllocations:
+      category === 'personal' ? alloc : [...data.personalAllocations],
     partyAllocations: category === 'party' ? alloc : [...data.partyAllocations],
   };
   await saveCharacterData(updated);
@@ -1133,7 +1373,9 @@ export async function loadNormalRaidProgress(): Promise<NormalRaidProgress> {
   return load<NormalRaidProgress>('normalRaidProgress', {});
 }
 
-export async function saveNormalRaidProgress(data: NormalRaidProgress): Promise<void> {
+export async function saveNormalRaidProgress(
+  data: NormalRaidProgress,
+): Promise<void> {
   await save('normalRaidProgress', data);
 }
 
@@ -1141,7 +1383,11 @@ export async function recordNormalRaidKill(
   progress: NormalRaidProgress,
   stage: number,
 ): Promise<NormalRaidProgress> {
-  const existing = progress[stage] ?? {firstCleared: false, killCount: 0, firstClearDiaClaimed: false};
+  const existing = progress[stage] ?? {
+    firstCleared: false,
+    killCount: 0,
+    firstClearDiaClaimed: false,
+  };
   const updated: NormalRaidProgress = {
     ...progress,
     [stage]: {
@@ -1158,16 +1404,23 @@ export async function claimFirstClearDia(
   progress: NormalRaidProgress,
   stage: number,
 ): Promise<NormalRaidProgress> {
-  const existing = progress[stage] ?? {firstCleared: false, killCount: 0, firstClearDiaClaimed: false};
+  const existing = progress[stage] ?? {
+    firstCleared: false,
+    killCount: 0,
+    firstClearDiaClaimed: false,
+  };
   const updated = {
     ...progress,
-    [stage]: {...existing, firstClearDiaClaimed: true},
+    [stage]: { ...existing, firstClearDiaClaimed: true },
   };
   await save('normalRaidProgress', updated);
   return updated;
 }
 
 // Skin earned by 10 normal raid kills on a specific stage
-export function hasSkinFromRaid(progress: NormalRaidProgress, stage: number): boolean {
+export function hasSkinFromRaid(
+  progress: NormalRaidProgress,
+  stage: number,
+): boolean {
   return (progress[stage]?.killCount ?? 0) >= 10;
 }

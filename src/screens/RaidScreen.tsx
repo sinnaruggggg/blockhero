@@ -1,10 +1,24 @@
-import React, {useState, useEffect, useCallback, useRef} from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, Alert, TouchableOpacity, Animated,
-  Vibration, TextInput, ScrollView, KeyboardAvoidingView, Platform, Image, Dimensions,
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  Animated,
+  Vibration,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
   ImageBackground,
+  useWindowDimensions,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
@@ -13,54 +27,82 @@ import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
+import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import SkillBar from '../components/SkillBar';
 import KnightSprite from '../components/KnightSprite';
 import VisualElementView, {
+  buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
-import {RaidParticipant} from '../components/RaidParticipants';
-import {useDragDrop} from '../game/useDragDrop';
-import {COMBO_TIMEOUT_MS, FEVER_DURATION} from '../constants';
-import {RAID_BOSSES} from '../constants/raidBosses';
-import {formatAttackTimer} from '../constants/raidConfig';
-import {getRaidBossAttackStats} from '../game/battleBalance';
-import {resolveCombatTurn} from '../game/combatFlow';
+import { RaidParticipant } from '../components/RaidParticipants';
+import { useDragDrop } from '../game/useDragDrop';
+import { COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
+import { RAID_BOSSES, getNormalRaidMaxHp } from '../constants/raidBosses';
+import { formatAttackTimer } from '../constants/raidConfig';
+import {
+  getNormalRaidAttackStats,
+  getRaidBossAttackStats,
+} from '../game/battleBalance';
+import { resolveCombatTurn } from '../game/combatFlow';
 import {
   applyCombatDamageEffectsDetailed,
-  applyDamageTakenReduction,
   applyRewardMultipliers,
   getCharacterSkillEffects,
   getPieceGenerationOptions,
   shouldDodgeAttack,
 } from '../game/characterSkillEffects';
 import {
-  createBoard, generatePlaceablePieces, placePiece,
-  checkAndClearLines, countBlocks, canPlaceAnyPiece,
-  Piece, Board as BoardType, getDifficulty, resetPieceGenerationHistory,
+  createBoard,
+  generatePlaceablePieces,
+  placePiece,
+  checkAndClearLines,
+  countBlocks,
+  canPlaceAnyPiece,
+  Piece,
+  Board as BoardType,
+  getDifficulty,
+  resetPieceGenerationHistory,
 } from '../game/engine';
 import {
-  getPlayerId, getNickname, getSelectedCharacter, loadCharacterData,
-  loadGameData, addGold, addDiamonds, addItem, loadCodexData,
-  collectSpecialBlockRewards, GameData,
-  unlockSkin, loadUnlockedTitles, saveUnlockedTitles, updateLocalCodex,
-  gainSummonExp, loadSkinData,
+  getPlayerId,
+  getNickname,
+  getSelectedCharacter,
+  loadCharacterData,
+  loadGameData,
+  addGold,
+  addDiamonds,
+  addItem,
+  loadCodexData,
+  collectSpecialBlockRewards,
+  GameData,
+  getUnlockedSpecialPieceShapeIndices,
+  unlockSkin,
+  loadUnlockedTitles,
+  saveUnlockedTitles,
+  updateLocalCodex,
+  gainSummonExp,
+  loadSkinData,
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {flushPlayerStateNow} from '../services/playerState';
-import {submitRaidLeaderboard} from '../services/rankingService';
-import {supabase} from '../services/supabase';
-import {getRaidInstance, getRaidParticipants, dealRaidDamage, joinRaidInstance, getRaidChannel} from '../services/raidService';
-import {upsertCodexEntry} from '../services/codexService';
-import {calculateRewards, RewardResult} from '../constants/raidRewards';
-import {checkNewTitles} from '../constants/titles';
-import {getSkinColors} from '../game/skinContext';
-import {getSkinBoardBg, setActiveSkin} from '../game/skinContext';
-import RaidRewardPopup from '../components/RaidRewardPopup';
-import {t} from '../i18n';
-import {getCharacterAtk, getCharacterHp} from '../constants/characters';
+import { flushPlayerStateNow } from '../services/playerState';
+import { submitRaidLeaderboard } from '../services/rankingService';
+import { supabase } from '../services/supabase';
 import {
-  getNormalRaidRewardPreview,
-} from '../game/raidRules';
+  getRaidInstance,
+  getRaidParticipants,
+  dealRaidDamage,
+  joinRaidInstance,
+  getRaidChannel,
+} from '../services/raidService';
+import { upsertCodexEntry } from '../services/codexService';
+import { calculateRewards, RewardResult } from '../constants/raidRewards';
+import { checkNewTitles } from '../constants/titles';
+import { getSkinColors } from '../game/skinContext';
+import { getSkinBoardBg, setActiveSkin } from '../game/skinContext';
+import RaidRewardPopup from '../components/RaidRewardPopup';
+import { t } from '../i18n';
+import { getCharacterAtk, getCharacterHp } from '../constants/characters';
+import { getNormalRaidRewardPreview } from '../game/raidRules';
 import {
   claimFirstClearDia,
   loadNormalRaidProgress,
@@ -92,28 +134,35 @@ import {
   loadCharacterVisualTunings,
   subscribeCharacterVisualTunings,
 } from '../stores/characterVisualTuning';
-import {useBattleNotice} from '../hooks/useBattleNotice';
-import {buildSkillTriggerNotice} from '../game/skillTriggerNotice';
-import {loadSkillTriggerNoticeMode, type SkillTriggerNoticeMode} from '../stores/gameSettings';
+import { useBattleNotice } from '../hooks/useBattleNotice';
+import {
+  buildBoardSkillTriggerNotice,
+  buildSkillTriggerNotice,
+} from '../game/skillTriggerNotice';
+import {
+  loadSkillTriggerNoticeMode,
+  type SkillTriggerNoticeMode,
+} from '../stores/gameSettings';
 import {
   pushFloatingDamageHit,
   type FloatingDamageHit,
 } from '../game/floatingDamage';
-import {useVisualConfig} from '../hooks/useVisualConfig';
+import { useVisualConfig } from '../hooks/useVisualConfig';
 import {
   buildVisualTintColor,
   getRaidBackgroundOverride,
   getVisualElementRule,
+  type VisualViewport,
 } from '../game/visualConfig';
-import {useCreatorConfig} from '../hooks/useCreatorConfig';
-import {resolveCreatorRaidRuntime} from '../game/creatorManifest';
+import { useCreatorConfig } from '../hooks/useCreatorConfig';
+import { resolveCreatorRaidRuntime } from '../game/creatorManifest';
 import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
-import {getBoardMetrics} from '../components/Board';
-
-const MODE_VERTICAL_GUTTER = Math.round(Dimensions.get('window').height * 0.05);
+import { getBoardMetrics } from '../components/Board';
+import { scaleGameplayUnit } from '../game/layoutScale';
+import { applySkillBoardEffects } from '../game/skillBoardEffects';
 
 const HIT_FRAMES = [
   require('../assets/effects/hit_00.png'),
@@ -132,7 +181,7 @@ const HIT_FRAMES = [
   require('../assets/effects/hit_13.png'),
 ];
 
-function HitEffect({damage, onDone}: {damage: number; onDone: () => void}) {
+function HitEffect({ damage, onDone }: { damage: number; onDone: () => void }) {
   const [frame, setFrame] = useState(0);
   const scale = Math.min(2.5, 1 + Math.floor(damage / 10) * 0.1);
   const size = 120 * scale;
@@ -166,7 +215,7 @@ function HitEffect({damage, onDone}: {damage: number; onDone: () => void}) {
           height: size,
           top: -(size - 88) / 2,
           left: -(size - 88) / 2,
-          transform: [{rotate: `${rotation}deg`}, {scaleX: flipX ? -1 : 1}],
+          transform: [{ rotate: `${rotation}deg` }, { scaleX: flipX ? -1 : 1 }],
         },
       ]}
     />
@@ -182,13 +231,14 @@ interface ChatMsg {
 const HEARTBEAT_INTERVAL = 5000;
 const INIT_QUERY_TIMEOUT_MS = 7000;
 const SUMMON_SPAWN_POINTS = 4;
-const RAID_CHARACTER_VISUALS: Record<string, {name: string; emoji: string}> = {
-  knight: {name: '기사', emoji: '🛡️'},
-  mage: {name: '매지션', emoji: '🔮'},
-  archer: {name: '궁수', emoji: '🏹'},
-  rogue: {name: '도적', emoji: '🗡️'},
-  healer: {name: '힐러', emoji: '✨'},
-};
+const RAID_CHARACTER_VISUALS: Record<string, { name: string; emoji: string }> =
+  {
+    knight: { name: '기사', emoji: '🛡️' },
+    mage: { name: '매지션', emoji: '🔮' },
+    archer: { name: '궁수', emoji: '🏹' },
+    rogue: { name: '도적', emoji: '🗡️' },
+    healer: { name: '힐러', emoji: '✨' },
+  };
 
 const RAID_CHARACTER_PORTRAITS: Partial<Record<string, any>> = {
   knight: require('../assets/ui/hero_knight.png'),
@@ -217,28 +267,59 @@ function withTimeout<T>(
   });
 }
 
-export default function RaidScreen({route, navigation}: any) {
-  const {instanceId, bossStage, isNormalRaid = false} = route.params;
-  const staticBoss = RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
-  const {manifest: visualManifest, assetUris: visualAssetUris} = useVisualConfig();
-  const {manifest: creatorManifest, assetUris: creatorAssetUris} = useCreatorConfig();
+export default function RaidScreen({ route, navigation }: any) {
+  const windowDimensions = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const visualViewport: VisualViewport = {
+    width: windowDimensions.width,
+    height: windowDimensions.height,
+    safeTop: insets.top,
+    safeBottom: insets.bottom,
+  };
+  const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
+  const { instanceId, bossStage, isNormalRaid = false } = route.params;
+  const staticBoss =
+    RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
+  const { manifest: visualManifest, assetUris: visualAssetUris } =
+    useVisualConfig();
+  const { manifest: creatorManifest, assetUris: creatorAssetUris } =
+    useCreatorConfig();
   const raidScreenId = isNormalRaid ? 'raidNormal' : 'raidBoss';
   const creatorRaidRuntime = resolveCreatorRaidRuntime(
     creatorManifest,
     isNormalRaid ? 'normal' : 'boss',
     bossStage,
   );
+  const creatorNormalRaidRuntime = resolveCreatorRaidRuntime(
+    creatorManifest,
+    'normal',
+    bossStage,
+  );
   const bossName = creatorRaidRuntime?.name ?? t(staticBoss.nameKey);
   const bossColor = creatorRaidRuntime?.monsterColor ?? staticBoss.color;
   const bossEmoji = creatorRaidRuntime?.monsterEmoji ?? staticBoss.emoji;
-  const bossMaxHp = creatorRaidRuntime?.maxHp ?? staticBoss.maxHp;
-  const bossAttackStats = creatorRaidRuntime
+  const normalRaidBaseHp =
+    creatorNormalRaidRuntime?.maxHp ?? getNormalRaidMaxHp(bossStage);
+  const normalRaidAttackStats = creatorNormalRaidRuntime
     ? {
-        attack: creatorRaidRuntime.enemyAttack,
-        attackIntervalMs: creatorRaidRuntime.attackIntervalMs,
+        attack: creatorNormalRaidRuntime.enemyAttack,
+        attackIntervalMs: creatorNormalRaidRuntime.attackIntervalMs,
+        tier: 'boss' as const,
       }
-    : getRaidBossAttackStats(bossStage);
-  const raidBoardMetrics = getBoardMetrics(Dimensions.get('window').width, {compact: true});
+    : getNormalRaidAttackStats(bossStage);
+  const bossMaxHp = isNormalRaid ? normalRaidBaseHp : normalRaidBaseHp * 20;
+  const bossAttackStats = isNormalRaid
+    ? normalRaidAttackStats
+    : {
+        attack: normalRaidAttackStats.attack * 2,
+        attackIntervalMs:
+          creatorRaidRuntime?.attackIntervalMs ??
+          getRaidBossAttackStats(bossStage).attackIntervalMs,
+        tier: 'boss' as const,
+      };
+  const raidBoardMetrics = getBoardMetrics(visualViewport, {
+    compact: true,
+  });
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
@@ -258,9 +339,14 @@ export default function RaidScreen({route, navigation}: any) {
   const [gameOver, setGameOver] = useState(false);
   const [bossDefeated, setBossDefeated] = useState(false);
   const [timeExpired, setTimeExpired] = useState(false);
-  const [boardLayout, setBoardLayout] = useState<{x: number; y: number} | null>(null);
+  const [boardLayout, setBoardLayout] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [bossDamageHits, setBossDamageHits] = useState<FloatingDamageHit[]>([]);
-  const [bossImpactHit, setBossImpactHit] = useState<FloatingDamageHit | null>(null);
+  const [bossImpactHit, setBossImpactHit] = useState<FloatingDamageHit | null>(
+    null,
+  );
   const [placementEffect, setPlacementEffect] = useState<{
     id: number;
     cells: PiecePlacementEffectCell[];
@@ -286,15 +372,20 @@ export default function RaidScreen({route, navigation}: any) {
   const [characterVisualTunings, setCharacterVisualTunings] = useState(
     getCachedCharacterVisualTunings(),
   );
-  const [raidSkillLevels, setRaidSkillLevels] = useState<Record<number, number>>({});
-  const [failureReason, setFailureReason] =
-    useState<'board_full' | 'hp_zero' | 'time_up'>('board_full');
+  const [raidSkillLevels, setRaidSkillLevels] = useState<
+    Record<number, number>
+  >({});
+  const [failureReason, setFailureReason] = useState<
+    'board_full' | 'hp_zero' | 'time_up'
+  >('board_full');
 
   // Spectator mode states
   const [spectatorMode, setSpectatorMode] = useState(false);
   const [_alivePlayers, setAlivePlayers] = useState<string[]>([]);
   const [_spectatingIdx, setSpectatingIdx] = useState(0);
-  const [spectatorBoard, setSpectatorBoard] = useState<BoardType>(createBoard());
+  const [spectatorBoard, setSpectatorBoard] = useState<BoardType>(
+    createBoard(),
+  );
   const [spectatorNickname, setSpectatorNickname] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -331,6 +422,8 @@ export default function RaidScreen({route, navigation}: any) {
   const feverExpireAtRef = useRef<number | null>(null);
   const reviveUsedRef = useRef(false);
   const smallPieceStreakRef = useRef(0);
+  const lastPlacementAtRef = useRef<number | null>(null);
+  const damageReductionBuffUntilRef = useRef(0);
   const summonGaugeRef = useRef(0);
   const summonGaugeRequiredRef = useRef(0);
   const summonAttackRef = useRef(0);
@@ -341,15 +434,26 @@ export default function RaidScreen({route, navigation}: any) {
   const raidSkillLevelsRef = useRef<Record<number, number>>({});
   const floatingHitIdRef = useRef(0);
   const placementEffectIdRef = useRef(0);
-  const remoteBoardsRef = useRef<Map<string, {board: BoardType; nickname: string}>>(new Map());
+  const remoteBoardsRef = useRef<
+    Map<string, { board: BoardType; nickname: string }>
+  >(new Map());
   const alivePlayersRef = useRef<string[]>([]);
   const participantCountRef = useRef(0);
   const chatScrollRef = useRef<ScrollView>(null);
   const gameDataRef = useRef<GameData | null>(null);
   const playerHpAnim = useRef(new Animated.Value(1)).current;
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
-  const {message: battleNoticeMessage, showNotice: showBattleNotice} =
-    useBattleNotice(3000);
+  const allowLeaveRef = useRef(false);
+  const {
+    message: battleNoticeMessage,
+    messageKey: battleNoticeKey,
+    showNotice: showBattleNotice,
+  } = useBattleNotice(3000);
+  const {
+    message: skillEffectMessage,
+    messageKey: skillEffectMessageKey,
+    showNotice: showSkillEffect,
+  } = useBattleNotice(1600);
 
   useEffect(() => {
     let active = true;
@@ -370,39 +474,55 @@ export default function RaidScreen({route, navigation}: any) {
     };
   }, []);
 
-  const getRaidEffects = useCallback(() => getCharacterSkillEffects(
-    selectedCharacterRef.current,
-    selectedCharacterDataRef.current,
-    {
-      mode: 'raid',
-      partySize: Math.max(1, participantCountRef.current),
-      bossHpRatio: bossHpRef.current / Math.max(1, bossMaxHp),
-    },
-  ), [bossMaxHp]);
+  const getRaidEffects = useCallback(
+    () =>
+      getCharacterSkillEffects(
+        selectedCharacterRef.current,
+        selectedCharacterDataRef.current,
+        {
+          mode: 'raid',
+          partySize: Math.max(1, participantCountRef.current),
+          bossHpRatio: bossHpRef.current / Math.max(1, bossMaxHp),
+        },
+      ),
+    [bossMaxHp],
+  );
 
   const getCurrentPieceOptions = useCallback(
-    () =>
-      mergeSkinPieceGenerationOptions(
+    () => ({
+      ...mergeSkinPieceGenerationOptions(
         getPieceGenerationOptions(getRaidEffects()),
         activeSkinIdRef.current,
       ),
+      unlockedSpecialShapeIndices: getUnlockedSpecialPieceShapeIndices(
+        gameDataRef.current,
+      ),
+    }),
     [getRaidEffects],
   );
 
   const showSkillTriggerNotice = useCallback(
     (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
-      const message = buildSkillTriggerNotice(skillNoticeModeRef.current, events);
-      if (message) {
-        showBattleNotice(message);
+      const noticeMessage = buildSkillTriggerNotice(
+        skillNoticeModeRef.current,
+        events,
+      );
+      if (noticeMessage) {
+        showBattleNotice(noticeMessage);
+      }
+
+      const boardMessage = buildBoardSkillTriggerNotice(events);
+      if (boardMessage) {
+        showSkillEffect(boardMessage);
       }
     },
-    [showBattleNotice],
+    [showBattleNotice, showSkillEffect],
   );
 
   const queueBossDamageHit = useCallback((damage: number) => {
     floatingHitIdRef.current += 1;
     const hitId = floatingHitIdRef.current;
-    const nextHit = {id: hitId, damage};
+    const nextHit = { id: hitId, damage };
     setBossDamageHits(current => pushFloatingDamageHit(current, hitId, damage));
     setBossImpactHit(nextHit);
   }, []);
@@ -412,26 +532,36 @@ export default function RaidScreen({route, navigation}: any) {
       if (!boardLayout) {
         return;
       }
-      const cells = buildPiecePlacementEffectCells(boardLayout, piece, row, col, true);
+      const cells = buildPiecePlacementEffectCells(
+        boardLayout,
+        piece,
+        row,
+        col,
+        true,
+        visualViewport,
+      );
       if (cells.length === 0) {
         return;
       }
       placementEffectIdRef.current += 1;
-      setPlacementEffect({id: placementEffectIdRef.current, cells});
+      setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
-    [boardLayout],
+    [boardLayout, visualViewport],
   );
 
-  const triggerBossPose = useCallback((pose: MonsterSpritePose, duration = 220) => {
-    if (bossPoseTimerRef.current) {
-      clearTimeout(bossPoseTimerRef.current);
-    }
-    setBossPose(pose);
-    bossPoseTimerRef.current = setTimeout(() => {
-      setBossPose('idle');
-      bossPoseTimerRef.current = null;
-    }, duration);
-  }, []);
+  const triggerBossPose = useCallback(
+    (pose: MonsterSpritePose, duration = 220) => {
+      if (bossPoseTimerRef.current) {
+        clearTimeout(bossPoseTimerRef.current);
+      }
+      setBossPose(pose);
+      bossPoseTimerRef.current = setTimeout(() => {
+        setBossPose('idle');
+        bossPoseTimerRef.current = null;
+      }, duration);
+    },
+    [],
+  );
 
   useEffect(() => {
     return () => {
@@ -449,6 +579,8 @@ export default function RaidScreen({route, navigation}: any) {
     linesClearedRef.current = 0;
     feverGaugeRef.current = 0;
     feverActiveRef.current = false;
+    lastPlacementAtRef.current = null;
+    damageReductionBuffUntilRef.current = 0;
     comboExpireAtRef.current = null;
     feverExpireAtRef.current = null;
     setCombo(0);
@@ -484,13 +616,20 @@ export default function RaidScreen({route, navigation}: any) {
     (async () => {
       try {
         const [playerId, nickname, noticeMode] = await withTimeout(
-          Promise.all([getPlayerId(), getNickname(), loadSkillTriggerNoticeMode()]),
+          Promise.all([
+            getPlayerId(),
+            getNickname(),
+            loadSkillTriggerNoticeMode(),
+          ]),
           'raid_player_profile',
         );
         playerIdRef.current = playerId;
         nicknameRef.current = nickname;
         skillNoticeModeRef.current = noticeMode;
-        gameDataRef.current = await withTimeout(loadGameData(), 'raid_game_data');
+        gameDataRef.current = await withTimeout(
+          loadGameData(),
+          'raid_game_data',
+        );
         if (mounted && gameDataRef.current) {
           const levels = getRaidSkillLevels(gameDataRef.current.items);
           raidSkillLevelsRef.current = levels;
@@ -522,8 +661,14 @@ export default function RaidScreen({route, navigation}: any) {
           );
           selectedCharacterRef.current = selectedCharacter;
           selectedCharacterDataRef.current = characterData;
-          baseAttackPowerRef.current = getCharacterAtk(selectedCharacter, characterData.level);
-          baseMaxPlayerHpRef.current = getCharacterHp(selectedCharacter, characterData.level);
+          baseAttackPowerRef.current = getCharacterAtk(
+            selectedCharacter,
+            characterData.level,
+          );
+          baseMaxPlayerHpRef.current = getCharacterHp(
+            selectedCharacter,
+            characterData.level,
+          );
           const effects = getRaidEffects();
           attackPowerRef.current = Math.round(
             baseAttackPowerRef.current *
@@ -568,7 +713,7 @@ export default function RaidScreen({route, navigation}: any) {
         }
 
         // Get initial instance state
-        const {data: instance} = await withTimeout(
+        const { data: instance } = await withTimeout(
           getRaidInstance(instanceId),
           'raid_instance',
         );
@@ -589,12 +734,16 @@ export default function RaidScreen({route, navigation}: any) {
 
         // Ensure we're a participant
         await withTimeout(
-          joinRaidInstance(instanceId, playerIdRef.current, nicknameRef.current),
+          joinRaidInstance(
+            instanceId,
+            playerIdRef.current,
+            nicknameRef.current,
+          ),
           'raid_join',
         );
 
         // Get initial participants
-        const {data: parts} = await withTimeout(
+        const { data: parts } = await withTimeout(
           getRaidParticipants(instanceId),
           'raid_participants',
         );
@@ -616,18 +765,24 @@ export default function RaidScreen({route, navigation}: any) {
         // Set up realtime channel
         const channel = getRaidChannel(instanceId);
         channel
-          .on('broadcast', {event: 'damage'}, ({payload}: any) => {
+          .on('broadcast', { event: 'damage' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             setBossHp(payload.newBossHp);
             bossHpRef.current = payload.newBossHp;
             setParticipants(prev => {
               const updated = prev.map(entry =>
                 entry.playerId === payload.playerId
-                  ? {...entry, totalDamage: entry.totalDamage + payload.damage}
+                  ? {
+                      ...entry,
+                      totalDamage: entry.totalDamage + payload.damage,
+                    }
                   : entry,
               );
               updated.sort((a, b) => b.totalDamage - a.totalDamage);
-              return updated.map((entry, index) => ({...entry, rank: index + 1}));
+              return updated.map((entry, index) => ({
+                ...entry,
+                rank: index + 1,
+              }));
             });
             if (payload.defeated) {
               setBossDefeated(true);
@@ -637,7 +792,7 @@ export default function RaidScreen({route, navigation}: any) {
               spectatorRef.current = false;
             }
           })
-          .on('broadcast', {event: 'raid_expired'}, () => {
+          .on('broadcast', { event: 'raid_expired' }, () => {
             if (!mounted || isNormalRaid) return;
             setTimeExpired(true);
             setFailureReason('time_up');
@@ -646,9 +801,9 @@ export default function RaidScreen({route, navigation}: any) {
             setSpectatorMode(false);
             spectatorRef.current = false;
           })
-          .on('broadcast', {event: 'heartbeat'}, () => {})
+          .on('broadcast', { event: 'heartbeat' }, () => {})
           // NEW: player_dead - someone's board filled
-          .on('broadcast', {event: 'player_dead'}, ({payload}: any) => {
+          .on('broadcast', { event: 'player_dead' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             setAlivePlayers(prev => {
               const next = prev.filter(id => id !== payload.playerId);
@@ -664,7 +819,7 @@ export default function RaidScreen({route, navigation}: any) {
             });
           })
           // NEW: board_state - alive player broadcasts their board
-          .on('broadcast', {event: 'board_state'}, ({payload}: any) => {
+          .on('broadcast', { event: 'board_state' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             remoteBoardsRef.current.set(payload.playerId, {
               board: payload.board,
@@ -672,7 +827,9 @@ export default function RaidScreen({route, navigation}: any) {
             });
             // Update spectator view if watching this player
             if (spectatorRef.current) {
-              const aliveList = alivePlayersRef.current.filter(id => id !== playerIdRef.current);
+              const aliveList = alivePlayersRef.current.filter(
+                id => id !== playerIdRef.current,
+              );
               if (aliveList.length > 0) {
                 // use functional state to get current idx
                 setSpectatingIdx(idx => {
@@ -687,11 +844,15 @@ export default function RaidScreen({route, navigation}: any) {
             }
           })
           // NEW: chat
-          .on('broadcast', {event: 'chat'}, ({payload}: any) => {
+          .on('broadcast', { event: 'chat' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             setChatMessages(prev => [
               ...prev.slice(-49),
-              {id: `${payload.playerId}-${Date.now()}`, nickname: payload.nickname, text: payload.text},
+              {
+                id: `${payload.playerId}-${Date.now()}`,
+                nickname: payload.nickname,
+                text: payload.text,
+              },
             ]);
           })
           .subscribe();
@@ -705,15 +866,22 @@ export default function RaidScreen({route, navigation}: any) {
         // Start heartbeat
         heartbeatTimer.current = setInterval(() => {
           channel.send({
-            type: 'broadcast', event: 'heartbeat',
-            payload: {playerId: playerIdRef.current},
+            type: 'broadcast',
+            event: 'heartbeat',
+            payload: { playerId: playerIdRef.current },
           });
         }, HEARTBEAT_INTERVAL);
       } catch (e) {
         console.warn('RaidScreen init error:', e);
         if (mounted) {
           Alert.alert(t('common.error'), t('raid.connectionFail'), [
-            {text: t('common.goHome'), onPress: () => navigation.replace('Home')},
+            {
+              text: t('common.goHome'),
+              onPress: () => {
+                allowLeaveRef.current = true;
+                navigation.replace('Home');
+              },
+            },
           ]);
         }
       }
@@ -730,7 +898,15 @@ export default function RaidScreen({route, navigation}: any) {
       if (feverTimerRef.current) clearTimeout(feverTimerRef.current);
       if (feverTickerRef.current) clearInterval(feverTickerRef.current);
     };
-  }, [bossStage, getCurrentPieceOptions, getRaidEffects, instanceId, isNormalRaid, navigation, playerHpAnim]);
+  }, [
+    bossStage,
+    getCurrentPieceOptions,
+    getRaidEffects,
+    instanceId,
+    isNormalRaid,
+    navigation,
+    playerHpAnim,
+  ]);
 
   // 10-minute attack timer
   useEffect(() => {
@@ -775,9 +951,14 @@ export default function RaidScreen({route, navigation}: any) {
           activeSkinId: activeSkinIdRef.current,
         }).effects.attackBonusMultiplier,
     );
-    const nextMaxHp = Math.round(baseMaxPlayerHpRef.current * effects.maxHpMultiplier);
+    const nextMaxHp = Math.round(
+      baseMaxPlayerHpRef.current * effects.maxHpMultiplier,
+    );
     const hpRatio = playerHpRef.current / Math.max(1, maxPlayerHp || nextMaxHp);
-    const adjustedHp = Math.min(nextMaxHp, Math.max(1, Math.round(nextMaxHp * hpRatio)));
+    const adjustedHp = Math.min(
+      nextMaxHp,
+      Math.max(1, Math.round(nextMaxHp * hpRatio)),
+    );
     playerHpRef.current = adjustedHp;
     setPlayerHp(adjustedHp);
     setMaxPlayerHp(nextMaxHp);
@@ -788,13 +969,16 @@ export default function RaidScreen({route, navigation}: any) {
     }).start();
   }, [getRaidEffects, maxPlayerHp, participants.length, playerHpAnim]);
 
-  const animatePlayerHpBar = useCallback((newRatio: number) => {
-    Animated.timing(playerHpAnim, {
-      toValue: newRatio,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [playerHpAnim]);
+  const animatePlayerHpBar = useCallback(
+    (newRatio: number) => {
+      Animated.timing(playerHpAnim, {
+        toValue: newRatio,
+        duration: 250,
+        useNativeDriver: false,
+      }).start();
+    },
+    [playerHpAnim],
+  );
 
   const resetComboTimer = useCallback(() => {
     const durationMs = COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
@@ -921,19 +1105,28 @@ export default function RaidScreen({route, navigation}: any) {
     }
 
     const timer = setInterval(() => {
-      if (gameOverRef.current || spectatorRef.current || bossHpRef.current <= 0) {
+      if (
+        gameOverRef.current ||
+        spectatorRef.current ||
+        bossHpRef.current <= 0
+      ) {
         return;
       }
 
       const maxHp = Math.max(
         1,
-        Math.round(baseMaxPlayerHpRef.current * getRaidEffects().maxHpMultiplier),
+        Math.round(
+          baseMaxPlayerHpRef.current * getRaidEffects().maxHpMultiplier,
+        ),
       );
       if (playerHpRef.current / maxHp > 0.5) {
         return;
       }
 
-      const healAmount = Math.max(1, Math.round(maxHp * effects.autoHealPercent));
+      const healAmount = Math.max(
+        1,
+        Math.round(maxHp * effects.autoHealPercent),
+      );
       const healedHp = Math.min(maxHp, playerHpRef.current + healAmount);
       if (healedHp === playerHpRef.current) {
         return;
@@ -946,7 +1139,14 @@ export default function RaidScreen({route, navigation}: any) {
     }, effects.autoHealIntervalMs);
 
     return () => clearInterval(timer);
-  }, [animatePlayerHpBar, bossDefeated, gameOver, getRaidEffects, showSkillTriggerNotice, spectatorMode]);
+  }, [
+    animatePlayerHpBar,
+    bossDefeated,
+    gameOver,
+    getRaidEffects,
+    showSkillTriggerNotice,
+    spectatorMode,
+  ]);
 
   // Enter spectator mode helper
   const enterSpectator = useCallback(() => {
@@ -957,7 +1157,7 @@ export default function RaidScreen({route, navigation}: any) {
     channelRef.current?.send({
       type: 'broadcast',
       event: 'player_dead',
-      payload: {playerId: playerIdRef.current, nickname: nicknameRef.current},
+      payload: { playerId: playerIdRef.current, nickname: nicknameRef.current },
     });
 
     // Remove self from alive
@@ -998,8 +1198,15 @@ export default function RaidScreen({route, navigation}: any) {
       return;
     }
 
+    const placementProtectionActive =
+      damageReductionBuffUntilRef.current > Date.now();
+    const incomingReduction = Math.min(
+      0.85,
+      effects.damageTakenReduction +
+        (placementProtectionActive ? effects.placementDamageReduction : 0),
+    );
     const incomingDamage = applySkinIncomingDamage(
-      applyDamageTakenReduction(bossAttackStats.attack, effects),
+      Math.max(0, Math.round(bossAttackStats.attack * (1 - incomingReduction))),
       activeSkinIdRef.current,
     );
     const rawNextHp = Math.max(0, playerHpRef.current - incomingDamage);
@@ -1076,8 +1283,23 @@ export default function RaidScreen({route, navigation}: any) {
       showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
       const effects = getRaidEffects();
+      const placedAt = Date.now();
+      const fastPlacement =
+        effects.fastPlacementWindowMs > 0 &&
+        lastPlacementAtRef.current !== null &&
+        placedAt - lastPlacementAtRef.current <= effects.fastPlacementWindowMs;
+      lastPlacementAtRef.current = placedAt;
+      if (
+        effects.placementDamageReduction > 0 &&
+        effects.placementDamageReductionWindowMs > 0
+      ) {
+        damageReductionBuffUntilRef.current =
+          placedAt + effects.placementDamageReductionWindowMs;
+      }
       const wasSmallPiece = blockCount <= 2;
-      smallPieceStreakRef.current = wasSmallPiece ? smallPieceStreakRef.current + 1 : 0;
+      smallPieceStreakRef.current = wasSmallPiece
+        ? smallPieceStreakRef.current + 1
+        : 0;
       const usedSmallPieceStreak = smallPieceStreakRef.current >= 2;
       if (usedSmallPieceStreak) {
         smallPieceStreakRef.current = 0;
@@ -1095,6 +1317,21 @@ export default function RaidScreen({route, navigation}: any) {
         totalGemsFound += r.gemsFound;
         totalItemsFound.push(...r.itemsFound);
       }
+
+      const boardSkillResult = applySkillBoardEffects({
+        board: newBoard,
+        piece,
+        row,
+        col,
+        didClear: totalLinesCleared > 0,
+        combo: totalLinesCleared > 0 ? comboRef.current + 1 : comboRef.current,
+        effects,
+        colors: getSkinColors(),
+      });
+      newBoard = boardSkillResult.board;
+      totalLinesCleared += boardSkillResult.extraLinesCleared;
+      totalGemsFound += boardSkillResult.gemsFound;
+      totalItemsFound.push(...boardSkillResult.itemsFound);
 
       const blocksFromLines = totalLinesCleared * 8;
       const totalBroken = blockCount + blocksFromLines;
@@ -1121,7 +1358,10 @@ export default function RaidScreen({route, navigation}: any) {
         combo: comboRef.current,
         feverActive: feverActiveRef.current,
         feverGauge: feverGaugeRef.current,
-        feverLinesRequired: Math.max(1, Math.round(20 * effects.feverRequirementMultiplier)),
+        feverLinesRequired: Math.max(
+          1,
+          Math.round(20 * effects.feverRequirementMultiplier),
+        ),
         feverGaugeGainMultiplier: effects.feverGaugeGainMultiplier,
       });
       comboRef.current = turnResult.nextCombo;
@@ -1139,26 +1379,45 @@ export default function RaidScreen({route, navigation}: any) {
         setFeverGauge(turnResult.nextFeverGauge);
       }
 
-      const damageResult = applyCombatDamageEffectsDetailed(turnResult.damage, effects, {
-        combo: turnResult.nextCombo,
-        didClear: turnResult.didClear,
-        feverActive: feverActiveRef.current,
-        usedSmallPieceStreak,
-        isRaid: true,
-      });
+      const damageResult = applyCombatDamageEffectsDetailed(
+        turnResult.damage,
+        effects,
+        {
+          combo: turnResult.nextCombo,
+          didClear: turnResult.didClear,
+          feverActive: feverActiveRef.current,
+          usedSmallPieceStreak,
+          isRaid: true,
+          clearedLines: totalLinesCleared,
+          fastPlacement,
+        },
+      );
       showSkillTriggerNotice(...damageResult.events);
-      const skinDamage = applySkinCombatDamage(damageResult.amount, activeSkinIdRef.current, {
-        combo: turnResult.nextCombo,
-        didClear: turnResult.didClear,
-      }).damage;
+      const fastPlacementDetail = damageResult.details.find(
+        detail => detail.event === 'fast_placement' && detail.bonusAmount > 0,
+      );
+      if (fastPlacementDetail) {
+        showSkillEffect(
+          `신속 배치 +${fastPlacementDetail.bonusAmount.toLocaleString()}`,
+          1800,
+        );
+      }
+      const skinDamage = applySkinCombatDamage(
+        damageResult.amount,
+        activeSkinIdRef.current,
+        {
+          combo: turnResult.nextCombo,
+          didClear: turnResult.didClear,
+        },
+      ).damage;
       const skillSpend =
         activeMultiplier > 1
           ? consumeRaidSkillGauge(
-            gaugeBeforeTurn,
-            activeMultiplier,
-            raidSkillLevelsRef.current,
-          )
-          : {consumed: false, nextGauge: gaugeBeforeTurn, cost: 0};
+              gaugeBeforeTurn,
+              activeMultiplier,
+              raidSkillLevelsRef.current,
+            )
+          : { consumed: false, nextGauge: gaugeBeforeTurn, cost: 0 };
       const appliedMultiplier = skillSpend.consumed ? activeMultiplier : 1;
       const effectiveMultiplier = getRaidSkillEffectiveMultiplier(
         appliedMultiplier,
@@ -1168,7 +1427,14 @@ export default function RaidScreen({route, navigation}: any) {
         summonActiveRef.current && summonRemainingMsRef.current > 0
           ? summonAttackRef.current
           : 0;
-      const finalDamage = Math.round((skinDamage + summonBonus) * effectiveMultiplier);
+      const raidSkillDamageMultiplier = skillSpend.consumed
+        ? 1 + effects.raidActiveSkillDamageBonus
+        : 1;
+      const finalDamage = Math.round(
+        (skinDamage + summonBonus) *
+          effectiveMultiplier *
+          raidSkillDamageMultiplier,
+      );
       if (summonBonus > 0) {
         summonExpEarnedRef.current += Math.max(1, Math.round(summonBonus / 8));
         setSummonAttackPulse(prev => prev + 1);
@@ -1198,7 +1464,10 @@ export default function RaidScreen({route, navigation}: any) {
           1,
           Math.round(baseMaxPlayerHpRef.current * effects.maxHpMultiplier),
         );
-        const healAmount = Math.max(1, Math.round(maxHp * effects.placeHealPercent));
+        const healAmount = Math.max(
+          1,
+          Math.round(maxHp * effects.placeHealPercent),
+        );
         const healedHp = Math.min(maxHp, playerHpRef.current + healAmount);
         playerHpRef.current = healedHp;
         setPlayerHp(healedHp);
@@ -1207,49 +1476,64 @@ export default function RaidScreen({route, navigation}: any) {
       }
 
       setMyTotalDamage(prev => prev + finalDamage);
-      if (activeSkinIdRef.current > 0 && summonGaugeRequiredRef.current > 0 && !summonActiveRef.current) {
+      if (
+        activeSkinIdRef.current > 0 &&
+        summonGaugeRequiredRef.current > 0 &&
+        !summonActiveRef.current
+      ) {
         const nextGauge = Math.min(
           summonGaugeRequiredRef.current,
           summonGaugeRef.current +
-            getSummonGaugeGain(activeSkinIdRef.current, blockCount, totalLinesCleared),
+            getSummonGaugeGain(
+              activeSkinIdRef.current,
+              blockCount,
+              totalLinesCleared,
+            ),
         );
         summonGaugeRef.current = nextGauge;
         setSummonGauge(nextGauge);
       }
-      dealRaidDamage(instanceId, playerIdRef.current, finalDamage, totalBroken)
-        .then(result => {
-          if (result.data) {
-            setBossHp(result.data.newHp);
-            bossHpRef.current = result.data.newHp;
-            channelRef.current?.send({
-              type: 'broadcast',
-              event: 'damage',
-              payload: {
-                playerId: playerIdRef.current,
-                nickname: nicknameRef.current,
-                damage: finalDamage,
-                newBossHp: result.data.newHp,
-                defeated: result.data.defeated,
-              },
-            });
-            if (result.data.defeated) {
-              setBossDefeated(true);
-              setGameOver(true);
-              gameOverRef.current = true;
-            }
+      dealRaidDamage(
+        instanceId,
+        playerIdRef.current,
+        finalDamage,
+        totalBroken,
+      ).then(result => {
+        if (result.data) {
+          setBossHp(result.data.newHp);
+          bossHpRef.current = result.data.newHp;
+          channelRef.current?.send({
+            type: 'broadcast',
+            event: 'damage',
+            payload: {
+              playerId: playerIdRef.current,
+              nickname: nicknameRef.current,
+              damage: finalDamage,
+              newBossHp: result.data.newHp,
+              defeated: result.data.defeated,
+            },
+          });
+          if (result.data.defeated) {
+            setBossDefeated(true);
+            setGameOver(true);
+            gameOverRef.current = true;
           }
-        });
+        }
+      });
 
       setParticipants(prev => {
         const updated = prev.map(p =>
           p.playerId === playerIdRef.current
-            ? {...p, totalDamage: p.totalDamage + finalDamage}
+            ? { ...p, totalDamage: p.totalDamage + finalDamage }
             : p,
         );
         updated.sort((a, b) => b.totalDamage - a.totalDamage);
-        return updated.map((p, i) => ({...p, rank: i + 1}));
+        return updated.map((p, i) => ({ ...p, rank: i + 1 }));
       });
-      if (gameDataRef.current && (totalGemsFound > 0 || totalItemsFound.length > 0)) {
+      if (
+        gameDataRef.current &&
+        (totalGemsFound > 0 || totalItemsFound.length > 0)
+      ) {
         collectSpecialBlockRewards(
           gameDataRef.current,
           totalGemsFound,
@@ -1264,7 +1548,9 @@ export default function RaidScreen({route, navigation}: any) {
       const remaining = newPieces.filter(p => p !== null);
       if (remaining.length === 0) {
         const nextRound = round + 1;
-        const difficulty = getDifficulty(Math.min(bossStage + Math.floor(nextRound / 5), 10));
+        const difficulty = getDifficulty(
+          Math.min(bossStage + Math.floor(nextRound / 5), 10),
+        );
         const fresh = generatePlaceablePieces(
           newBoard,
           difficulty,
@@ -1339,12 +1625,20 @@ export default function RaidScreen({route, navigation}: any) {
     ],
   );
 
-  const dragDrop = useDragDrop(board, pieces, boardLayout, handlePlace, true, 1);
+  const dragDrop = useDragDrop(
+    board,
+    pieces,
+    boardLayout,
+    handlePlace,
+    true,
+    1,
+    visualViewport,
+  );
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 100);
   }, []);
@@ -1352,7 +1646,7 @@ export default function RaidScreen({route, navigation}: any) {
   useEffect(() => {
     setTimeout(() => {
       boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({x, y});
+        setBoardLayout({ x, y });
       });
     }, 500);
   }, [round]);
@@ -1364,11 +1658,17 @@ export default function RaidScreen({route, navigation}: any) {
   const skillCharges = getRaidSkillCharges(skillGauge, raidSkillLevels);
 
   const handleToggleSummon = useCallback(() => {
-    if (summonGaugeRequiredRef.current <= 0 || summonRemainingMsRef.current <= 0) {
+    if (
+      summonGaugeRequiredRef.current <= 0 ||
+      summonRemainingMsRef.current <= 0
+    ) {
       return;
     }
 
-    if (!summonActiveRef.current && summonGaugeRef.current < summonGaugeRequiredRef.current) {
+    if (
+      !summonActiveRef.current &&
+      summonGaugeRef.current < summonGaugeRequiredRef.current
+    ) {
       return;
     }
 
@@ -1390,7 +1690,9 @@ export default function RaidScreen({route, navigation}: any) {
 
   // Spectator navigation
   const cycleSpectator = useCallback((dir: number) => {
-    const aliveList = alivePlayersRef.current.filter(id => id !== playerIdRef.current);
+    const aliveList = alivePlayersRef.current.filter(
+      id => id !== playerIdRef.current,
+    );
     if (aliveList.length === 0) return;
     setSpectatingIdx(prev => {
       const next = (prev + dir + aliveList.length) % aliveList.length;
@@ -1414,15 +1716,100 @@ export default function RaidScreen({route, navigation}: any) {
     channelRef.current?.send({
       type: 'broadcast',
       event: 'chat',
-      payload: {playerId: playerIdRef.current, nickname: nicknameRef.current, text},
+      payload: {
+        playerId: playerIdRef.current,
+        nickname: nicknameRef.current,
+        text,
+      },
     });
     setChatMessages(prev => [
       ...prev.slice(-49),
-      {id: `${playerIdRef.current}-${Date.now()}`, nickname: nicknameRef.current, text},
+      {
+        id: `${playerIdRef.current}-${Date.now()}`,
+        nickname: nicknameRef.current,
+        text,
+      },
     ]);
     setChatInput('');
-    setTimeout(() => chatScrollRef.current?.scrollToEnd({animated: true}), 100);
+    setTimeout(
+      () => chatScrollRef.current?.scrollToEnd({ animated: true }),
+      100,
+    );
   }, [chatInput]);
+
+  const leaveRaidToHome = useCallback(() => {
+    allowLeaveRef.current = true;
+    navigation.replace('Home');
+  }, [navigation]);
+
+  const requestRaidExit = useCallback(
+    (onConfirm?: () => void) => {
+      let message = '레이드를 종료하고 홈으로 이동하시겠습니까?';
+      if (bossDefeated && rewardData && !rewardCollected) {
+        message =
+          '지금 나가면 아직 수령하지 않은 레이드 보상을 받을 수 없습니다.\n보상을 받고 나가는 것을 권장합니다.\n그래도 나가시겠습니까?';
+      } else if (spectatorMode && !bossDefeated) {
+        message =
+          '지금 나가면 관전을 종료하며 이번 레이드의 점수와 보상을 받을 수 없습니다.\n대기하면 레이드 종료 후 점수 보상을 받을 수 있습니다.\n그래도 나가시겠습니까?';
+      } else if (!gameOver && !bossDefeated) {
+        message =
+          '지금 나가면 진행 중인 레이드 기록과 보상을 받을 수 없습니다.\n그래도 나가시겠습니까?';
+      }
+
+      Alert.alert('레이드 나가기', message, [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: '나가기',
+          style: 'destructive',
+          onPress: () => {
+            if (onConfirm) {
+              allowLeaveRef.current = true;
+              onConfirm();
+              return;
+            }
+            leaveRaidToHome();
+          },
+        },
+      ]);
+    },
+    [
+      bossDefeated,
+      gameOver,
+      leaveRaidToHome,
+      rewardCollected,
+      rewardData,
+      spectatorMode,
+    ],
+  );
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event: any) => {
+      if (allowLeaveRef.current) {
+        return;
+      }
+
+      if (
+        !spectatorMode &&
+        !(bossDefeated && rewardData && !rewardCollected) &&
+        !(!gameOver && !bossDefeated)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      requestRaidExit(() => navigation.dispatch(event.data.action));
+    });
+
+    return unsubscribe;
+  }, [
+    bossDefeated,
+    gameOver,
+    navigation,
+    requestRaidExit,
+    rewardCollected,
+    rewardData,
+    spectatorMode,
+  ]);
 
   // Calculate and apply rewards when boss is defeated
   const processRewards = useCallback(async () => {
@@ -1431,7 +1818,11 @@ export default function RaidScreen({route, navigation}: any) {
     if (isNormalRaid) {
       const normalRaidProgress = await loadNormalRaidProgress();
       const preview = getNormalRaidRewardPreview(bossStage, normalRaidProgress);
-      const rewardTotals = applyRewardMultipliers(0, preview.diamonds, getRaidEffects());
+      const rewardTotals = applyRewardMultipliers(
+        0,
+        preview.diamonds,
+        getRaidEffects(),
+      );
       setRewardData({
         gold: 0,
         diamonds: rewardTotals.diamonds,
@@ -1445,18 +1836,24 @@ export default function RaidScreen({route, navigation}: any) {
     }
 
     await new Promise<void>(resolve => setTimeout(resolve, 500));
-    const {data: finalParts} = await getRaidParticipants(instanceId);
+    const { data: finalParts } = await getRaidParticipants(instanceId);
     let myRank = 1;
     if (finalParts) {
-      const sorted = finalParts.sort((a: any, b: any) => b.total_damage - a.total_damage);
-      const idx = sorted.findIndex((p: any) => p.player_id === playerIdRef.current);
+      const sorted = finalParts.sort(
+        (a: any, b: any) => b.total_damage - a.total_damage,
+      );
+      const idx = sorted.findIndex(
+        (p: any) => p.player_id === playerIdRef.current,
+      );
       if (idx >= 0) myRank = idx + 1;
-      setParticipants(sorted.map((p: any, i: number) => ({
-        playerId: p.player_id,
-        nickname: p.nickname,
-        totalDamage: p.total_damage,
-        rank: i + 1,
-      })));
+      setParticipants(
+        sorted.map((p: any, i: number) => ({
+          playerId: p.player_id,
+          nickname: p.nickname,
+          totalDamage: p.total_damage,
+          rank: i + 1,
+        })),
+      );
     }
     const codexData = await loadCodexData();
     const firstDefeat = !codexData[bossStage];
@@ -1464,13 +1861,32 @@ export default function RaidScreen({route, navigation}: any) {
     const existingTitles = await loadUnlockedTitles();
     const defeatedBosses = Object.keys(codexData).map(Number);
     if (firstDefeat) defeatedBosses.push(bossStage);
-    const newTitles = checkNewTitles(existingTitles, defeatedBosses, myRank === 1, myTotalDamage);
+    const newTitles = checkNewTitles(
+      existingTitles,
+      defeatedBosses,
+      myRank === 1,
+      myTotalDamage,
+    );
     reward.titlesUnlocked = newTitles;
-    const rewardTotals = applyRewardMultipliers(reward.gold, reward.diamonds, getRaidEffects());
-    reward.gold = applySkinRewardBonuses(rewardTotals.gold, activeSkinIdRef.current);
+    const rewardTotals = applyRewardMultipliers(
+      reward.gold,
+      reward.diamonds,
+      getRaidEffects(),
+    );
+    reward.gold = applySkinRewardBonuses(
+      rewardTotals.gold,
+      activeSkinIdRef.current,
+    );
     reward.diamonds = rewardTotals.diamonds;
     setRewardData(reward);
-  }, [bossStage, getRaidEffects, instanceId, isNormalRaid, myTotalDamage, rewardCollected]);
+  }, [
+    bossStage,
+    getRaidEffects,
+    instanceId,
+    isNormalRaid,
+    myTotalDamage,
+    rewardCollected,
+  ]);
 
   useEffect(() => {
     if (bossDefeated && !rewardData && !rewardCollected) {
@@ -1518,10 +1934,16 @@ export default function RaidScreen({route, navigation}: any) {
     if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
       await gainSummonExp(activeSkinIdRef.current, summonExpEarnedRef.current);
     }
-    const clearTimeMs = startedAtRef.current > 0 ? Date.now() - startedAtRef.current : undefined;
+    const clearTimeMs =
+      startedAtRef.current > 0 ? Date.now() - startedAtRef.current : undefined;
     await updateLocalCodex(bossStage, myTotalDamage, clearTimeMs);
     try {
-      await upsertCodexEntry(playerIdRef.current, bossStage, myTotalDamage, clearTimeMs);
+      await upsertCodexEntry(
+        playerIdRef.current,
+        bossStage,
+        myTotalDamage,
+        clearTimeMs,
+      );
     } catch {}
     void submitRaidLeaderboard({
       bossStage,
@@ -1531,7 +1953,7 @@ export default function RaidScreen({route, navigation}: any) {
       clearTimeMs: clearTimeMs ?? 0,
     });
     void flushPlayerStateNow('raid_rewards');
-    navigation.replace('Home');
+    leaveRaidToHome();
   };
 
   const getResultText = () => {
@@ -1552,7 +1974,8 @@ export default function RaidScreen({route, navigation}: any) {
   const hasSummon = activeSkinIdRef.current > 0 && summonGaugeRequired > 0;
   const summonButtonDisabled =
     !hasSummon ||
-    ((summonGauge < summonGaugeRequired && !summonActive) || summonRemainingMs <= 0);
+    (summonGauge < summonGaugeRequired && !summonActive) ||
+    summonRemainingMs <= 0;
   const myRaidVisual =
     RAID_CHARACTER_VISUALS[selectedCharacterRef.current ?? 'knight'] ??
     RAID_CHARACTER_VISUALS.knight;
@@ -1592,7 +2015,8 @@ export default function RaidScreen({route, navigation}: any) {
       style={[
         styles.raidPlayerSpriteDock,
         compact && styles.raidPlayerSpriteDockCompact,
-      ]}>
+      ]}
+    >
       {(() => {
         const characterId = selectedCharacterRef.current ?? 'knight';
         const tuning =
@@ -1601,9 +2025,9 @@ export default function RaidScreen({route, navigation}: any) {
           ] ?? characterVisualTunings.knight;
         const battleTransform = {
           transform: [
-            {translateX: tuning.battleOffsetX},
-            {translateY: tuning.battleOffsetY},
-            {scale: tuning.battleScaleMultiplier},
+            { translateX: tuning.battleOffsetX },
+            { translateY: tuning.battleOffsetY },
+            { scale: tuning.battleScaleMultiplier },
           ],
         };
 
@@ -1637,7 +2061,9 @@ export default function RaidScreen({route, navigation}: any) {
 
         return (
           <View style={battleTransform}>
-            <Text style={styles.raidPlayerSpriteEmoji}>{myRaidVisual.emoji}</Text>
+            <Text style={styles.raidPlayerSpriteEmoji}>
+              {myRaidVisual.emoji}
+            </Text>
           </View>
         );
       })()}
@@ -1646,7 +2072,13 @@ export default function RaidScreen({route, navigation}: any) {
 
   const renderTopStatusRow = (compact: boolean) => (
     <View style={[styles.topStatusRow, compact && styles.topStatusRowCompact]}>
-      <View style={[styles.statusPanel, styles.statusPanelHp, compact && styles.statusPanelCompact]}>
+      <View
+        style={[
+          styles.statusPanel,
+          styles.statusPanelHp,
+          compact && styles.statusPanelCompact,
+        ]}
+      >
         <View style={styles.playerStatusBarGroup}>
           <View style={styles.playerStatusBarRow}>
             <View style={styles.playerHpBarBg}>
@@ -1675,7 +2107,7 @@ export default function RaidScreen({route, navigation}: any) {
               <View
                 style={[
                   styles.playerFeverBarFill,
-                  {width: `${Math.min(100, feverGauge)}%`},
+                  { width: `${Math.min(100, feverGauge)}%` },
                   feverActive && styles.playerFeverBarFillActive,
                 ]}
               />
@@ -1685,7 +2117,8 @@ export default function RaidScreen({route, navigation}: any) {
                 style={[
                   styles.playerStatusBarText,
                   feverActive && styles.playerStatusBarTextActive,
-                ]}>
+                ]}
+              >
                 {feverActive ? '피버 발동' : `피버 ${feverGauge}%`}
               </Text>
             </View>
@@ -1699,7 +2132,8 @@ export default function RaidScreen({route, navigation}: any) {
           styles.statusPanelSummon,
           compact && styles.statusPanelCompact,
           !hasSummon && styles.statusPanelSummonDisabled,
-        ]}>
+        ]}
+      >
         <View style={styles.summonHeader}>
           <Text style={styles.summonTitle}>소환수</Text>
           <Text style={styles.summonMeta}>
@@ -1713,7 +2147,11 @@ export default function RaidScreen({route, navigation}: any) {
             style={[
               styles.summonBarFill,
               {
-                width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
+                width: `${
+                  summonGaugeRequired > 0
+                    ? (summonGauge / summonGaugeRequired) * 100
+                    : 0
+                }%`,
               },
             ]}
           />
@@ -1721,9 +2159,9 @@ export default function RaidScreen({route, navigation}: any) {
         <View style={styles.summonFooter}>
           <Text style={styles.summonMeta}>
             {hasSummon
-              ? `게이지 ${summonGauge}/${summonGaugeRequired || '-'} · ${Math.ceil(
-                summonRemainingMs / 1000,
-              )}초`
+              ? `게이지 ${summonGauge}/${
+                  summonGaugeRequired || '-'
+                } · ${Math.ceil(summonRemainingMs / 1000)}초`
               : '활성 스킨 없음'}
           </Text>
           <TouchableOpacity
@@ -1733,7 +2171,8 @@ export default function RaidScreen({route, navigation}: any) {
               styles.summonBtn,
               summonActive && styles.summonBtnActive,
               summonButtonDisabled && styles.summonBtnDisabled,
-            ]}>
+            ]}
+          >
             <Text style={styles.summonBtnText}>
               {summonActive ? '회수' : '소환'}
             </Text>
@@ -1743,8 +2182,10 @@ export default function RaidScreen({route, navigation}: any) {
     </View>
   );
 
-  const comboGaugeMaxMs = COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
-  const feverGaugeMaxMs = FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
+  const comboGaugeMaxMs =
+    COMBO_TIMEOUT_MS + getRaidEffects().comboWindowBonusMs;
+  const feverGaugeMaxMs =
+    FEVER_DURATION + getRaidEffects().feverDurationBonusMs;
   const creatorRaidBackgroundRule = creatorRaidRuntime?.background ?? null;
   const raidBackgroundOverride = getRaidBackgroundOverride(
     visualManifest,
@@ -1756,29 +2197,28 @@ export default function RaidScreen({route, navigation}: any) {
     creatorRaidBackgroundRule?.removeImage === true
       ? null
       : raidBackgroundOverride?.assetKey &&
-          visualAssetUris[raidBackgroundOverride.assetKey]
-        ? {uri: visualAssetUris[raidBackgroundOverride.assetKey]}
-        : creatorRaidBackgroundRule?.assetKey &&
-            creatorAssetUris[creatorRaidBackgroundRule.assetKey]
-          ? {uri: creatorAssetUris[creatorRaidBackgroundRule.assetKey]}
-        : null;
+        visualAssetUris[raidBackgroundOverride.assetKey]
+      ? { uri: visualAssetUris[raidBackgroundOverride.assetKey] }
+      : creatorRaidBackgroundRule?.assetKey &&
+        creatorAssetUris[creatorRaidBackgroundRule.assetKey]
+      ? { uri: creatorAssetUris[creatorRaidBackgroundRule.assetKey] }
+      : null;
   const raidBackgroundTint = raidBackgroundOverride
     ? buildVisualTintColor(
         raidBackgroundOverride.tintColor,
         raidBackgroundOverride.tintOpacity,
       )
     : creatorRaidBackgroundRule
-      ? buildVisualTintColor(
-          creatorRaidBackgroundRule.tintColor,
-          creatorRaidBackgroundRule.tintOpacity,
-        )
+    ? buildVisualTintColor(
+        creatorRaidBackgroundRule.tintColor,
+        creatorRaidBackgroundRule.tintOpacity,
+      )
     : 'transparent';
   const raidComboGaugeRule = getVisualElementRule(
     visualManifest,
     raidScreenId,
     'combo_gauge',
   );
-
   const renderBoardStatusDock = (compact: boolean) => {
     if (!raidComboGaugeRule.visible) {
       return null;
@@ -1793,7 +2233,15 @@ export default function RaidScreen({route, navigation}: any) {
         feverRemainingMs={feverRemainingMs}
         feverMaxMs={feverGaugeMaxMs}
         compact={compact}
-        style={buildVisualElementStyle(raidComboGaugeRule)}
+        visualAutomationLabel={buildVisualAutomationLabel(
+          raidScreenId,
+          'combo_gauge',
+        )}
+        style={buildVisualElementStyle(
+          raidComboGaugeRule,
+          visualViewport,
+          visualManifest.referenceViewport,
+        )}
       />
     );
 
@@ -1807,13 +2255,19 @@ export default function RaidScreen({route, navigation}: any) {
     return (
       <View
         pointerEvents="none"
-        style={[styles.boardStatusOverlay, compact && styles.boardStatusOverlayCompact]}>
+        style={[
+          styles.boardStatusOverlay,
+          compact && styles.boardStatusOverlayCompact,
+        ]}
+      >
         {showComboGauge && (
           <View style={styles.boardGaugeCard}>
             <View style={styles.boardGaugeHeader}>
               <Text style={styles.boardGaugeLabel}>콤보 유지</Text>
               <Text style={styles.boardGaugeValue}>
-                {`${combo}콤보 · ${Math.max(0, comboRemainingMs / 1000).toFixed(2)}초`}
+                {`${combo}콤보 · ${Math.max(0, comboRemainingMs / 1000).toFixed(
+                  2,
+                )}초`}
               </Text>
             </View>
             <View style={styles.boardGaugeTrack}>
@@ -1821,7 +2275,17 @@ export default function RaidScreen({route, navigation}: any) {
                 style={[
                   styles.boardGaugeFill,
                   styles.boardGaugeFillCombo,
-                  {width: `${Math.max(0, Math.min(1, comboRemainingMs / Math.max(1, comboGaugeMaxMs))) * 100}%`},
+                  {
+                    width: `${
+                      Math.max(
+                        0,
+                        Math.min(
+                          1,
+                          comboRemainingMs / Math.max(1, comboGaugeMaxMs),
+                        ),
+                      ) * 100
+                    }%`,
+                  },
                 ]}
               />
             </View>
@@ -1841,7 +2305,17 @@ export default function RaidScreen({route, navigation}: any) {
                 style={[
                   styles.boardGaugeFill,
                   styles.boardGaugeFillFever,
-                  {width: `${Math.max(0, Math.min(1, feverRemainingMs / Math.max(1, feverGaugeMaxMs))) * 100}%`},
+                  {
+                    width: `${
+                      Math.max(
+                        0,
+                        Math.min(
+                          1,
+                          feverRemainingMs / Math.max(1, feverGaugeMaxMs),
+                        ),
+                      ) * 100
+                    }%`,
+                  },
                 ]}
               />
             </View>
@@ -1871,15 +2345,19 @@ export default function RaidScreen({route, navigation}: any) {
         key={`${side}-${slotIndex}-${participant?.playerId ?? 'empty'}`}
         style={[
           styles.normalRaidPartySlot,
-          side === 'left' ? styles.normalRaidPartySlotLeft : styles.normalRaidPartySlotRight,
+          side === 'left'
+            ? styles.normalRaidPartySlotLeft
+            : styles.normalRaidPartySlotRight,
           !participant && styles.normalRaidPartySlotEmpty,
-        ]}>
+        ]}
+      >
         <View
           style={[
             styles.normalRaidAvatarOrb,
             isMe && styles.normalRaidAvatarOrbMe,
             !participant && styles.normalRaidAvatarOrbEmpty,
-          ]}>
+          ]}
+        >
           <Text style={styles.normalRaidAvatarText}>{avatarLabel}</Text>
         </View>
         <Text numberOfLines={1} style={styles.normalRaidAvatarName}>
@@ -1895,118 +2373,152 @@ export default function RaidScreen({route, navigation}: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          paddingTop: modeVerticalGutter,
+          paddingBottom: modeVerticalGutter,
+        },
+      ]}
+    >
       {raidBackgroundSource ? (
         <ImageBackground
           source={raidBackgroundSource}
           resizeMode="cover"
-          style={styles.visualBackgroundLayer}>
+          style={styles.visualBackgroundLayer}
+        >
           <View
             pointerEvents="none"
-            style={[styles.visualBackgroundTintLayer, {backgroundColor: raidBackgroundTint}]}
+            style={[
+              styles.visualBackgroundTintLayer,
+              { backgroundColor: raidBackgroundTint },
+            ]}
           />
         </ImageBackground>
       ) : raidBackgroundTint !== 'transparent' ? (
         <View
           pointerEvents="none"
-          style={[styles.visualBackgroundTintLayer, {backgroundColor: raidBackgroundTint}]}
+          style={[
+            styles.visualBackgroundTintLayer,
+            { backgroundColor: raidBackgroundTint },
+          ]}
         />
       ) : null}
-      <VisualElementView screenId={raidScreenId} elementId="top_panel" style={styles.visualWrapper}>
-      {isNormalRaid ? (
-        <>
-          <View style={styles.normalRaidHeader}>
-            <View style={styles.normalRaidPartyColumn}>
-              {renderNormalRaidSlot(normalRaidSlots[0], 'left', 0)}
-              {renderNormalRaidSlot(normalRaidSlots[1], 'left', 1)}
-            </View>
+      <VisualElementView
+        screenId={raidScreenId}
+        elementId="top_panel"
+        style={styles.visualWrapper}
+      >
+        {isNormalRaid ? (
+          <>
+            <View style={styles.normalRaidHeader}>
+              <View style={styles.normalRaidPartyColumn}>
+                {renderNormalRaidSlot(normalRaidSlots[0], 'left', 0)}
+                {renderNormalRaidSlot(normalRaidSlots[1], 'left', 1)}
+              </View>
 
-            <View style={styles.normalRaidBossCard}>
-              <Text style={[styles.normalRaidBossName, {color: bossColor}]}>
-                {bossName}
-              </Text>
-              <View style={[styles.normalRaidBossOrb, {borderColor: bossColor}]}>
-                {bossSprite ? (
-                  <Image
-                    source={bossSprite}
-                    resizeMode="contain"
-                    fadeDuration={0}
-                    style={[
-                      styles.normalRaidBossSprite,
-                      {transform: [{scaleX: -(bossSpriteSet?.facing ?? 1)}]},
-                    ]}
-                  />
-                ) : (
-                  <Text style={styles.normalRaidBossEmoji}>{bossEmoji}</Text>
-                )}
-                {bossImpactHit && bossImpactHit.damage >= 10 && (
-                  <HitEffect
-                    key={`raid-normal-hit-effect-${bossImpactHit.id}`}
-                    damage={bossImpactHit.damage}
-                    onDone={() =>
-                      setBossImpactHit(current =>
-                        current?.id === bossImpactHit.id ? null : current,
-                      )
-                    }
-                  />
-                )}
-                <View pointerEvents="none" style={styles.normalRaidBossDamageHost}>
-                  {bossDamageHits
-                    .slice()
-                    .reverse()
-                    .map((hit, index) => (
-                      <FloatingDamageLabel
-                        key={`raid-normal-hit-${hit.id}`}
-                        damage={hit.damage}
-                        stackIndex={index}
-                        baseTop={8}
-                        stackGap={20}
-                      />
-                    ))}
-                </View>
-              </View>
-              <View pointerEvents="none" style={styles.normalRaidBossOverlayHost}>
-                {renderSummonOverlay(true)}
-              </View>
-              {renderRaidPlayerSprite(true)}
-              <View style={styles.normalRaidBossHpTrack}>
+              <View style={styles.normalRaidBossCard}>
+                <Text style={[styles.normalRaidBossName, { color: bossColor }]}>
+                  {bossName}
+                </Text>
                 <View
-                  style={[
-                    styles.normalRaidBossHpFill,
-                    {width: `${Math.max(0, (bossHp / Math.max(1, bossMaxHp)) * 100)}%`},
-                    bossHp / Math.max(1, bossMaxHp) > 0.5
-                      ? styles.normalRaidBossHpFillHigh
-                      : bossHp / Math.max(1, bossMaxHp) > 0.25
+                  style={[styles.normalRaidBossOrb, { borderColor: bossColor }]}
+                >
+                  {bossSprite ? (
+                    <Image
+                      source={bossSprite}
+                      resizeMode="contain"
+                      fadeDuration={0}
+                      style={[
+                        styles.normalRaidBossSprite,
+                        {
+                          transform: [
+                            { scaleX: -(bossSpriteSet?.facing ?? 1) },
+                          ],
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <Text style={styles.normalRaidBossEmoji}>{bossEmoji}</Text>
+                  )}
+                  {bossImpactHit && bossImpactHit.damage >= 10 && (
+                    <HitEffect
+                      key={`raid-normal-hit-effect-${bossImpactHit.id}`}
+                      damage={bossImpactHit.damage}
+                      onDone={() =>
+                        setBossImpactHit(current =>
+                          current?.id === bossImpactHit.id ? null : current,
+                        )
+                      }
+                    />
+                  )}
+                  <View
+                    pointerEvents="none"
+                    style={styles.normalRaidBossDamageHost}
+                  >
+                    {bossDamageHits
+                      .slice()
+                      .reverse()
+                      .map((hit, index) => (
+                        <FloatingDamageLabel
+                          key={`raid-normal-hit-${hit.id}`}
+                          damage={hit.damage}
+                          stackIndex={index}
+                          baseTop={8}
+                          stackGap={20}
+                        />
+                      ))}
+                  </View>
+                </View>
+                <View
+                  pointerEvents="none"
+                  style={styles.normalRaidBossOverlayHost}
+                >
+                  {renderSummonOverlay(true)}
+                </View>
+                {renderRaidPlayerSprite(true)}
+                <View style={styles.normalRaidBossHpTrack}>
+                  <View
+                    style={[
+                      styles.normalRaidBossHpFill,
+                      {
+                        width: `${Math.max(
+                          0,
+                          (bossHp / Math.max(1, bossMaxHp)) * 100,
+                        )}%`,
+                      },
+                      bossHp / Math.max(1, bossMaxHp) > 0.5
+                        ? styles.normalRaidBossHpFillHigh
+                        : bossHp / Math.max(1, bossMaxHp) > 0.25
                         ? styles.normalRaidBossHpFillMid
                         : styles.normalRaidBossHpFillLow,
-                  ]}
-                />
+                    ]}
+                  />
+                </View>
+                <Text style={styles.normalRaidBossHpText}>
+                  {bossHp.toLocaleString()} / {bossMaxHp.toLocaleString()}
+                </Text>
               </View>
-              <Text style={styles.normalRaidBossHpText}>
-                {bossHp.toLocaleString()} / {bossMaxHp.toLocaleString()}
-              </Text>
+
+              <View style={styles.normalRaidPartyColumn}>
+                {renderNormalRaidSlot(normalRaidSlots[2], 'right', 2)}
+                {renderNormalRaidSlot(normalRaidSlots[3], 'right', 3)}
+              </View>
             </View>
 
-            <View style={styles.normalRaidPartyColumn}>
-              {renderNormalRaidSlot(normalRaidSlots[2], 'right', 2)}
-              {renderNormalRaidSlot(normalRaidSlots[3], 'right', 3)}
-            </View>
-          </View>
-
-          {renderTopStatusRow(true)}
-        </>
-      ) : (
-        <>
-          <BossDisplay
-            bossName={bossName}
-            bossEmoji={bossEmoji}
-            bossColor={bossColor}
-            currentHp={bossHp}
-            maxHp={bossMaxHp}
-            stage={bossStage}
-            participants={participants
-              .slice(0, 30)
-              .map(p => ({
+            {renderTopStatusRow(true)}
+          </>
+        ) : (
+          <>
+            <BossDisplay
+              bossName={bossName}
+              bossEmoji={bossEmoji}
+              bossColor={bossColor}
+              currentHp={bossHp}
+              maxHp={bossMaxHp}
+              stage={bossStage}
+              participants={participants.slice(0, 30).map(p => ({
                 rank: p.rank,
                 nickname: p.nickname,
                 totalDamage: p.totalDamage,
@@ -2016,24 +2528,29 @@ export default function RaidScreen({route, navigation}: any) {
               damageHits={bossDamageHits}
               activeDamageHit={bossImpactHit}
               onClearActiveDamageHit={hitId =>
-                setBossImpactHit(current => (current?.id === hitId ? null : current))
+                setBossImpactHit(current =>
+                  current?.id === hitId ? null : current,
+                )
               }
               overlay={renderSummonOverlay(false)}
               bossPose={bossPose}
               playerOverlay={renderRaidPlayerSprite(false)}
             />
 
-          {renderTopStatusRow(false)}
-        </>
-      )}
+            {renderTopStatusRow(false)}
+          </>
+        )}
       </VisualElementView>
 
       {false && activeSkinIdRef.current > 0 && (
-        <View style={[styles.summonCard, isNormalRaid && styles.summonCardCompact]}>
+        <View
+          style={[styles.summonCard, isNormalRaid && styles.summonCardCompact]}
+        >
           <View style={styles.summonHeader}>
             <Text style={styles.summonTitle}>소환수</Text>
             <Text style={styles.summonMeta}>
-              공격 {summonAttack} / 남은 시간 {Math.ceil(summonRemainingMs / 1000)}초
+              공격 {summonAttack} / 남은 시간{' '}
+              {Math.ceil(summonRemainingMs / 1000)}초
             </Text>
           </View>
           <View style={styles.summonBarBg}>
@@ -2041,7 +2558,11 @@ export default function RaidScreen({route, navigation}: any) {
               style={[
                 styles.summonBarFill,
                 {
-                  width: `${summonGaugeRequired > 0 ? (summonGauge / summonGaugeRequired) * 100 : 0}%`,
+                  width: `${
+                    summonGaugeRequired > 0
+                      ? (summonGauge / summonGaugeRequired) * 100
+                      : 0
+                  }%`,
                 },
               ]}
             />
@@ -2053,7 +2574,8 @@ export default function RaidScreen({route, navigation}: any) {
             <TouchableOpacity
               onPress={handleToggleSummon}
               disabled={
-                (summonGauge < summonGaugeRequired && !summonActive) || summonRemainingMs <= 0
+                (summonGauge < summonGaugeRequired && !summonActive) ||
+                summonRemainingMs <= 0
               }
               style={[
                 styles.summonBtn,
@@ -2061,8 +2583,11 @@ export default function RaidScreen({route, navigation}: any) {
                 (summonRemainingMs <= 0 ||
                   (summonGauge < summonGaugeRequired && !summonActive)) &&
                   styles.summonBtnDisabled,
-              ]}>
-              <Text style={styles.summonBtnText}>{summonActive ? '회수' : '소환'}</Text>
+              ]}
+            >
+              <Text style={styles.summonBtnText}>
+                {summonActive ? '회수' : '소환'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2083,34 +2608,53 @@ export default function RaidScreen({route, navigation}: any) {
       )}
 
       {/* Damage info */}
-      <VisualElementView screenId={raidScreenId} elementId="info_bar" style={styles.visualWrapper}>
-      <View style={[styles.infoBar, isNormalRaid && styles.infoBarCompact]}>
-        <Text style={styles.infoText}>{t('raid.yourDamage', myTotalDamage)}</Text>
-        <Text style={styles.infoText}>
-          {spectatorMode ? '관전 모드' : `${t('raid.gauge')}: ${skillGauge}`}
-        </Text>
-      </View>
+      <VisualElementView
+        screenId={raidScreenId}
+        elementId="info_bar"
+        style={styles.visualWrapper}
+      >
+        <View style={[styles.infoBar, isNormalRaid && styles.infoBarCompact]}>
+          <Text style={styles.infoText}>
+            {t('raid.yourDamage', myTotalDamage)}
+          </Text>
+          <Text style={styles.infoText}>
+            {spectatorMode ? '관전 모드' : `${t('raid.gauge')}: ${skillGauge}`}
+          </Text>
+        </View>
       </VisualElementView>
 
       {/* Main content: Board or Spectator view */}
       {spectatorMode ? (
         <KeyboardAvoidingView
           style={styles.flexFill}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           {/* Spectator navigation */}
           <View style={styles.spectatorNav}>
-            <TouchableOpacity onPress={() => cycleSpectator(-1)} style={styles.arrowBtn}>
+            <TouchableOpacity
+              onPress={() => cycleSpectator(-1)}
+              style={styles.arrowBtn}
+            >
               <Text style={styles.arrowText}>◀</Text>
             </TouchableOpacity>
             <Text style={styles.spectatorLabel}>{spectatorNickname}</Text>
-            <TouchableOpacity onPress={() => cycleSpectator(1)} style={styles.arrowBtn}>
+            <TouchableOpacity
+              onPress={() => cycleSpectator(1)}
+              style={styles.arrowBtn}
+            >
               <Text style={styles.arrowText}>▶</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => requestRaidExit()}
+              style={styles.spectatorExitBtn}
+            >
+              <Text style={styles.spectatorExitBtnText}>나가기</Text>
             </TouchableOpacity>
           </View>
 
           {/* Spectator board (read-only) */}
           <View style={styles.boardContainer}>
-            <Board board={spectatorBoard} compact />
+            <Board board={spectatorBoard} compact viewport={visualViewport} />
           </View>
 
           {/* Chat panel */}
@@ -2118,7 +2662,10 @@ export default function RaidScreen({route, navigation}: any) {
             <ScrollView
               ref={chatScrollRef}
               style={styles.chatScroll}
-              onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({animated: true})}>
+              onContentSizeChange={() =>
+                chatScrollRef.current?.scrollToEnd({ animated: true })
+              }
+            >
               {chatMessages.length === 0 && (
                 <Text style={styles.chatEmpty}>채팅을 시작하세요</Text>
               )}
@@ -2140,7 +2687,10 @@ export default function RaidScreen({route, navigation}: any) {
                 returnKeyType="send"
                 onSubmitEditing={handleSendChat}
               />
-              <TouchableOpacity onPress={handleSendChat} style={styles.chatSendBtn}>
+              <TouchableOpacity
+                onPress={handleSendChat}
+                style={styles.chatSendBtn}
+              >
                 <Text style={styles.chatSendText}>전송</Text>
               </TouchableOpacity>
             </View>
@@ -2148,24 +2698,42 @@ export default function RaidScreen({route, navigation}: any) {
         </KeyboardAvoidingView>
       ) : (
         <View style={styles.playArea}>
-          <VisualElementView screenId={raidScreenId} elementId="board" style={styles.visualWrapper}>
+          <VisualElementView
+            screenId={raidScreenId}
+            elementId="board"
+            style={styles.visualWrapper}
+          >
             <View
               style={[
                 styles.boardContainer,
                 isNormalRaid && styles.boardContainerCompact,
-                {minHeight: raidBoardMetrics.boardSize + 18},
+                { minHeight: raidBoardMetrics.boardSize + 18 },
               ]}
-              onLayout={handleBoardLayout}>
+              onLayout={handleBoardLayout}
+            >
               {renderBoardStatusDock(isNormalRaid)}
               <Board
                 ref={boardRef}
                 board={board}
+                viewport={visualViewport}
                 backgroundColor={skinBoardBg}
                 compact
                 previewCells={dragDrop.previewCells}
                 invalidPreview={dragDrop.invalidPreview}
                 clearGuideCells={dragDrop.clearGuideCells}
               />
+              <VisualElementView
+                screenId={raidScreenId}
+                elementId="skill_effect"
+                style={styles.boardSkillEffectLayer}
+                pointerEvents="none"
+                viewport={visualViewport}
+              >
+                <SkillTriggerBoardEffect
+                  message={skillEffectMessage}
+                  triggerKey={skillEffectMessageKey}
+                />
+              </VisualElementView>
             </View>
           </VisualElementView>
 
@@ -2177,6 +2745,8 @@ export default function RaidScreen({route, navigation}: any) {
               onDragEnd={dragDrop.onDragEnd}
               onDragCancel={dragDrop.onDragCancel}
               compact
+              boardCompact
+              viewport={visualViewport}
             />
           </VisualElementView>
         </View>
@@ -2193,7 +2763,11 @@ export default function RaidScreen({route, navigation}: any) {
         />
       )}
 
-      <BattleNoticeOverlay message={battleNoticeMessage} bottom={156} />
+      <BattleNoticeOverlay
+        message={battleNoticeMessage}
+        messageKey={battleNoticeKey}
+        bottom={156}
+      />
 
       {/* Boss defeated - reward popup */}
       {bossDefeated && rewardData && !rewardCollected && (
@@ -2208,16 +2782,21 @@ export default function RaidScreen({route, navigation}: any) {
       {gameOver && !bossDefeated && !spectatorMode && (
         <View style={styles.overlay}>
           <Text style={styles.resultText}>{getResultText()}</Text>
-          <Text style={styles.resultDamage}>{t('raid.yourDamage', myTotalDamage)}</Text>
+          <Text style={styles.resultDamage}>
+            {t('raid.yourDamage', myTotalDamage)}
+          </Text>
 
           <View style={styles.finalRankings}>
             {participants.slice(0, 10).map((p, i) => (
               <View key={p.playerId} style={styles.finalRankRow}>
                 <Text style={styles.finalRankNum}>{i + 1}.</Text>
-                <Text style={[
-                  styles.finalRankName,
-                  p.playerId === playerIdRef.current && styles.finalRankNameMe,
-                ]}>
+                <Text
+                  style={[
+                    styles.finalRankName,
+                    p.playerId === playerIdRef.current &&
+                      styles.finalRankNameMe,
+                  ]}
+                >
                   {p.nickname}
                 </Text>
                 <Text style={styles.finalRankDmg}>{p.totalDamage}</Text>
@@ -2225,9 +2804,7 @@ export default function RaidScreen({route, navigation}: any) {
             ))}
           </View>
 
-          <TouchableOpacity
-            style={styles.exitBtn}
-            onPress={() => navigation.replace('Home')}>
+          <TouchableOpacity style={styles.exitBtn} onPress={leaveRaidToHome}>
             <Text style={styles.exitBtnText}>{t('common.goHome')}</Text>
           </TouchableOpacity>
         </View>
@@ -2247,8 +2824,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a0a3e',
-    paddingTop: MODE_VERTICAL_GUTTER,
-    paddingBottom: MODE_VERTICAL_GUTTER,
   },
   visualWrapper: {
     alignSelf: 'stretch',
@@ -2678,6 +3253,11 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 6,
   },
+  boardSkillEffectLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
+  },
   boardStatusOverlay: {
     position: 'absolute',
     top: 8,
@@ -2739,31 +3319,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  resultText: {color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center'},
-  resultDamage: {color: '#fbbf24', fontSize: 18, fontWeight: '800', marginTop: 12},
+  resultText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  resultDamage: {
+    color: '#fbbf24',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 12,
+  },
   finalRankings: {
-    marginTop: 20, width: '100%', maxWidth: 300,
-    backgroundColor: 'rgba(30,27,75,0.8)', borderRadius: 12, padding: 16,
+    marginTop: 20,
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: 'rgba(30,27,75,0.8)',
+    borderRadius: 12,
+    padding: 16,
   },
   finalRankRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
   },
-  finalRankNum: {color: '#94a3b8', fontSize: 14, fontWeight: '800', width: 24},
-  finalRankName: {color: '#e2e8f0', fontSize: 14, fontWeight: '600', flex: 1},
-  finalRankNameMe: {color: '#fbbf24'},
-  finalRankDmg: {color: '#f87171', fontSize: 14, fontWeight: '800'},
+  finalRankNum: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '800',
+    width: 24,
+  },
+  finalRankName: { color: '#e2e8f0', fontSize: 14, fontWeight: '600', flex: 1 },
+  finalRankNameMe: { color: '#fbbf24' },
+  finalRankDmg: { color: '#f87171', fontSize: 14, fontWeight: '800' },
   exitBtn: {
-    marginTop: 24, backgroundColor: '#6366f1',
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12,
+    marginTop: 24,
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
   },
-  exitBtnText: {color: '#fff', fontSize: 18, fontWeight: '800'},
-  waitingText: {color: '#e2e8f0', fontSize: 18, fontWeight: '600'},
+  exitBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  waitingText: { color: '#e2e8f0', fontSize: 18, fontWeight: '600' },
   damageFlash: {
-    position: 'absolute', top: '25%', alignSelf: 'center',
+    position: 'absolute',
+    top: '25%',
+    alignSelf: 'center',
     backgroundColor: 'rgba(239,68,68,0.9)',
-    borderRadius: 16, paddingHorizontal: 24, paddingVertical: 10,
+    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
   },
-  damageFlashText: {color: '#fff', fontSize: 28, fontWeight: '900'},
+  damageFlashText: { color: '#fff', fontSize: 28, fontWeight: '900' },
   // Spectator styles
   spectatorNav: {
     flexDirection: 'row',
@@ -2791,6 +3399,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     minWidth: 100,
     textAlign: 'center',
+  },
+  spectatorExitBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239,68,68,0.26)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.45)',
+  },
+  spectatorExitBtnText: {
+    color: '#fecaca',
+    fontSize: 13,
+    fontWeight: '800',
   },
   // Chat styles
   chatPanel: {

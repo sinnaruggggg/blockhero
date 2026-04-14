@@ -1,10 +1,11 @@
-import type {SkillTriggerNoticeMode} from '../stores/gameSettings';
+import type { SkillTriggerNoticeMode } from '../stores/gameSettings';
 
 export type SkillTriggerNoticeEvent =
   | 'combo_bonus'
   | 'line_clear_bonus'
   | 'fever_bonus'
   | 'small_piece_chain'
+  | 'fast_placement'
   | 'raid_bonus'
   | 'jackpot_double'
   | 'double_attack'
@@ -17,6 +18,7 @@ export type SkillTriggerNoticeEvent =
 const TRIGGER_ONLY_EVENTS = new Set<SkillTriggerNoticeEvent>([
   'jackpot_double',
   'double_attack',
+  'fast_placement',
   'dodge',
   'revive',
   'auto_heal',
@@ -26,9 +28,10 @@ const TRIGGER_ONLY_EVENTS = new Set<SkillTriggerNoticeEvent>([
 
 const EVENT_LABELS: Record<SkillTriggerNoticeEvent, string> = {
   combo_bonus: '콤보 강화',
-  line_clear_bonus: '라인 클리어 강화',
+  line_clear_bonus: '라인 정리 강화',
   fever_bonus: '피버 강화',
   small_piece_chain: '소형 블록 연계',
+  fast_placement: '신속 배치',
   raid_bonus: '레이드 강화',
   jackpot_double: '잭팟 2배 발동',
   double_attack: '추가 타격 발동',
@@ -53,6 +56,21 @@ export function buildSkillTriggerNotice(
       : events;
 
   const unique = Array.from(new Set(filtered));
+  if (unique.length === 0) {
+    return null;
+  }
+
+  return unique.map(event => EVENT_LABELS[event]).join(' · ');
+}
+
+export function buildBoardSkillTriggerNotice(
+  events: SkillTriggerNoticeEvent[],
+): string | null {
+  if (events.length === 0) {
+    return null;
+  }
+
+  const unique = Array.from(new Set(events));
   if (unique.length === 0) {
     return null;
   }

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  StyleSheet,
   View,
   useWindowDimensions,
   type StyleProp,
@@ -16,10 +17,21 @@ import {
 } from '../game/visualConfig';
 import {useVisualConfig} from '../hooks/useVisualConfig';
 
+export const VISUAL_AUTOMATION_PREFIX = 'blockhero-visual:';
+
+export function buildVisualAutomationLabel(
+  screenId: VisualScreenId,
+  elementId: VisualElementId,
+) {
+  return `${VISUAL_AUTOMATION_PREFIX}${screenId}:${elementId}`;
+}
+
 export function buildVisualElementStyle(rule: {
   offsetX: number;
   offsetY: number;
   scale: number;
+  widthScale?: number;
+  heightScale?: number;
   opacity: number;
   zIndex: number;
   safeAreaAware?: boolean;
@@ -41,7 +53,8 @@ export function buildVisualElementStyle(rule: {
     transform: [
       {translateX: resolvedOffset.x},
       {translateY: resolvedOffset.y},
-      {scale: rule.scale},
+      {scaleX: rule.scale * (rule.widthScale ?? 1)},
+      {scaleY: rule.scale * (rule.heightScale ?? 1)},
     ],
   };
 }
@@ -77,14 +90,31 @@ export default function VisualElementView({
     return null;
   }
 
+  const automationLabel = buildVisualAutomationLabel(screenId, elementId);
+
   return (
     <View
       {...rest}
+      collapsable={false}
       style={[
         style,
         buildVisualElementStyle(rule, currentViewport, manifest.referenceViewport),
       ]}>
+      <View
+        pointerEvents="none"
+        accessible
+        accessibilityLabel={automationLabel}
+        collapsable={false}
+        style={styles.automationTag}
+      />
       {children}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  automationTag: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.01,
+  },
+});

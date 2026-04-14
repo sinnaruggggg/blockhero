@@ -1,4 +1,12 @@
-import {ROWS, COLS, COLORS, PIECE_SHAPES, PIECES_EASY, PIECES_MEDIUM, PIECES_HARD} from '../constants';
+import {
+  ROWS,
+  COLS,
+  COLORS,
+  PIECE_SHAPES,
+  PIECES_EASY,
+  PIECES_MEDIUM,
+  PIECES_HARD,
+} from '../constants';
 
 // Types
 // 'hard' obstacles have a hit counter: needs `hits` more line-clears to be destroyed
@@ -17,14 +25,15 @@ export interface PieceGenerationOptions {
   smallPieceChanceBonus?: number;
   gemChanceBonus?: number;
   itemChanceBonus?: number;
+  unlockedSpecialShapeIndices?: number[];
 }
 
 export interface Piece {
   shape: PieceShape;
   color: string;
   id: number;
-  isGem?: boolean;   // 보석 블록 (1-2% 확률)
-  isItem?: boolean;  // 아이템 블록 (2% 확률)
+  isGem?: boolean; // 보석 블록 (1-2% 확률)
+  isItem?: boolean; // 아이템 블록 (2% 확률)
   itemType?: string; // 아이템 종류
 }
 
@@ -32,15 +41,15 @@ export interface PlaceResult {
   board: Board;
   linesCleared: number;
   scoreGained: number;
-  damageDealt: number;  // blocks × attackPower
+  damageDealt: number; // blocks × attackPower
   combo: number;
   clearedRows: number[];
   clearedCols: number[];
   stonesDestroyed: number;
   iceDestroyed: number;
   hardBlocksHit: number; // hard obstacles that took a hit
-  gemsFound: number;     // gem cells cleared
-  itemsFound: string[];  // item cells cleared
+  gemsFound: number; // gem cells cleared
+  itemsFound: string[]; // item cells cleared
 }
 
 // ─── Damage calculation ────────────────────────────────────────
@@ -61,7 +70,7 @@ export function calculateDamage(
 
 // Create empty board
 export function createBoard(): Board {
-  return Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
 }
 
 // Generate random color (supports skin colors)
@@ -70,9 +79,9 @@ export function randomColor(colors?: string[]): string {
   return c[Math.floor(Math.random() * c.length)];
 }
 
-// Fill-friendly pieces: simple shapes that cleanly fill gaps
-// 0=1x1, 1=1x2, 2=2x1, 3=1x3, 4=3x1, 9=2x2
-const FILL_FRIENDLY = [0, 1, 2, 3, 4, 9];
+// Fill-friendly pieces: simple shapes that cleanly fill gaps.
+// The 1x1 block is no longer part of the default pool and is only added when unlocked.
+const DEFAULT_FILL_FRIENDLY = [1, 2, 3, 4, 9];
 const REDUCED_SMALL_PIECE_PROBABILITY = 0.5;
 const PIECE_HISTORY_LIMIT = 8;
 let recentGeneratedPieces: Piece[] = [];
@@ -82,9 +91,10 @@ function getPieceShapeKey(shape: PieceShape): string {
 }
 
 function rotateShape(shape: PieceShape): PieceShape {
-  return Array.from({length: shape[0].length}, (_, colIndex) =>
-    Array.from({length: shape.length}, (_, rowIndex) =>
-      shape[shape.length - 1 - rowIndex][colIndex],
+  return Array.from({ length: shape[0].length }, (_, colIndex) =>
+    Array.from(
+      { length: shape.length },
+      (_, rowIndex) => shape[shape.length - 1 - rowIndex][colIndex],
     ),
   );
 }
@@ -119,23 +129,60 @@ function getPieceFamilyKey(shape: PieceShape): string {
 }
 
 function rememberGeneratedPiece(piece: Piece) {
-  recentGeneratedPieces = [...recentGeneratedPieces, piece].slice(-PIECE_HISTORY_LIMIT);
+  recentGeneratedPieces = [...recentGeneratedPieces, piece].slice(
+    -PIECE_HISTORY_LIMIT,
+  );
 }
 
 export function resetPieceGenerationHistory() {
   recentGeneratedPieces = [];
 }
 
-function getPoolForDifficulty(
-  difficulty: 'easy' | 'medium' | 'hard',
+function normalizeUnlockedSpecialShapeIndices(
+  options: PieceGenerationOptions = {},
 ): number[] {
-  if (difficulty === 'hard') {
-    return PIECES_HARD;
+  return Array.from(
+    new Set(
+      (options.unlockedSpecialShapeIndices ?? []).filter(
+        shapeIndex =>
+          Number.isInteger(shapeIndex) &&
+          shapeIndex >= 0 &&
+          shapeIndex < PIECE_SHAPES.length,
+      ),
+    ),
+  );
+}
+
+export function getFillFriendlyGenerationPool(
+  options: PieceGenerationOptions = {},
+): number[] {
+  const unlockedSpecialShapeIndices =
+    normalizeUnlockedSpecialShapeIndices(options);
+  const fillFriendlyPool = [...DEFAULT_FILL_FRIENDLY];
+
+  if (unlockedSpecialShapeIndices.includes(0)) {
+    fillFriendlyPool.unshift(0);
   }
-  if (difficulty === 'medium') {
-    return PIECES_MEDIUM;
-  }
-  return PIECES_EASY;
+
+  return fillFriendlyPool;
+}
+
+export function getGenerationPoolForDifficulty(
+  difficulty: 'easy' | 'medium' | 'hard',
+  options: PieceGenerationOptions = {},
+): number[] {
+  const basePool =
+    difficulty === 'hard'
+      ? PIECES_HARD
+      : difficulty === 'medium'
+      ? PIECES_MEDIUM
+      : PIECES_EASY;
+  const filteredBasePool = basePool.filter(shapeIndex => shapeIndex !== 0);
+  const unlockedSpecialShapeIndices = normalizeUnlockedSpecialShapeIndices(
+    options,
+  ).filter(shapeIndex => !filteredBasePool.includes(shapeIndex));
+
+  return [...filteredBasePool, ...unlockedSpecialShapeIndices];
 }
 
 function isReducedSmallPieceShapeIndex(shapeIndex: number): boolean {
@@ -174,7 +221,10 @@ function getReducedSmallPieceWeightMultiplier(
   );
 }
 
-export function getShapeSpawnWeight(shapeIndex: number, pool: number[]): number {
+export function getShapeSpawnWeight(
+  shapeIndex: number,
+  pool: number[],
+): number {
   if (!isReducedSmallPieceShapeIndex(shapeIndex)) {
     return 1;
   }
@@ -263,7 +313,10 @@ function getBalanceScore(candidate: Piece, history: Piece[]): number {
   return score;
 }
 
-function hasRecentFamilySaturation(candidate: Piece, history: Piece[]): boolean {
+function hasRecentFamilySaturation(
+  candidate: Piece,
+  history: Piece[],
+): boolean {
   const recentWindow = history.slice(-5);
   const candidateFamilyKey = getPieceFamilyKey(candidate.shape);
   const repeatedFamilyCount = recentWindow.filter(
@@ -288,12 +341,15 @@ function getRankedShapeCandidates(
   sourcePool: number[],
   history: Piece[],
   board?: Board,
-): {shapeIndex: number; score: number; immediateRepeat: boolean}[] {
+): { shapeIndex: number; score: number; immediateRepeat: boolean }[] {
   const previous = history.length > 0 ? history[history.length - 1] : null;
   const uniquePool = [...new Set(sourcePool)];
 
   return uniquePool
-    .filter(shapeIndex => !board || canPlaceShapeAnywhere(board, PIECE_SHAPES[shapeIndex]))
+    .filter(
+      shapeIndex =>
+        !board || canPlaceShapeAnywhere(board, PIECE_SHAPES[shapeIndex]),
+    )
     .map(shapeIndex => {
       const candidate: Piece = {
         shape: PIECE_SHAPES[shapeIndex],
@@ -313,7 +369,7 @@ function getRankedShapeCandidates(
 }
 
 function pickFromRankedCandidates(
-  candidates: {shapeIndex: number; score: number}[],
+  candidates: { shapeIndex: number; score: number }[],
   sourcePool: number[],
 ): number | null {
   if (candidates.length === 0) {
@@ -321,10 +377,17 @@ function pickFromRankedCandidates(
   }
 
   const bestScore = candidates[0].score;
-  const preferredCandidates = candidates.filter(candidate => candidate.score <= bestScore + 8);
+  const preferredCandidates = candidates.filter(
+    candidate => candidate.score <= bestScore + 8,
+  );
   const weightedPool = preferredCandidates.flatMap(candidate => {
-    const duplicateCount = sourcePool.filter(entry => entry === candidate.shapeIndex).length;
-    return Array.from({length: Math.max(1, duplicateCount)}, () => candidate.shapeIndex);
+    const duplicateCount = sourcePool.filter(
+      entry => entry === candidate.shapeIndex,
+    ).length;
+    return Array.from(
+      { length: Math.max(1, duplicateCount) },
+      () => candidate.shapeIndex,
+    );
   });
 
   if (weightedPool.length === 0) {
@@ -338,12 +401,12 @@ function getPreferredSourcePool(
   difficulty: 'easy' | 'medium' | 'hard',
   options: PieceGenerationOptions = {},
 ): number[] {
-  const pool = getPoolForDifficulty(difficulty);
+  const pool = getGenerationPoolForDifficulty(difficulty, options);
   const preferSmall =
     (options.smallPieceChanceBonus ?? 0) > 0 &&
     Math.random() < (options.smallPieceChanceBonus ?? 0);
 
-  return preferSmall ? FILL_FRIENDLY : pool;
+  return preferSmall ? getFillFriendlyGenerationPool(options) : pool;
 }
 
 function pickBalancedShapeIndex(
@@ -352,14 +415,20 @@ function pickBalancedShapeIndex(
   options: PieceGenerationOptions = {},
   board?: Board,
 ): number {
-  const pool = getPoolForDifficulty(difficulty);
+  const pool = getGenerationPoolForDifficulty(difficulty, options);
   const sourcePool = getPreferredSourcePool(difficulty, options);
-  const rankedPreferredCandidates = getRankedShapeCandidates(sourcePool, history, board);
+  const rankedPreferredCandidates = getRankedShapeCandidates(
+    sourcePool,
+    history,
+    board,
+  );
   const rankedPreferredNonRepeat = rankedPreferredCandidates.filter(
     candidate => !candidate.immediateRepeat,
   );
   const chosenPreferredIndex = pickFromRankedCandidates(
-    rankedPreferredNonRepeat.length > 0 ? rankedPreferredNonRepeat : rankedPreferredCandidates,
+    rankedPreferredNonRepeat.length > 0
+      ? rankedPreferredNonRepeat
+      : rankedPreferredCandidates,
     sourcePool,
   );
 
@@ -367,13 +436,21 @@ function pickBalancedShapeIndex(
     return chosenPreferredIndex;
   }
 
-  const fallbackPool = [...new Set([...FILL_FRIENDLY, ...pool])];
-  const rankedFallbackCandidates = getRankedShapeCandidates(fallbackPool, history, board);
+  const fallbackPool = [
+    ...new Set([...getFillFriendlyGenerationPool(options), ...pool]),
+  ];
+  const rankedFallbackCandidates = getRankedShapeCandidates(
+    fallbackPool,
+    history,
+    board,
+  );
   const rankedFallbackNonRepeat = rankedFallbackCandidates.filter(
     candidate => !candidate.immediateRepeat,
   );
   const chosenFallbackIndex = pickFromRankedCandidates(
-    rankedFallbackNonRepeat.length > 0 ? rankedFallbackNonRepeat : rankedFallbackCandidates,
+    rankedFallbackNonRepeat.length > 0
+      ? rankedFallbackNonRepeat
+      : rankedFallbackCandidates,
     fallbackPool,
   );
 
@@ -402,7 +479,10 @@ export function generatePiece(
 }
 
 // Generate a piece from specific shape indices (for special piece items)
-export function generateSpecificPiece(shapeIndices: number[], colors?: string[]): Piece {
+export function generateSpecificPiece(
+  shapeIndices: number[],
+  colors?: string[],
+): Piece {
   const idx = shapeIndices[Math.floor(Math.random() * shapeIndices.length)];
   const piece = createPieceFromShapeIndex(idx, colors);
   rememberGeneratedPiece(piece);
@@ -422,7 +502,10 @@ export function generatePieces(
   ];
 }
 
-function applyPieceRewardRolls(piece: Piece, options: PieceGenerationOptions = {}): Piece {
+function applyPieceRewardRolls(
+  piece: Piece,
+  options: PieceGenerationOptions = {},
+): Piece {
   let nextPiece = applyGemChance(piece, options.gemChanceBonus ?? 0);
   if (!nextPiece.isGem) {
     nextPiece = applyItemChance(nextPiece, options.itemChanceBonus ?? 0);
@@ -445,13 +528,21 @@ export function generatePlaceablePieces(
   // Generate fill-friendly pieces first
   for (let i = 0; i < fillCount; i++) {
     const history = [...recentGeneratedPieces, ...result];
-    const piece = generateFillPiece(board, colors, history);
+    const piece = generateFillPiece(board, colors, history, options);
     if (piece) {
       result.push(applyPieceRewardRolls(piece, options));
     } else {
-      const fallbackIdx = pickBalancedShapeIndex(difficulty, history, options, board);
+      const fallbackIdx = pickBalancedShapeIndex(
+        difficulty,
+        history,
+        options,
+        board,
+      );
       result.push(
-        applyPieceRewardRolls(createPieceFromShapeIndex(fallbackIdx, colors), options),
+        applyPieceRewardRolls(
+          createPieceFromShapeIndex(fallbackIdx, colors),
+          options,
+        ),
       );
     }
   }
@@ -462,7 +553,12 @@ export function generatePlaceablePieces(
     let piece: Piece | null = null;
     const history = [...recentGeneratedPieces, ...result];
     for (let attempt = 0; attempt < 20; attempt++) {
-      const shapeIdx = pickBalancedShapeIndex(difficulty, history, options, board);
+      const shapeIdx = pickBalancedShapeIndex(
+        difficulty,
+        history,
+        options,
+        board,
+      );
       const candidate = createPieceFromShapeIndex(shapeIdx, colors);
       if (canPlaceShapeAnywhere(board, candidate.shape)) {
         piece = applyPieceRewardRolls(candidate, options);
@@ -472,7 +568,7 @@ export function generatePlaceablePieces(
     // Fallback: if no placeable random piece found, use fill-friendly
     if (!piece) {
       const fallbackPiece =
-        generateFillPiece(board, colors, history) ||
+        generateFillPiece(board, colors, history, options) ||
         createPieceFromShapeIndex(
           pickBalancedShapeIndex('easy', history, options, board),
           colors,
@@ -491,11 +587,12 @@ function generateFillPiece(
   board: Board,
   colors?: string[],
   history: Piece[] = recentGeneratedPieces,
+  options: PieceGenerationOptions = {},
 ): Piece | null {
   const previous = history.length > 0 ? history[history.length - 1] : null;
   const placeableIndices: number[] = [];
 
-  for (const idx of FILL_FRIENDLY) {
+  for (const idx of getFillFriendlyGenerationPool(options)) {
     const shape = PIECE_SHAPES[idx];
     const candidate: Piece = {
       shape,
@@ -515,11 +612,19 @@ function generateFillPiece(
     return null;
   }
 
-  return createPieceFromShapeIndex(pickWeightedShapeIndex(placeableIndices), colors);
+  return createPieceFromShapeIndex(
+    pickWeightedShapeIndex(placeableIndices),
+    colors,
+  );
 }
 
 // Check if piece can be placed at position
-export function canPlacePiece(board: Board, shape: PieceShape, row: number, col: number): boolean {
+export function canPlacePiece(
+  board: Board,
+  shape: PieceShape,
+  row: number,
+  col: number,
+): boolean {
   for (let r = 0; r < shape.length; r++) {
     for (let c = 0; c < shape[r].length; c++) {
       if (shape[r][c] === 1) {
@@ -547,7 +652,12 @@ export function canPlaceAnyPiece(board: Board, pieces: Piece[]): boolean {
 }
 
 // Place a piece on the board (returns new board)
-export function placePiece(board: Board, piece: Piece, row: number, col: number): Board {
+export function placePiece(
+  board: Board,
+  piece: Piece,
+  row: number,
+  col: number,
+): Board {
   const newBoard = board.map(r => [...r]);
   let rewardMarkerPlaced = false;
   for (let r = 0; r < piece.shape.length; r++) {
@@ -559,7 +669,8 @@ export function placePiece(board: Board, piece: Piece, row: number, col: number)
           isItem: !rewardMarkerPlaced && piece.isItem,
           itemType: !rewardMarkerPlaced ? piece.itemType : undefined,
         };
-        rewardMarkerPlaced = rewardMarkerPlaced || piece.isGem === true || piece.isItem === true;
+        rewardMarkerPlaced =
+          rewardMarkerPlaced || piece.isGem === true || piece.isItem === true;
       }
     }
   }
@@ -604,8 +715,14 @@ export function checkAndClearLines(board: Board): {
     let full = true;
     for (let c = 0; c < COLS; c++) {
       const cell = newBoard[r][c];
-      if (cell === null) { full = false; break; }
-      if (cell.type === 'stone') { full = false; break; }
+      if (cell === null) {
+        full = false;
+        break;
+      }
+      if (cell.type === 'stone') {
+        full = false;
+        break;
+      }
     }
     if (full) clearedRows.push(r);
   }
@@ -615,8 +732,14 @@ export function checkAndClearLines(board: Board): {
     let full = true;
     for (let r = 0; r < ROWS; r++) {
       const cell = newBoard[r][c];
-      if (cell === null) { full = false; break; }
-      if (cell.type === 'stone') { full = false; break; }
+      if (cell === null) {
+        full = false;
+        break;
+      }
+      if (cell.type === 'stone') {
+        full = false;
+        break;
+      }
     }
     if (full) clearedCols.push(c);
   }
@@ -627,14 +750,21 @@ export function checkAndClearLines(board: Board): {
     if (cell === null) return;
 
     if (cell.type === 'ice') {
-      if ((cell.hits || 0) >= 1) { newBoard[r][c] = null; iceDestroyed++; }
-      else { newBoard[r][c] = {...cell, hits: (cell.hits || 0) + 1}; }
+      if ((cell.hits || 0) >= 1) {
+        newBoard[r][c] = null;
+        iceDestroyed++;
+      } else {
+        newBoard[r][c] = { ...cell, hits: (cell.hits || 0) + 1 };
+      }
     } else if (cell.type === 'hard') {
       // hard block: reduce hit counter; disappears when hits reach 0
       const remaining = (cell.hits ?? 1) - 1;
       hardBlocksHit++;
-      if (remaining <= 0) { newBoard[r][c] = null; }
-      else { newBoard[r][c] = {...cell, hits: remaining}; }
+      if (remaining <= 0) {
+        newBoard[r][c] = null;
+      } else {
+        newBoard[r][c] = { ...cell, hits: remaining };
+      }
     } else {
       // Normal cell — collect gem/item info before clearing
       if ((cell as any).isGem) gemsFound++;
@@ -678,11 +808,221 @@ export function checkAndClearLines(board: Board): {
     const [r, c] = pos.split(',').map(Number);
     if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
       const cell = newBoard[r][c];
-      if (cell?.type === 'stone') { newBoard[r][c] = null; stonesDestroyed++; }
+      if (cell?.type === 'stone') {
+        newBoard[r][c] = null;
+        stonesDestroyed++;
+      }
     }
   }
 
-  return {newBoard, clearedRows, clearedCols, stonesDestroyed, iceDestroyed, hardBlocksHit, gemsFound, itemsFound};
+  return {
+    newBoard,
+    clearedRows,
+    clearedCols,
+    stonesDestroyed,
+    iceDestroyed,
+    hardBlocksHit,
+    gemsFound,
+    itemsFound,
+  };
+}
+
+export function clearLineTargets(
+  board: Board,
+  rows: number[],
+  cols: number[],
+): {
+  newBoard: Board;
+  clearedRows: number[];
+  clearedCols: number[];
+  stonesDestroyed: number;
+  iceDestroyed: number;
+  hardBlocksHit: number;
+  gemsFound: number;
+  itemsFound: string[];
+} {
+  const newBoard = board.map(r => [...r]);
+  const safeRows = Array.from(
+    new Set(rows.filter(row => row >= 0 && row < ROWS)),
+  );
+  const safeCols = Array.from(
+    new Set(cols.filter(col => col >= 0 && col < COLS)),
+  );
+  let stonesDestroyed = 0;
+  let iceDestroyed = 0;
+  let hardBlocksHit = 0;
+  let gemsFound = 0;
+  const itemsFound: string[] = [];
+
+  const processCell = (r: number, c: number) => {
+    const cell = newBoard[r][c];
+    if (cell === null) {
+      return;
+    }
+
+    if (cell.type === 'ice') {
+      if ((cell.hits || 0) >= 1) {
+        newBoard[r][c] = null;
+        iceDestroyed++;
+      } else {
+        newBoard[r][c] = { ...cell, hits: (cell.hits || 0) + 1 };
+      }
+      return;
+    }
+
+    if (cell.type === 'hard') {
+      const remaining = (cell.hits ?? 1) - 1;
+      hardBlocksHit++;
+      if (remaining <= 0) {
+        newBoard[r][c] = null;
+      } else {
+        newBoard[r][c] = { ...cell, hits: remaining };
+      }
+      return;
+    }
+
+    if ((cell as any).isGem) {
+      gemsFound++;
+    }
+    if ((cell as any).isItem && (cell as any).itemType) {
+      itemsFound.push((cell as any).itemType);
+    }
+    newBoard[r][c] = null;
+  };
+
+  for (const row of safeRows) {
+    for (let c = 0; c < COLS; c++) {
+      processCell(row, c);
+    }
+  }
+
+  for (const col of safeCols) {
+    for (let r = 0; r < ROWS; r++) {
+      if (newBoard[r][col] === null) {
+        continue;
+      }
+      processCell(r, col);
+    }
+  }
+
+  const damagedPositions = new Set<string>();
+  for (const row of safeRows) {
+    for (let c = 0; c < COLS; c++) {
+      damagedPositions.add(`${row - 1},${c}`);
+      damagedPositions.add(`${row + 1},${c}`);
+    }
+  }
+  for (const col of safeCols) {
+    for (let r = 0; r < ROWS; r++) {
+      damagedPositions.add(`${r},${col - 1}`);
+      damagedPositions.add(`${r},${col + 1}`);
+    }
+  }
+
+  for (const pos of damagedPositions) {
+    const [r, c] = pos.split(',').map(Number);
+    if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+      const cell = newBoard[r][c];
+      if (cell?.type === 'stone') {
+        newBoard[r][c] = null;
+        stonesDestroyed++;
+      }
+    }
+  }
+
+  return {
+    newBoard,
+    clearedRows: safeRows,
+    clearedCols: safeCols,
+    stonesDestroyed,
+    iceDestroyed,
+    hardBlocksHit,
+    gemsFound,
+    itemsFound,
+  };
+}
+
+export function clearRandomLines(
+  board: Board,
+  count: number,
+): {
+  newBoard: Board;
+  clearedRows: number[];
+  clearedCols: number[];
+  stonesDestroyed: number;
+  iceDestroyed: number;
+  hardBlocksHit: number;
+  gemsFound: number;
+  itemsFound: string[];
+} {
+  const rowCandidates = Array.from({ length: ROWS }, (_, row) => row).filter(
+    row => board[row].some(cell => cell !== null),
+  );
+  const colCandidates = Array.from({ length: COLS }, (_, col) => col).filter(
+    col => board.some(row => row[col] !== null),
+  );
+  const lineCandidates = [
+    ...rowCandidates.map(row => ({ kind: 'row' as const, index: row })),
+    ...colCandidates.map(col => ({ kind: 'col' as const, index: col })),
+  ];
+
+  if (lineCandidates.length === 0 || count <= 0) {
+    return clearLineTargets(board, [], []);
+  }
+
+  const selectedRows: number[] = [];
+  const selectedCols: number[] = [];
+  const remaining = [...lineCandidates];
+  const selectionCount = Math.min(count, remaining.length);
+
+  for (let pick = 0; pick < selectionCount; pick += 1) {
+    const nextIndex = Math.floor(Math.random() * remaining.length);
+    const [next] = remaining.splice(nextIndex, 1);
+    if (!next) {
+      break;
+    }
+
+    if (next.kind === 'row') {
+      selectedRows.push(next.index);
+    } else {
+      selectedCols.push(next.index);
+    }
+  }
+
+  return clearLineTargets(board, selectedRows, selectedCols);
+}
+
+export function fillRandomEmptyCells(
+  board: Board,
+  count: number,
+  colors?: string[],
+): Board {
+  if (count <= 0) {
+    return board;
+  }
+
+  const newBoard = board.map(r => [...r]);
+  const empties: Array<{ row: number; col: number }> = [];
+  for (let row = 0; row < ROWS; row += 1) {
+    for (let col = 0; col < COLS; col += 1) {
+      if (newBoard[row][col] === null) {
+        empties.push({ row, col });
+      }
+    }
+  }
+
+  let remaining = Math.min(count, empties.length);
+  while (remaining > 0 && empties.length > 0) {
+    const nextIndex = Math.floor(Math.random() * empties.length);
+    const [nextCell] = empties.splice(nextIndex, 1);
+    if (!nextCell) {
+      break;
+    }
+    newBoard[nextCell.row][nextCell.col] = { color: randomColor(colors) };
+    remaining -= 1;
+  }
+
+  return newBoard;
 }
 
 // Predict which rows/cols will clear if a piece is placed at (row, col)
@@ -691,13 +1031,13 @@ export function predictClearLines(
   shape: PieceShape,
   row: number,
   col: number,
-): {rows: number[]; cols: number[]} {
+): { rows: number[]; cols: number[] } {
   // Simulate placement
   const simBoard = board.map(r => [...r]);
   for (let r = 0; r < shape.length; r++) {
     for (let c = 0; c < shape[r].length; c++) {
       if (shape[r][c] === 1) {
-        simBoard[row + r][col + c] = {color: '#fff'};
+        simBoard[row + r][col + c] = { color: '#fff' };
       }
     }
   }
@@ -723,7 +1063,7 @@ export function predictClearLines(
     }
     if (full) cols.push(c);
   }
-  return {rows, cols};
+  return { rows, cols };
 }
 
 // Calculate score for a placement
@@ -741,7 +1081,10 @@ export function calculateScore(
 }
 
 // Calculate stars earned for a score
-export function calculateStars(score: number, thresholds: [number, number, number]): number {
+export function calculateStars(
+  score: number,
+  thresholds: [number, number, number],
+): number {
   if (score >= thresholds[2]) return 3;
   if (score >= thresholds[1]) return 2;
   if (score >= thresholds[0]) return 1;
@@ -752,7 +1095,7 @@ export function calculateStars(score: number, thresholds: [number, number, numbe
 // 'hard' obstacles require `hits` line-clears to destroy (x-block system)
 export function addObstacles(
   board: Board,
-  obstacles: {type: 'stone' | 'ice' | 'hard'; count: number; hits?: number}[],
+  obstacles: { type: 'stone' | 'ice' | 'hard'; count: number; hits?: number }[],
 ): Board {
   const newBoard = board.map(r => [...r]);
   for (const obs of obstacles) {
@@ -768,7 +1111,7 @@ export function addObstacles(
         newBoard[r][c] = {
           color,
           type: obs.type,
-          hits: obs.type === 'hard' ? (obs.hits ?? 2) : 0,
+          hits: obs.type === 'hard' ? obs.hits ?? 2 : 0,
         };
         placed++;
       }
@@ -784,14 +1127,14 @@ export function addEndlessHardObstacles(board: Board, level: number): Board {
   if (level < 3) return board; // no obstacles in early levels
   const newBoard = board.map(r => [...r]);
   const count = Math.min(Math.floor((level - 2) / 2), 6); // max 6 obstacles
-  const hitCount = Math.min(Math.ceil(level / 3), 5);      // max x5
+  const hitCount = Math.min(Math.ceil(level / 3), 5); // max x5
   let placed = 0;
   let attempts = 0;
   while (placed < count && attempts < 200) {
     const r = Math.floor(Math.random() * ROWS);
     const c = Math.floor(Math.random() * COLS);
     if (newBoard[r][c] === null) {
-      newBoard[r][c] = {color: '#7c3aed', type: 'hard', hits: hitCount};
+      newBoard[r][c] = { color: '#7c3aed', type: 'hard', hits: hitCount };
       placed++;
     }
     attempts++;
@@ -801,8 +1144,9 @@ export function addEndlessHardObstacles(board: Board, level: number): Board {
 
 // Apply random gem block chance (1-2%) to a generated piece
 export function applyGemChance(piece: Piece, chanceBonus: number = 0): Piece {
-  if (Math.random() < 0.015 + chanceBonus) { // 1.5% chance
-    return {...piece, isGem: true, color: '#f59e0b'}; // gold color for gems
+  if (Math.random() < 0.015 + chanceBonus) {
+    // 1.5% chance
+    return { ...piece, isGem: true, color: '#f59e0b' }; // gold color for gems
   }
   return piece;
 }
@@ -812,7 +1156,7 @@ const ITEM_TYPES = ['hammer', 'bomb', 'refresh'];
 export function applyItemChance(piece: Piece, chanceBonus: number = 0): Piece {
   if (Math.random() < 0.02 + chanceBonus) {
     const itemType = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
-    return {...piece, isItem: true, itemType, color: '#ec4899'};
+    return { ...piece, isItem: true, itemType, color: '#ec4899' };
   }
   return piece;
 }
@@ -825,7 +1169,8 @@ export function generatePieceWithEffects(
 ): Piece {
   let piece = generatePiece(difficulty, colors, options);
   piece = applyGemChance(piece, options.gemChanceBonus ?? 0);
-  if (!piece.isGem) piece = applyItemChance(piece, options.itemChanceBonus ?? 0);
+  if (!piece.isGem)
+    piece = applyItemChance(piece, options.itemChanceBonus ?? 0);
   return piece;
 }
 
@@ -843,7 +1188,11 @@ export function generatePiecesWithEffects(
 }
 
 // Use hammer on a cell
-export function useHammer(board: Board, row: number, col: number): Board | null {
+export function useHammer(
+  board: Board,
+  row: number,
+  col: number,
+): Board | null {
   if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return null;
   if (board[row][col] === null) return null;
   const newBoard = board.map(r => [...r]);
@@ -852,7 +1201,11 @@ export function useHammer(board: Board, row: number, col: number): Board | null 
 }
 
 // Use bomb on a cell (3x3 area)
-export function useBomb(board: Board, row: number, col: number): {board: Board; destroyed: number} {
+export function useBomb(
+  board: Board,
+  row: number,
+  col: number,
+): { board: Board; destroyed: number } {
   const newBoard = board.map(r => [...r]);
   let destroyed = 0;
   for (let r = row - 1; r <= row + 1; r++) {
@@ -863,7 +1216,7 @@ export function useBomb(board: Board, row: number, col: number): {board: Board; 
       }
     }
   }
-  return {board: newBoard, destroyed};
+  return { board: newBoard, destroyed };
 }
 
 // Seeded random for battle mode
@@ -883,9 +1236,11 @@ export function mulberry32(seed: number): () => number {
 export function generateSeededPieces(seed: number, round: number): Piece[] {
   const rng = mulberry32(seed + round * 12345);
   const pieces: Piece[] = [];
+  const fillFriendlyPool = getFillFriendlyGenerationPool();
+  const generationPool = getGenerationPoolForDifficulty('hard');
 
   // First piece: always fill-friendly
-  const fillIdx = pickWeightedShapeIndex(FILL_FRIENDLY, rng);
+  const fillIdx = pickWeightedShapeIndex(fillFriendlyPool, rng);
   const fillColorIdx = Math.floor(rng() * COLORS.length);
   pieces.push({
     shape: PIECE_SHAPES[fillIdx],
@@ -895,7 +1250,7 @@ export function generateSeededPieces(seed: number, round: number): Piece[] {
 
   // Remaining 2 pieces: random
   for (let i = 0; i < 2; i++) {
-    const idx = Math.floor(rng() * PIECE_SHAPES.length);
+    const idx = generationPool[Math.floor(rng() * generationPool.length)];
     const colorIdx = Math.floor(rng() * COLORS.length);
     pieces.push({
       shape: PIECE_SHAPES[idx],
@@ -917,7 +1272,7 @@ export function generateAttackLines(board: Board, lineCount: number): Board {
   for (let i = ROWS - lineCount; i < ROWS; i++) {
     const gap = Math.floor(Math.random() * COLS);
     for (let c = 0; c < COLS; c++) {
-      newBoard[i][c] = c === gap ? null : {color: '#6b7280'};
+      newBoard[i][c] = c === gap ? null : { color: '#6b7280' };
     }
   }
   return newBoard;

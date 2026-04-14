@@ -131,6 +131,35 @@ export function useLobbyChat({
       const channelKey = getLobbyChatChannelKey(mode, targetChannelId);
       const chatChannel = supabase
         .channel(`lobby-chat-db:${mode}:${targetChannelId}`)
+        .on('broadcast', { event: 'message' }, ({ payload }: any) => {
+          const incomingId =
+            typeof payload?.id === 'string' ? payload.id : null;
+          const incomingNickname =
+            typeof payload?.nickname === 'string'
+              ? payload.nickname
+              : 'Unknown';
+          const incomingText =
+            typeof payload?.text === 'string' ? payload.text : '';
+
+          if (!incomingId || !incomingText) {
+            return;
+          }
+
+          setMessages(current => {
+            const nextMessages = appendLobbyChatMessage(current, {
+              id: incomingId,
+              userId:
+                typeof payload?.userId === 'string'
+                  ? payload.userId
+                  : undefined,
+              nickname: incomingNickname,
+              text: incomingText,
+              self: payload?.userId === userId,
+            });
+            writeLobbyChatHistory(mode, targetChannelId, nextMessages);
+            return nextMessages;
+          });
+        })
         .on(
           'postgres_changes',
           {
@@ -201,22 +230,26 @@ export function useLobbyChat({
             refreshChannelInfos();
           }
 
-          const { data: history } = await fetchLobbyChatMessages(
-            mode,
-            targetChannelId,
-            MESSAGE_LIMIT,
-          );
+          try {
+            const { data: history } = await fetchLobbyChatMessages(
+              mode,
+              targetChannelId,
+              MESSAGE_LIMIT,
+            );
 
-          if (token === lifecycleTokenRef.current) {
-            const hydratedMessages = history.map(message => ({
-              id: message.id,
-              userId: message.userId,
-              nickname: message.nickname,
-              text: message.text,
-              self: message.userId === userId,
-            }));
-            writeLobbyChatHistory(mode, targetChannelId, hydratedMessages);
-            setMessages(hydratedMessages);
+            if (token === lifecycleTokenRef.current) {
+              const hydratedMessages = history.map(message => ({
+                id: message.id,
+                userId: message.userId,
+                nickname: message.nickname,
+                text: message.text,
+                self: message.userId === userId,
+              }));
+              writeLobbyChatHistory(mode, targetChannelId, hydratedMessages);
+              setMessages(hydratedMessages);
+            }
+          } catch (error) {
+            console.warn('useLobbyChat history load failed:', error);
           }
 
           resolve();
@@ -349,6 +382,24 @@ export function useLobbyChat({
     });
     setDraft('');
 
+    let broadcastSucceeded = false;
+    try {
+      const result = await chatChannelRef.current.send({
+        type: 'broadcast',
+        event: 'message',
+        payload: {
+          id: message.id,
+          userId,
+          nickname,
+          text,
+          channelId: activeChannelId,
+        },
+      });
+      broadcastSucceeded = result === 'ok';
+    } catch (error) {
+      console.warn('useLobbyChat broadcast failed:', error);
+    }
+
     const { error } = await insertLobbyChatMessage({
       id: message.id,
       mode,
@@ -359,7 +410,11 @@ export function useLobbyChat({
     });
 
     if (error) {
-      Alert.alert('채팅 전송 실패', error.message);
+      if (!broadcastSucceeded) {
+        Alert.alert('채팅 전송 실패', error.message);
+      } else {
+        console.warn('useLobbyChat insert failed:', error.message);
+      }
     }
   }, [draft, mode, nickname, userId]);
 
