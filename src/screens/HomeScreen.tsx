@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import MageSprite from '../components/MageSprite';
 import KnightSprite from '../components/KnightSprite';
+import GameBottomNav from '../components/GameBottomNav';
 import {CHARACTER_CLASSES, getCharacterAtk, getCharacterHp} from '../constants/characters';
 import {loadCharacterData, CharacterData} from '../stores/gameStore';
 import {
@@ -70,14 +71,7 @@ const IMG_RANKING = require('../assets/ui/ranking.png');
 const IMG_BATTLE = require('../assets/ui/battle.png');
 const IMG_RAID = require('../assets/ui/raid.png');
 const IMG_CURRENCY = require('../assets/ui/currency_bar.png');
-const IMG_MISSIONS = require('../assets/ui/missions.png');
-const IMG_SHOP = require('../assets/ui/shop.png');
-const IMG_FRIENDS = require('../assets/ui/friends.png');
-const IMG_SKIN = require('../assets/ui/skin.png');
-const IMG_CODEX = require('../assets/ui/codex.png');
-
 const MODE_BTN_SIZE = W * 0.23;
-const NAV_ICON_SIZE = W * 0.16;
 const TOP_ICON_SIZE = W * 0.12;
 const KNIGHT_SIZE = W * 0.57 * 1.5;
 const MAGE_SIZE = KNIGHT_SIZE / 1.3;
@@ -131,19 +125,6 @@ const CHARACTER_THEMES: Record<
   },
 };
 
-function OutlinedText({
-  style,
-  children,
-}: {
-  style?: any;
-  children: React.ReactNode;
-}) {
-  return (
-    <View>
-      <Text style={[style, styles.outlinedTextShadow]}>{children}</Text>
-    </View>
-  );
-}
 
 export default function HomeScreen({navigation}: any) {
   const windowSize = useWindowDimensions();
@@ -729,50 +710,12 @@ export default function HomeScreen({navigation}: any) {
           </View>
         </View>
 
-        <View style={styles.bottomNav}>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => navigation.navigate('Missions')}>
-            <Image source={IMG_MISSIONS} style={styles.navIcon} resizeMode="contain" />
-            <OutlinedText style={styles.navLabel}>미션</OutlinedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => navigation.navigate('Shop')}>
-            <Image source={IMG_SHOP} style={styles.navIcon} resizeMode="contain" />
-            <OutlinedText style={styles.navLabel}>상점</OutlinedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => navigation.navigate('Friends')}>
-            <Image source={IMG_FRIENDS} style={styles.navIcon} resizeMode="contain" />
-            <OutlinedText style={styles.navLabel}>친구</OutlinedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => navigation.navigate('SkinCollection')}>
-            <Image source={IMG_SKIN} style={styles.navIcon} resizeMode="contain" />
-            <OutlinedText style={styles.navLabel}>스킨</OutlinedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => {
-              if (selectedChar) {
-                navigation.navigate('SkillTree', {characterId: selectedChar});
-              } else {
-                setShowCharSelect(true);
-              }
-            }}>
-            <Text style={styles.navIconEmoji}>✨</Text>
-            <OutlinedText style={styles.navLabel}>스킬</OutlinedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => navigation.navigate('BossCodex')}>
-            <Image source={IMG_CODEX} style={styles.navIcon} resizeMode="contain" />
-            <OutlinedText style={styles.navLabel}>도감</OutlinedText>
-          </TouchableOpacity>
-        </View>
+        <GameBottomNav
+          navigation={navigation}
+          activeItem="home"
+          selectedCharacterId={selectedChar}
+          onOpenCharacterPicker={() => setShowCharSelect(true)}
+        />
 
         <Modal
           visible={showAnnouncementModal && !!announcement}
@@ -974,11 +917,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  outlinedTextShadow: {
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowOffset: {width: 1, height: 1},
-    textShadowRadius: 2,
-  },
+
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1152,35 +1091,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.22)',
     marginTop: 10,
   },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-    paddingBottom: H * 0.01,
-    paddingHorizontal: W * 0.025,
-  },
-  navItem: {
-    width: NAV_ICON_SIZE,
-    alignItems: 'center',
-  },
-  navIcon: {
-    width: NAV_ICON_SIZE,
-    height: NAV_ICON_SIZE,
-  },
-  navIconEmoji: {
-    fontSize: NAV_ICON_SIZE * 0.65,
-    width: NAV_ICON_SIZE,
-    height: NAV_ICON_SIZE,
-    textAlign: 'center',
-    lineHeight: NAV_ICON_SIZE,
-  },
-  navLabel: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
-    marginTop: 2,
-    textAlign: 'center',
-  },
+
   announceBanner: {
     backgroundColor: 'rgba(99, 102, 241, 0.2)',
     borderRadius: 10,

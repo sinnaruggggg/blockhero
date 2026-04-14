@@ -16,7 +16,9 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import BackImageButton from '../components/BackImageButton';
+import GameBottomNav, {
+  GAME_BOTTOM_NAV_CHAT_OFFSET,
+} from '../components/GameBottomNav';
 import { useCreatorConfig } from '../hooks/useCreatorConfig';
 import {
   getPlayerId,
@@ -1167,21 +1169,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <BackImageButton
-          onPress={() => {
-            cleanup();
-            navigation.goBack();
-          }}
-          size={42}
-        />
-        <TouchableOpacity
-          onPress={() => {
-            cleanup();
-            navigation.goBack();
-          }}
-        >
-          <Text style={styles.backBtn}>뒤로</Text>
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
         <Text style={styles.title}>레이드</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Friends')}>
           <Text style={styles.friendsBtn}>친구</Text>
@@ -1219,7 +1207,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
           </Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}>
         {loadSummary && (
           <View
             style={styles.loadErrorCard}
@@ -1540,6 +1530,12 @@ export default function RaidLobbyScreen({ navigation }: any) {
         />
       </ScrollView>
 
+      <GameBottomNav
+        navigation={navigation}
+        activeItem={null}
+        onHomePress={cleanup}
+      />
+
       <FriendInviteModal
         visible={showInviteModal}
         friends={inviteableFriends}
@@ -1583,7 +1579,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
             });
           }}
           onPressUser={handleInviteFromChat}
-          bottom={26}
+          bottom={GAME_BOTTOM_NAV_CHAT_OFFSET}
         />
       ) : null}
     </SafeAreaView>
@@ -1600,7 +1596,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  backBtn: { color: 'transparent', fontSize: 1, lineHeight: 1, opacity: 0 },
+  headerSpacer: { width: 58 },
   title: { color: '#e2e8f0', fontSize: 18, fontWeight: '800' },
   friendsBtn: { color: '#22c55e', fontSize: 13, fontWeight: '700' },
   modeTabs: {
@@ -1620,6 +1616,7 @@ const styles = StyleSheet.create({
   modeTabActive: { backgroundColor: '#dc2626' },
   modeTabText: { color: '#94a3b8', fontSize: 13, fontWeight: '700' },
   modeTabTextActive: { color: '#fff' },
+  scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 28, paddingHorizontal: 14 },
   loadErrorCard: {
     backgroundColor: 'rgba(127,29,29,0.35)',

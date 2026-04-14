@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
   Dimensions,
   Image,
   StatusBar,
@@ -14,7 +13,11 @@ import {
 } from 'react-native';
 import MageSprite from '../components/MageSprite';
 import BackImageButton from '../components/BackImageButton';
+import GameBottomNav, {
+  GAME_BOTTOM_NAV_CHAT_OFFSET,
+} from '../components/GameBottomNav';
 import LobbyChatPanel from '../components/LobbyChatPanel';
+import MenuFloatingBlocks from '../components/MenuFloatingBlocks';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {t} from '../i18n';
 import {getNickname, getPlayerId} from '../stores/gameStore';
@@ -38,112 +41,10 @@ const IMG_BG = require('../assets/ui/lobby_bg.jpg');
 const IMG_BTN_CREATE = require('../assets/ui/btn_create.png');
 const IMG_BTN_JOIN = require('../assets/ui/btn_join.png');
 const IMG_BTN_RANDOM = require('../assets/ui/btn_random.png');
-const IMG_NAV_MISSION = require('../assets/ui/missions.png');
-const IMG_NAV_SHOP = require('../assets/ui/shop.png');
-const IMG_NAV_FRIENDS = require('../assets/ui/friends.png');
-const IMG_NAV_SKIN = require('../assets/ui/skin.png');
-const IMG_NAV_CODEX = require('../assets/ui/codex.png');
 
 const BTN_W = W * 0.871;
 const BTN_H = Math.min(H * 0.112, 106);
 const BTN_GAP = Math.min(H * 0.016, 14);
-const NAV_ICON_SIZE = W * 0.16;
-
-const BLOCK_COLORS = [
-  'rgba(99, 132, 255, 0.25)',
-  'rgba(255, 99, 132, 0.2)',
-  'rgba(75, 220, 130, 0.22)',
-  'rgba(255, 206, 86, 0.22)',
-  'rgba(180, 99, 255, 0.2)',
-  'rgba(255, 159, 64, 0.22)',
-  'rgba(54, 215, 232, 0.2)',
-];
-
-interface BlockData {
-  id: number;
-  size: number;
-  color: string;
-  startX: number;
-  startY: number;
-  duration: number;
-  delay: number;
-  rotation: number;
-}
-
-function generateBlocks(count: number): BlockData[] {
-  return Array.from({length: count}, (_, i) => ({
-    id: i,
-    size: 12 + Math.random() * 24,
-    color: BLOCK_COLORS[i % BLOCK_COLORS.length],
-    startX: -40 + Math.random() * W * 0.8,
-    startY: -60 - Math.random() * H * 0.5,
-    duration: 6000 + Math.random() * 6000,
-    delay: Math.random() * 4000,
-    rotation: Math.random() * 360,
-  }));
-}
-
-const BLOCKS = generateBlocks(14);
-
-function FloatingBlocks() {
-  const anims = useRef(BLOCKS.map(() => new Animated.Value(0))).current;
-
-  useEffect(() => {
-    BLOCKS.forEach((block, i) => {
-      const animate = () => {
-        anims[i].setValue(0);
-        Animated.timing(anims[i], {
-          toValue: 1,
-          duration: block.duration,
-          delay: block.delay,
-          useNativeDriver: true,
-        }).start(() => {
-          block.delay = 0;
-          animate();
-        });
-      };
-      animate();
-    });
-  }, [anims]);
-
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {BLOCKS.map((block, i) => {
-        const translateX = anims[i].interpolate({
-          inputRange: [0, 1],
-          outputRange: [block.startX, block.startX + W * 0.5],
-        });
-        const translateY = anims[i].interpolate({
-          inputRange: [0, 1],
-          outputRange: [block.startY, block.startY + H * 1.4],
-        });
-        const rotate = anims[i].interpolate({
-          inputRange: [0, 1],
-          outputRange: [`${block.rotation}deg`, `${block.rotation + 180}deg`],
-        });
-        const opacity = anims[i].interpolate({
-          inputRange: [0, 0.1, 0.8, 1],
-          outputRange: [0, 1, 1, 0],
-        });
-
-        return (
-          <Animated.View
-            key={block.id}
-            style={{
-              position: 'absolute',
-              width: block.size,
-              height: block.size,
-              backgroundColor: block.color,
-              borderRadius: block.size * 0.2,
-              opacity,
-              transform: [{translateX}, {translateY}, {rotate}],
-            }}
-          />
-        );
-      })}
-    </View>
-  );
-}
 
 export default function LobbyScreen({navigation}: any) {
   const [mode, setMode] = useState<'menu' | 'create' | 'join' | 'random'>('menu');
@@ -461,29 +362,26 @@ export default function LobbyScreen({navigation}: any) {
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <Image source={IMG_BG} style={styles.bgImage} resizeMode="cover" />
-      <FloatingBlocks />
+      <MenuFloatingBlocks />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.backButtonDock}>
-          <BackImageButton
-            onPress={() => {
-              if (mode === 'menu') {
-                navigation.goBack();
-                return;
-              }
+        {mode !== 'menu' ? (
+          <View style={styles.backButtonDock}>
+            <BackImageButton
+              onPress={() => {
+                if (mode === 'join') {
+                  setMode('menu');
+                  setInputCode('');
+                  return;
+                }
 
-              if (mode === 'join') {
-                setMode('menu');
-                setInputCode('');
-                return;
-              }
-
-              handleCancel().catch(error => {
-                console.warn('LobbyScreen handleCancel error:', error);
-              });
-            }}
-            size={44}
-          />
-        </View>
+                handleCancel().catch(error => {
+                  console.warn('LobbyScreen handleCancel error:', error);
+                });
+              }}
+              size={44}
+            />
+          </View>
+        ) : null}
         {mode === 'menu' && (
           <View style={styles.menuContent}>
             <View style={styles.menuTopSection}>
@@ -532,43 +430,15 @@ export default function LobbyScreen({navigation}: any) {
               </View>
             </View>
 
-            <View style={styles.bottomNav}>
-              <TouchableOpacity
-                style={styles.navItem}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate('Missions')}>
-                <Image source={IMG_NAV_MISSION} style={styles.navIcon} resizeMode="contain" />
-                <Text style={styles.navLabel}>미션</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navItem}
-                onPress={() => navigation.navigate('Shop')}
-                activeOpacity={0.7}>
-                <Image source={IMG_NAV_SHOP} style={styles.navIcon} resizeMode="contain" />
-                <Text style={styles.navLabel}>상점</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navItem}
-                onPress={() => navigation.navigate('Friends')}
-                activeOpacity={0.7}>
-                <Image source={IMG_NAV_FRIENDS} style={styles.navIcon} resizeMode="contain" />
-                <Text style={styles.navLabel}>친구</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navItem}
-                onPress={() => navigation.navigate('SkinCollection')}
-                activeOpacity={0.7}>
-                <Image source={IMG_NAV_SKIN} style={styles.navIcon} resizeMode="contain" />
-                <Text style={styles.navLabel}>스킨</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.navItem}
-                onPress={() => navigation.navigate('BossCodex')}
-                activeOpacity={0.7}>
-                <Image source={IMG_NAV_CODEX} style={styles.navIcon} resizeMode="contain" />
-                <Text style={styles.navLabel}>도감</Text>
-              </TouchableOpacity>
-            </View>
+            <GameBottomNav
+              navigation={navigation}
+              activeItem={null}
+              onHomePress={async () => {
+                cleanup();
+                await cleanupMatching(playerIdRef.current);
+                await cleanupBattleState(playerIdRef.current);
+              }}
+            />
           </View>
         )}
 
@@ -658,7 +528,7 @@ export default function LobbyScreen({navigation}: any) {
                 console.warn('LobbyScreen joinRandomChannel error:', error);
               });
             }}
-            bottom={mode === 'menu' ? 98 : 26}
+            bottom={mode === 'menu' ? GAME_BOTTOM_NAV_CHAT_OFFSET : 26}
           />
         ) : null}
       </SafeAreaView>
@@ -767,31 +637,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: {width: 0, height: 1},
     textShadowRadius: 3,
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-    paddingBottom: H * 0.004,
-    paddingHorizontal: W * 0.025,
-  },
-  navItem: {
-    width: NAV_ICON_SIZE,
-    alignItems: 'center',
-  },
-  navIcon: {
-    width: NAV_ICON_SIZE,
-    height: NAV_ICON_SIZE,
-  },
-  navLabel: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
-    marginTop: 2,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowOffset: {width: 1, height: 1},
-    textShadowRadius: 2,
   },
   overlayCenter: {
     flex: 1,
