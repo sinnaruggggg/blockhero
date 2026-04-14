@@ -1,23 +1,33 @@
 import { Linking, Platform } from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
-import { isNewerVersion } from './updateVersion';
 import { openGameDialog } from './gameDialogService';
+import { isNewerVersion } from './updateVersion';
 
-export const CURRENT_VERSION_CODE = 173;
-export const CURRENT_VERSION_NAME = '1.3.45';
+export const CURRENT_VERSION_CODE = 174;
+export const CURRENT_VERSION_NAME = '1.3.47';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
+const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_REPO}`;
 const APK_MIME = 'application/vnd.android.package-archive';
+
+interface GitHubReleaseAsset {
+  name: string;
+  browser_download_url: string;
+  content_type?: string;
+  size: number;
+}
 
 interface GitHubRelease {
   tag_name: string;
-  name: string;
-  body: string;
-  assets: {
-    name: string;
-    browser_download_url: string;
-    size: number;
-  }[];
+  name?: string | null;
+  body?: string | null;
+  draft?: boolean;
+  prerelease?: boolean;
+  assets: GitHubReleaseAsset[];
+}
+
+interface GitHubApiError {
+  message?: string;
 }
 
 export interface UpdateInfo {
@@ -27,43 +37,124 @@ export interface UpdateInfo {
   sizeBytes: number;
 }
 
-export async function checkForUpdate(): Promise<UpdateInfo | null> {
+export interface UpdateCheckResult {
+  update: UpdateInfo | null;
+  errorMessage: string | null;
+}
+
+function buildGitHubHeaders() {
+  return {
+    Accept: 'application/vnd.github+json',
+    'Cache-Control': 'no-cache',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+}
+
+function pickApkAsset(release: GitHubRelease): GitHubReleaseAsset | null {
+  return (
+    release.assets.find(
+      asset =>
+        asset.name.toLowerCase().endsWith('.apk') ||
+        asset.content_type === APK_MIME,
+    ) ?? null
+  );
+}
+
+function isUsableRelease(release: GitHubRelease): boolean {
+  return !release.draft && !release.prerelease && !!pickApkAsset(release);
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    headers: buildGitHubHeaders(),
+  });
+
+  if (!response.ok) {
+    let details = `GitHub API ${response.status}`;
+
+    try {
+      const payload: GitHubApiError = await response.json();
+      if (payload?.message) {
+        details = `${details}: ${payload.message}`;
+      }
+    } catch {}
+
+    throw new Error(details);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function fetchLatestPublishedRelease(): Promise<GitHubRelease> {
+  let latestReleaseError: Error | null = null;
+
   try {
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
-      {
-        headers: {
-          Accept: 'application/vnd.github.v3+json',
-          'Cache-Control': 'no-cache',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      },
+    const latestRelease = await fetchJson<GitHubRelease>(
+      `${GITHUB_API_BASE}/releases/latest`,
     );
-
-    if (!response.ok) {
-      return null;
+    if (isUsableRelease(latestRelease)) {
+      return latestRelease;
     }
+  } catch (error) {
+    latestReleaseError =
+      error instanceof Error ? error : new Error('Unknown update error');
+  }
 
-    const release: GitHubRelease = await response.json();
-    const latestVersionName = release.tag_name.replace(/^v/, '');
+  const releases = await fetchJson<GitHubRelease[]>(
+    `${GITHUB_API_BASE}/releases?per_page=5`,
+  );
+  const fallbackRelease = releases.find(isUsableRelease);
+
+  if (fallbackRelease) {
+    return fallbackRelease;
+  }
+
+  if (latestReleaseError) {
+    throw latestReleaseError;
+  }
+
+  throw new Error('No published APK release found');
+}
+
+export async function checkForUpdate(): Promise<UpdateCheckResult> {
+  try {
+    const release = await fetchLatestPublishedRelease();
+    const latestVersionName = release.tag_name.replace(/^v/, '').trim();
+    const apkAsset = pickApkAsset(release);
+
+    if (!latestVersionName || !apkAsset) {
+      return {
+        update: null,
+        errorMessage: '유효한 업데이트 릴리즈 정보를 찾지 못했습니다.',
+      };
+    }
 
     if (!isNewerVersion(latestVersionName, CURRENT_VERSION_NAME)) {
-      return null;
-    }
-
-    const apkAsset = release.assets.find(asset => asset.name.endsWith('.apk'));
-    if (!apkAsset) {
-      return null;
+      return {
+        update: null,
+        errorMessage: null,
+      };
     }
 
     return {
-      versionName: latestVersionName,
-      downloadUrl: apkAsset.browser_download_url,
-      releaseNotes: release.body || '',
-      sizeBytes: apkAsset.size || 0,
+      update: {
+        versionName: latestVersionName,
+        downloadUrl: apkAsset.browser_download_url,
+        releaseNotes: release.body?.trim() || '',
+        sizeBytes: apkAsset.size || 0,
+      },
+      errorMessage: null,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : '업데이트 정보를 가져오지 못했습니다.';
+
+    return {
+      update: null,
+      errorMessage,
+    };
   }
 }
 
