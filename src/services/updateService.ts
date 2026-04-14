@@ -3,12 +3,13 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 import { openGameDialog } from './gameDialogService';
 import { isNewerVersion } from './updateVersion';
 
-export const CURRENT_VERSION_CODE = 175;
-export const CURRENT_VERSION_NAME = '1.3.48';
+export const CURRENT_VERSION_CODE = 176;
+export const CURRENT_VERSION_NAME = '1.3.49';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_REPO}`;
 const APK_MIME = 'application/vnd.android.package-archive';
+const GITHUB_FETCH_TIMEOUT_MS = 15000;
 
 interface GitHubReleaseAsset {
   name: string;
@@ -46,6 +47,7 @@ function buildGitHubHeaders() {
   return {
     Accept: 'application/vnd.github+json',
     'Cache-Control': 'no-cache',
+    'User-Agent': `BlockHero/${CURRENT_VERSION_NAME}`,
     'X-GitHub-Api-Version': '2022-11-28',
   };
 }
@@ -65,9 +67,24 @@ function isUsableRelease(release: GitHubRelease): boolean {
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: buildGitHubHeaders(),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GITHUB_FETCH_TIMEOUT_MS);
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: buildGitHubHeaders(),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if ((error as Error)?.name === 'AbortError') {
+      throw new Error('GitHub API timeout');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     let details = `GitHub API ${response.status}`;
