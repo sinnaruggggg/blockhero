@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, {useEffect, useRef} from 'react';
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { LobbyChatMessage } from '../hooks/useLobbyChat';
+import type {LobbyChatMessage} from '../hooks/useLobbyChat';
 
 interface ChannelOption {
   id: number;
@@ -59,7 +59,7 @@ export default function LobbyChatPanel({
   const shouldAutoScrollRef = useRef(true);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const {contentOffset, contentSize, layoutMeasurement} = event.nativeEvent;
     const distanceFromBottom =
       contentSize.height - (contentOffset.y + layoutMeasurement.height);
     shouldAutoScrollRef.current = distanceFromBottom <= 28;
@@ -74,27 +74,28 @@ export default function LobbyChatPanel({
   useEffect(() => {
     if (isOpen && shouldAutoScrollRef.current) {
       requestAnimationFrame(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
+        scrollRef.current?.scrollToEnd({animated: true});
       });
     }
   }, [currentChannelId, isOpen, messages]);
 
+  const channelLabel = currentChannelId
+    ? `채널 ${currentChannelId} · ${currentOccupancy}/${capacity}`
+    : '채널 연결 중';
+
   return (
-    <View pointerEvents="box-none" style={[styles.host, { bottom }]}>
+    <View pointerEvents="box-none" style={[styles.host, {bottom}]}>
       {isOpen ? (
-        <View style={[styles.panel, { borderColor: `${accentColor}AA` }]}>
+        <View style={[styles.panel, {borderColor: 'rgba(226, 169, 77, 0.82)'}]}>
           <View style={styles.header}>
             <View style={styles.headerTextBlock}>
+              <Text style={styles.eyebrow}>SOCIAL CHAT</Text>
               <Text style={styles.title}>{title}</Text>
-              <Text style={[styles.channelText, { color: accentColor }]}>
-                {currentChannelId ? `채널 ${currentChannelId}` : '채널 연결 중'}
-                {currentChannelId ? ` · ${currentOccupancy}/${capacity}` : ''}
+              <Text style={[styles.channelText, {color: accentColor}]}>
+                {channelLabel}
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.closeButton, { borderColor: `${accentColor}55` }]}
-              onPress={onToggle}
-            >
+            <TouchableOpacity style={styles.closeButton} onPress={onToggle}>
               <Text style={styles.closeButtonText}>닫기</Text>
             </TouchableOpacity>
           </View>
@@ -103,41 +104,39 @@ export default function LobbyChatPanel({
             {channelOptions.map(option => {
               const active = option.id === currentChannelId;
               const full = !active && option.count >= capacity;
+
               return (
                 <TouchableOpacity
                   key={`channel-${option.id}`}
                   style={[
                     styles.channelChip,
-                    active && { backgroundColor: accentColor },
+                    active && {backgroundColor: accentColor, borderColor: '#ffffff'},
                     full && styles.channelChipFull,
                   ]}
                   disabled={full}
-                  onPress={() => onSwitchChannel(option.id)}
-                >
+                  onPress={() => onSwitchChannel(option.id)}>
                   <Text
                     style={[
                       styles.channelChipText,
                       active && styles.channelChipTextActive,
-                    ]}
-                  >
+                    ]}>
                     {option.id}번
                   </Text>
                   <Text
                     style={[
                       styles.channelChipMeta,
                       active && styles.channelChipTextActive,
-                    ]}
-                  >
+                    ]}>
                     {option.count}/{capacity}
                   </Text>
                 </TouchableOpacity>
               );
             })}
+
             <TouchableOpacity
-              style={[styles.randomButton, { borderColor: `${accentColor}88` }]}
-              onPress={onRandomizeChannel}
-            >
-              <Text style={[styles.randomButtonText, { color: accentColor }]}>
+              style={[styles.randomButton, {borderColor: `${accentColor}88`}]}
+              onPress={onRandomizeChannel}>
+              <Text style={[styles.randomButtonText, {color: accentColor}]}>
                 랜덤
               </Text>
             </TouchableOpacity>
@@ -154,9 +153,8 @@ export default function LobbyChatPanel({
               if (!isOpen || !shouldAutoScrollRef.current) {
                 return;
               }
-              scrollRef.current?.scrollToEnd({ animated: true });
-            }}
-          >
+              scrollRef.current?.scrollToEnd({animated: true});
+            }}>
             {messages.length === 0 ? (
               <Text style={styles.emptyText}>
                 {connected
@@ -170,29 +168,23 @@ export default function LobbyChatPanel({
                   style={[
                     styles.messageBubble,
                     message.self && styles.messageBubbleSelf,
-                  ]}
-                >
+                  ]}>
                   <Text
                     style={[
                       styles.messageNickname,
                       message.self && styles.messageNicknameSelf,
-                    ]}
-                  >
+                    ]}>
                     {message.nickname}
                   </Text>
                   {message.userId && onPressUser ? (
                     <TouchableOpacity
                       disabled={message.self}
-                      onPress={() =>
-                        onPressUser?.(message.userId!, message.nickname)
-                      }
-                    >
+                      onPress={() => onPressUser(message.userId!, message.nickname)}>
                       <Text
                         style={[
                           styles.messageUserId,
                           message.self && styles.messageUserIdDisabled,
-                        ]}
-                      >
+                        ]}>
                         ID: {message.userId}
                       </Text>
                     </TouchableOpacity>
@@ -208,28 +200,25 @@ export default function LobbyChatPanel({
               value={draft}
               onChangeText={onChangeDraft}
               placeholder="모집 메시지를 입력하세요"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor="#b7a8e6"
               style={styles.input}
               maxLength={120}
               returnKeyType="send"
               onSubmitEditing={onSend}
             />
             <TouchableOpacity
-              style={[styles.sendButton, { backgroundColor: accentColor }]}
-              onPress={onSend}
-            >
+              style={[styles.sendButton, {backgroundColor: accentColor}]}
+              onPress={onSend}>
               <Text style={styles.sendButtonText}>전송</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : null}
 
-      <TouchableOpacity
-        style={[styles.fab, { borderColor: `${accentColor}AA` }]}
-        onPress={onToggle}
-      >
+      <TouchableOpacity style={styles.fab} onPress={onToggle}>
+        <Text style={styles.fabEyebrow}>CHAT</Text>
         <Text style={styles.fabTitle}>채팅</Text>
-        <Text style={[styles.fabChannel, { color: accentColor }]}>
+        <Text style={[styles.fabChannel, {color: accentColor}]}>
           {currentChannelId
             ? `${currentChannelId}번 · ${currentOccupancy}/${capacity}`
             : '연결 중'}
@@ -247,15 +236,20 @@ const styles = StyleSheet.create({
     zIndex: 60,
   },
   panel: {
-    width: 310,
-    maxHeight: 360,
-    backgroundColor: 'rgba(15, 23, 42, 0.96)',
-    borderRadius: 18,
-    borderWidth: 1,
+    width: 316,
+    maxHeight: 380,
+    backgroundColor: 'rgba(33, 20, 82, 0.96)',
+    borderRadius: 22,
+    borderWidth: 2,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 10,
     gap: 10,
+    shadowColor: '#0b0419',
+    shadowOffset: {width: 0, height: 12},
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 10,
   },
   header: {
     flexDirection: 'row',
@@ -267,25 +261,33 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  eyebrow: {
+    color: '#ffd88a',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
   title: {
-    color: '#f8fafc',
+    color: '#fff7de',
     fontSize: 15,
     fontWeight: '900',
   },
   channelText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   closeButton: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   closeButtonText: {
-    color: '#e2e8f0',
+    color: '#fff4d7',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   channelRow: {
     flexDirection: 'row',
@@ -293,9 +295,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   channelChip: {
-    minWidth: 54,
-    borderRadius: 12,
-    backgroundColor: '#1e293b',
+    minWidth: 56,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 8,
     paddingVertical: 6,
     alignItems: 'center',
@@ -305,35 +309,38 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   channelChipText: {
-    color: '#e2e8f0',
+    color: '#f0e9ff',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   channelChipMeta: {
-    color: '#94a3b8',
+    color: '#d4c6ff',
     fontSize: 9,
     fontWeight: '700',
   },
   channelChipTextActive: {
-    color: '#fff',
+    color: '#ffffff',
   },
   randomButton: {
     marginLeft: 'auto',
-    borderWidth: 1,
-    borderRadius: 12,
+    borderWidth: 1.5,
+    borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 7,
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   randomButtonText: {
     fontSize: 11,
     fontWeight: '900',
   },
   messages: {
-    minHeight: 150,
-    maxHeight: 170,
-    borderRadius: 12,
-    backgroundColor: 'rgba(2, 6, 23, 0.68)',
+    minHeight: 156,
+    maxHeight: 176,
+    borderRadius: 16,
+    backgroundColor: 'rgba(12, 7, 36, 0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   messagesContent: {
     paddingHorizontal: 10,
@@ -341,41 +348,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyText: {
-    color: '#94a3b8',
+    color: '#d4c6ff',
     fontSize: 12,
     lineHeight: 18,
   },
   messageBubble: {
-    backgroundColor: 'rgba(30, 41, 59, 0.92)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   messageBubbleSelf: {
-    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    backgroundColor: 'rgba(45, 168, 255, 0.18)',
   },
   messageNickname: {
-    color: '#fbbf24',
+    color: '#ffd88a',
     fontSize: 11,
     fontWeight: '900',
   },
   messageNicknameSelf: {
-    color: '#93c5fd',
+    color: '#93dcff',
   },
   messageText: {
-    color: '#f8fafc',
+    color: '#fff7de',
     fontSize: 12,
     lineHeight: 18,
   },
   messageUserId: {
-    color: '#93c5fd',
+    color: '#9bddff',
     fontSize: 10,
     lineHeight: 14,
     textDecorationLine: 'underline',
   },
   messageUserIdDisabled: {
-    color: '#64748b',
+    color: '#9185bd',
     textDecorationLine: 'none',
   },
   inputRow: {
@@ -385,41 +394,57 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: '#0f172a',
-    color: '#f8fafc',
+    borderRadius: 14,
+    backgroundColor: 'rgba(12, 7, 36, 0.82)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.12)',
+    color: '#fff7de',
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
   },
   sendButton: {
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   sendButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: '900',
   },
   fab: {
-    minWidth: 118,
-    borderRadius: 18,
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    borderWidth: 1,
+    minWidth: 122,
+    borderRadius: 22,
+    backgroundColor: 'rgba(33, 20, 82, 0.95)',
+    borderWidth: 2,
+    borderColor: 'rgba(226, 169, 77, 0.76)',
     paddingHorizontal: 14,
     paddingVertical: 10,
     alignItems: 'center',
     gap: 2,
+    shadowColor: '#0b0419',
+    shadowOffset: {width: 0, height: 10},
+    shadowOpacity: 0.26,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  fabEyebrow: {
+    color: '#ffd88a',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   fabTitle: {
-    color: '#f8fafc',
+    color: '#fff7de',
     fontSize: 13,
     fontWeight: '900',
   },
   fabChannel: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

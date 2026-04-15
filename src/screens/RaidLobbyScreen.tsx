@@ -126,6 +126,9 @@ interface LoadSummary {
 const QUERY_TIMEOUT_MS = 10000;
 const PARTIAL_LOAD_DETAIL = '일반 레이드는 계속 플레이할 수 있습니다.';
 const IMG_BG = require('../assets/ui/lobby_bg.jpg');
+const IMG_PROFILE = require('../assets/ui/profile.png');
+const IMG_SETTINGS = require('../assets/ui/settings.png');
+const IMG_CODEX = require('../assets/ui/codex.png');
 const SOCIAL_LOAD_LABELS = new Set([
   'friendIds',
   'friends',
@@ -1216,6 +1219,62 @@ export default function RaidLobbyScreen({ navigation }: any) {
       friend.isOnline &&
       !partyMembers.some(member => member.playerId === friend.id),
   );
+  const featuredNormalEntry = normalRaidEntries[0] ?? null;
+  const featuredNormalKills = featuredNormalEntry
+    ? normalRaidProgress[featuredNormalEntry.stage]?.killCount ?? 0
+    : 0;
+  const featuredBossStage =
+    activeRaids[0]?.boss_stage ?? unlockedBossStages[0] ?? bossRaidEntries[0]?.stage ?? 1;
+  const featuredBossDisplay = resolveRaidDisplay('boss', featuredBossStage);
+  const featuredBossSprite = getRaidBossSprite(featuredBossStage);
+  const featuredBossUnlocked =
+    isAdmin || unlockedBossStages.includes(featuredBossStage);
+  const bossShowcaseEntries = (() => {
+    const picks: typeof bossRaidEntries = [];
+    const pushUnique = (entry?: (typeof bossRaidEntries)[number]) => {
+      if (!entry || picks.some(item => item.stage === entry.stage)) {
+        return;
+      }
+      picks.push(entry);
+    };
+
+    pushUnique(bossRaidEntries.find(entry => entry.stage === 1));
+    pushUnique(bossRaidEntries.find(entry => entry.stage === 2));
+    pushUnique(bossRaidEntries.find(entry => entry.stage === 3));
+    pushUnique(
+      bossRaidEntries.find(entry => entry.stage === featuredBossStage) ??
+        bossRaidEntries[3],
+    );
+    bossRaidEntries.forEach(pushUnique);
+
+    return picks.slice(0, 4);
+  })();
+  const bossPartySlots = Array.from({length: 4}, (_, index) => {
+    return partyMembers[index] ?? null;
+  });
+  const quickJoinRaid = activeRaids[0] ?? null;
+  const partyActionTitle = !partyId
+    ? 'CREATE'
+    : isLeader
+      ? partyMembers.length < MAX_PARTY_SIZE
+        ? 'INVITE'
+        : 'DISBAND'
+      : 'LEAVE';
+  const partyActionHint = !partyId
+    ? '파티 생성'
+    : isLeader
+      ? partyMembers.length < MAX_PARTY_SIZE
+        ? '친구 초대'
+        : '파티 해산'
+      : '파티 나가기';
+  const recruitmentLine =
+    incomingInvites.length > 0
+      ? `${incomingInvites[0].inviterNickname}님의 파티 초대가 도착했습니다.`
+      : partyId
+        ? isLeader
+          ? '모집 채팅을 열고 레이드 파티원을 더 모아보세요.'
+          : '파티장이 시작하면 같은 레이드로 자동 합류합니다.'
+        : '파티를 만들거나 빠른 입장으로 즉시 보스 레이드에 참가할 수 있습니다.';
 
   if (loading) {
     return (
@@ -1231,50 +1290,319 @@ export default function RaidLobbyScreen({ navigation }: any) {
     <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <Image source={IMG_BG} style={styles.bgImage} resizeMode="cover" />
+      <View pointerEvents="none" style={styles.bgVignette} />
+      <View pointerEvents="none" style={styles.bgTopGlow} />
+      <View pointerEvents="none" style={styles.bgBottomGlow} />
       <MenuFloatingBlocks />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <View style={styles.headerSpacer} />
-          <Text style={styles.title}>레이드</Text>
+        <View style={styles.raidHudTopBar}>
           <TouchableOpacity
-            style={styles.friendsBtnWrap}
-            onPress={() => navigation.navigate('Friends')}
+            style={styles.cornerIconButton}
+            onPress={() => navigation.navigate('Profile')}
           >
-            <Text style={styles.friendsBtn}>친구</Text>
+            <Image source={IMG_PROFILE} resizeMode="contain" style={styles.cornerIconImage} />
           </TouchableOpacity>
+
+          <View style={styles.modeToggleWrap}>
+            <TouchableOpacity
+              style={[
+                styles.modeToggleButton,
+                raidMode === 'normal' && styles.modeToggleButtonActive,
+              ]}
+              onPress={() => setRaidMode('normal')}
+            >
+              <Text
+                style={[
+                  styles.modeToggleText,
+                  raidMode === 'normal' && styles.modeToggleTextActive,
+                ]}
+              >
+                NORMAL
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.modeToggleButton,
+                raidMode === 'boss' && styles.modeToggleButtonActive,
+              ]}
+              onPress={() => setRaidMode('boss')}
+            >
+              <Text
+                style={[
+                  styles.modeToggleText,
+                  raidMode === 'boss' && styles.modeToggleTextActive,
+                ]}
+              >
+                BOSS
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.topActionStack}>
+            <TouchableOpacity
+              style={styles.cornerIconButton}
+              onPress={() => navigation.navigate('BossCodex')}
+            >
+              <Image source={IMG_CODEX} resizeMode="contain" style={styles.cornerIconImage} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cornerIconButton}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Image source={IMG_SETTINGS} resizeMode="contain" style={styles.cornerIconImage} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={styles.modeTabs}>
-          <TouchableOpacity
-            style={[
-              styles.modeTab,
-              raidMode === 'normal' && styles.modeTabActive,
-            ]}
-            onPress={() => setRaidMode('normal')}
-          >
-            <Text
-              style={[
-                styles.modeTabText,
-                raidMode === 'normal' && styles.modeTabTextActive,
-              ]}
+        {raidMode === 'boss' ? (
+          <View style={styles.raidHudHeroCard}>
+            <View style={styles.timerBanner}>
+              <Text style={styles.timerBannerLabel}>
+                {bossWindowInfo.isOpen ? 'RAID ENDS IN:' : 'RAID STARTS IN:'}
+              </Text>
+              <Text style={styles.timerBannerValue}>
+                {formatBossRaidCountdownLabel(Date.now())}
+              </Text>
+            </View>
+
+            <View style={styles.stageArena}>
+              {bossShowcaseEntries.map((entry, index) => {
+                const unlocked = isAdmin || unlockedBossStages.includes(entry.stage);
+                const disabled = partyStartLocked || !unlocked;
+                const stagePositionStyle =
+                  index === 0
+                    ? styles.stageMedalLeftTop
+                    : index === 1
+                      ? styles.stageMedalLeftBottom
+                      : index === 2
+                        ? styles.stageMedalRightTop
+                        : styles.stageMedalRightBottom;
+
+                return (
+                  <TouchableOpacity
+                    key={`showcase-stage-${entry.stage}`}
+                    style={[
+                      styles.stageMedal,
+                      stagePositionStyle,
+                      index === 3 && styles.stageMedalFinal,
+                      disabled && styles.stageMedalDisabled,
+                    ]}
+                    activeOpacity={0.86}
+                    disabled={disabled}
+                    onPress={() => {
+                      void handleChallengeBoss(entry.stage);
+                    }}
+                  >
+                    <Text style={styles.stageMedalTopText}>
+                      {index === 3 ? 'FINAL' : 'STAGE'}
+                    </Text>
+                    <Text style={styles.stageMedalMainText}>
+                      {index === 3 ? 'BOSS' : entry.stage}
+                    </Text>
+                    <Text style={styles.stageMedalBottomText}>
+                      {unlocked ? '0' : 'LOCK'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              <View style={styles.bossMonsterDock}>
+                {featuredBossSprite ? (
+                  <Image
+                    source={featuredBossSprite}
+                    resizeMode="contain"
+                    fadeDuration={0}
+                    style={styles.bossMonsterSprite}
+                  />
+                ) : (
+                  <Text style={styles.bossMonsterEmoji}>{featuredBossDisplay.emoji}</Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.bossNamePlate}>
+              <View style={styles.bossNamePlateTextBlock}>
+                <Text style={styles.bossNamePlateTitle}>{featuredBossDisplay.name}</Text>
+                <Text style={styles.bossNamePlateSubtitle}>
+                  {featuredBossUnlocked
+                    ? `체력 ${formatHp(featuredBossDisplay.maxHp)} · ${
+                        quickJoinRaid ? '진행 중 레이드 있음' : '직접 도전 가능'
+                      }`
+                    : '해당 월드 30스테이지를 클리어하면 도전할 수 있습니다.'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.bossInfoOrb}
+                onPress={() => navigation.navigate('BossCodex')}
+              >
+                <Image source={IMG_CODEX} resizeMode="contain" style={styles.bossInfoOrbIcon} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.partyPreviewStrip}>
+              {bossPartySlots.map((member, index) => (
+                <View
+                  key={member?.playerId || `party-preview-${index}`}
+                  style={[
+                    styles.partyPreviewSlot,
+                    !member && styles.partyPreviewSlotEmpty,
+                  ]}
+                >
+                  <View style={styles.partyPreviewPortrait}>
+                    <Text style={styles.partyPreviewPortraitText}>
+                      {member ? member.nickname.slice(0, 1).toUpperCase() : '+'}
+                    </Text>
+                  </View>
+                  <Text style={styles.partyPreviewRole}>
+                    {member
+                      ? index === 1
+                        ? 'HEALER'
+                        : index === 2
+                          ? 'DPS'
+                          : 'TANK'
+                      : 'EMPTY'}
+                  </Text>
+                  <Text style={styles.partyPreviewName}>
+                    {member ? member.nickname : '빈 슬롯'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.hudActionRow}>
+              <TouchableOpacity
+                style={styles.hudSideActionButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (!partyId) {
+                    void handleCreateParty();
+                    return;
+                  }
+
+                  if (isLeader) {
+                    if (partyMembers.length < MAX_PARTY_SIZE) {
+                      setShowInviteModal(true);
+                      return;
+                    }
+                    void handleDisbandParty();
+                    return;
+                  }
+
+                  void handleLeaveParty();
+                }}
+              >
+                <Text style={styles.hudActionTopText}>PARTY</Text>
+                <Text style={styles.hudActionMainText}>{partyActionTitle}</Text>
+                <Text style={styles.hudActionBottomText}>{partyActionHint}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.quickJoinButton,
+                  ((!quickJoinRaid && !featuredBossUnlocked) || partyStartLocked) &&
+                    styles.quickJoinButtonDisabled,
+                ]}
+                activeOpacity={0.88}
+                disabled={(!quickJoinRaid && !featuredBossUnlocked) || partyStartLocked}
+                onPress={() => {
+                  if (quickJoinRaid) {
+                    void handleJoinRaid(quickJoinRaid);
+                    return;
+                  }
+                  void handleChallengeBoss(featuredBossStage);
+                }}
+              >
+                <Text style={styles.quickJoinButtonTopText}>QUICK</Text>
+                <Text style={styles.quickJoinButtonMainText}>JOIN</Text>
+                <Text style={styles.quickJoinButtonBottomText}>
+                  {partyStartLocked
+                    ? '파티장 시작 대기'
+                    : quickJoinRaid
+                      ? '진행 중 레이드 합류'
+                      : '대표 보스 도전'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.hudSideActionButton}
+                activeOpacity={0.85}
+                onPress={() => lobbyChat.toggleOpen()}
+              >
+                <Text style={styles.hudActionTopText}>RECRUIT</Text>
+                <Text style={styles.hudActionMainText}>
+                  {incomingInvites.length > 0 ? 'ALERT' : 'CHAT'}
+                </Text>
+                <Text style={styles.hudActionBottomText}>
+                  {incomingInvites.length > 0
+                    ? `${incomingInvites.length}건 도착`
+                    : '모집 열기'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.recruitmentTicker}
+              activeOpacity={0.86}
+              onPress={() => lobbyChat.toggleOpen()}
             >
-              일반 레이드
+              <View style={styles.recruitmentTickerBadge}>
+                <Text style={styles.recruitmentTickerBadgeText}>RECRUITMENT</Text>
+              </View>
+              <Text style={styles.recruitmentTickerText} numberOfLines={1}>
+                {recruitmentLine}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.heroCard}>
+            <View style={styles.heroRibbon}>
+              <Text style={styles.heroRibbonText}>NORMAL RAID OPEN</Text>
+            </View>
+            <Text style={styles.heroEmoji}>{featuredNormalEntry?.emoji ?? '⚔'}</Text>
+            <Text style={styles.heroTitle}>
+              {featuredNormalEntry?.name ?? '일반 레이드'}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.modeTab, raidMode === 'boss' && styles.modeTabActive]}
-            onPress={() => setRaidMode('boss')}
-          >
-            <Text
+            <Text style={styles.heroSubtitle}>
+              상시 개방된 레이드에서 누적 처치와 반복 보상을 쌓아 보세요.
+            </Text>
+            <View style={styles.heroChipRow}>
+              <View style={styles.heroChip}>
+                <Text style={styles.heroChipLabel}>대표 단계</Text>
+                <Text style={styles.heroChipValue}>
+                  {featuredNormalEntry?.stage ?? 1}단계
+                </Text>
+              </View>
+              <View style={styles.heroChip}>
+                <Text style={styles.heroChipLabel}>누적 처치</Text>
+                <Text style={styles.heroChipValue}>{featuredNormalKills}회</Text>
+              </View>
+              <View style={styles.heroChip}>
+                <Text style={styles.heroChipLabel}>반복 보상</Text>
+                <Text style={styles.heroChipValue}>
+                  +{featuredNormalEntry?.reward.repeatDiamondReward ?? 0}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
               style={[
-                styles.modeTabText,
-                raidMode === 'boss' && styles.modeTabTextActive,
+                styles.heroActionBtn,
+                (!featuredNormalEntry || partyStartLocked) &&
+                  styles.challengeBtnDisabled,
               ]}
+              disabled={!featuredNormalEntry || partyStartLocked}
+              onPress={() => {
+                if (featuredNormalEntry) {
+                  void handleNormalRaidChallenge(featuredNormalEntry.stage);
+                }
+              }}
             >
-              보스 레이드
-            </Text>
-          </TouchableOpacity>
-        </View>
+              <Text style={styles.heroActionBtnText}>
+                {partyStartLocked ? '파티장 시작 대기' : '대표 레이드 도전'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -1382,33 +1710,24 @@ export default function RaidLobbyScreen({ navigation }: any) {
           </>
         ) : (
           <>
-            <View style={styles.bossRaidScheduleCard}>
-              <Text style={styles.bossRaidScheduleTitle}>보스 레이드</Text>
-              <Text style={styles.bossRaidScheduleDesc}>
-                서버 시간 기준 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수
-                있습니다.
-              </Text>
-              <Text style={styles.bossRaidScheduleDesc}>
-                방당 최대 {BOSS_RAID_MAX_PLAYERS}명까지 참가 가능하며, 가득 차면
-                새 방이 생성됩니다.
-              </Text>
-              <Text style={styles.voiceHint}>
-                음성 대화는 레이드 전투 안에서만 사용할 수 있습니다.
-              </Text>
-              <View style={styles.bossRaidTimer}>
-                <Text style={styles.bossRaidTimerLabel}>
-                  {bossWindowInfo.isOpen ? '현재 참여 시간' : '다음 개방까지'}
-                </Text>
-                <Text style={styles.bossRaidTimerValue}>
-                  {formatBossRaidCountdownLabel(Date.now())}
+            <View style={styles.bossQuickInfoRow}>
+              <View style={styles.bossQuickInfoChip}>
+                <Text style={styles.bossQuickInfoLabel}>ENTRY</Text>
+                <Text style={styles.bossQuickInfoValue}>
+                  {bossWindowInfo.isOpen ? 'OPEN NOW' : 'COUNTDOWN'}
                 </Text>
               </View>
+              <View style={styles.bossQuickInfoChip}>
+                <Text style={styles.bossQuickInfoLabel}>CAPACITY</Text>
+                <Text style={styles.bossQuickInfoValue}>
+                  MAX {BOSS_RAID_MAX_PLAYERS}
+                </Text>
+              </View>
+              <View style={styles.bossQuickInfoChip}>
+                <Text style={styles.bossQuickInfoLabel}>VOICE</Text>
+                <Text style={styles.bossQuickInfoValue}>IN RAID</Text>
+              </View>
             </View>
-
-            <Text style={styles.modeDesc}>
-              모든 월드 30스테이지를 클리어하면 해당 단계의 보스 레이드가
-              열립니다.
-            </Text>
 
             {activeRaids.length > 0 && (
               <View style={styles.section}>
@@ -1625,7 +1944,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         {!loading && chatPlayerId ? (
           <LobbyChatPanel
             title="레이드 모집 채팅"
-            accentColor={raidMode === 'boss' ? '#ef4444' : '#22c55e'}
+            accentColor={raidMode === 'boss' ? '#44b8ff' : '#7a5bff'}
             isOpen={lobbyChat.isOpen}
             connected={lobbyChat.connected}
             currentChannelId={lobbyChat.currentChannelId}
@@ -1657,32 +1976,448 @@ export default function RaidLobbyScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a1e' },
+  container: { flex: 1, backgroundColor: '#120f33' },
   bgImage: {
     ...StyleSheet.absoluteFillObject,
+  },
+  bgVignette: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 4, 28, 0.22)',
+  },
+  bgTopGlow: {
+    position: 'absolute',
+    top: -70,
+    left: '10%',
+    width: '80%',
+    height: 220,
+    borderRadius: 999,
+    backgroundColor: 'rgba(176, 110, 255, 0.18)',
+  },
+  bgBottomGlow: {
+    position: 'absolute',
+    bottom: 90,
+    left: '14%',
+    width: '72%',
+    height: 180,
+    borderRadius: 999,
+    backgroundColor: 'rgba(45, 168, 255, 0.12)',
   },
   safeArea: {
     flex: 1,
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  raidHudTopBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    marginBottom: 8,
+  },
+  cornerIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(57, 89, 126, 0.88)',
+    borderWidth: 1.5,
+    borderColor: '#d7b06a',
+    shadowColor: '#2d1406',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  cornerIconImage: {
+    width: 22,
+    height: 22,
+  },
+  topActionStack: {
+    gap: 8,
+  },
+  modeToggleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    backgroundColor: 'rgba(43, 20, 101, 0.82)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 169, 77, 0.72)',
+  },
+  modeToggleButton: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  modeToggleButtonActive: {
+    backgroundColor: 'rgba(120, 81, 255, 0.9)',
+  },
+  modeToggleText: {
+    color: '#eadfff',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  modeToggleTextActive: {
+    color: '#fff8e7',
+  },
+  raidHudHeroCard: {
+    marginHorizontal: 12,
+    marginBottom: 10,
+    borderRadius: 26,
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(70, 33, 147, 0.4)',
+  },
+  timerBanner: {
+    alignSelf: 'center',
+    minWidth: 222,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: '#7d49cf',
+    borderWidth: 2,
+    borderColor: '#dca75b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2b0f56',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  timerBannerLabel: {
+    color: '#ffe8a8',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  timerBannerValue: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  stageArena: {
+    height: 310,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  bossMonsterDock: {
+    width: 230,
+    height: 230,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bossMonsterSprite: {
+    width: 228,
+    height: 228,
+  },
+  bossMonsterEmoji: {
+    fontSize: 120,
+  },
+  stageMedal: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: '#c7822a',
+    borderWidth: 3,
+    borderColor: '#f6dc9d',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 6,
+    shadowColor: '#411d00',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.24,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  stageMedalLeftTop: {
+    left: 8,
+    top: 34,
+  },
+  stageMedalLeftBottom: {
+    left: 16,
+    top: 130,
+  },
+  stageMedalRightTop: {
+    right: 8,
+    top: 34,
+  },
+  stageMedalRightBottom: {
+    right: 16,
+    top: 130,
+  },
+  stageMedalFinal: {
+    backgroundColor: '#9c3b42',
+  },
+  stageMedalDisabled: {
+    opacity: 0.45,
+  },
+  stageMedalTopText: {
+    color: '#fff7da',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  stageMedalMainText: {
+    color: '#ffffff',
+    fontSize: 21,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  stageMedalBottomText: {
+    color: '#f9f0cf',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  bossNamePlate: {
+    marginTop: -8,
+    marginHorizontal: 20,
+    borderRadius: 18,
+    minHeight: 54,
+    backgroundColor: '#53338f',
+    borderWidth: 2,
+    borderColor: '#d8a55a',
+    paddingLeft: 18,
+    paddingRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bossNamePlateTextBlock: {
+    flex: 1,
+    paddingVertical: 8,
+  },
+  bossNamePlateTitle: {
+    color: '#fff8de',
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  bossNamePlateSubtitle: {
+    color: '#e6d7ff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  bossInfoOrb: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(116, 169, 236, 0.94)',
+    borderWidth: 1.5,
+    borderColor: '#f3d79b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bossInfoOrbIcon: {
+    width: 18,
+    height: 18,
+  },
+  partyPreviewStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginTop: 10,
+  },
+  partyPreviewSlot: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    backgroundColor: 'rgba(58, 28, 123, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 169, 77, 0.72)',
+    alignItems: 'center',
+  },
+  partyPreviewSlotEmpty: {
+    opacity: 0.72,
+  },
+  partyPreviewPortrait: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5,
+  },
+  partyPreviewPortraitText: {
+    color: '#fff6dc',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  partyPreviewRole: {
+    color: '#aee4ff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  partyPreviewName: {
+    color: '#fff7df',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  hudActionRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+  },
+  hudSideActionButton: {
+    flex: 1,
+    minHeight: 66,
+    borderRadius: 18,
+    backgroundColor: '#4c77b5',
+    borderWidth: 2,
+    borderColor: '#d3a35d',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  quickJoinButton: {
+    flex: 1.2,
+    minHeight: 72,
+    borderRadius: 20,
+    backgroundColor: '#44b8ff',
+    borderWidth: 2,
+    borderColor: '#d9f4ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  quickJoinButtonDisabled: {
+    opacity: 0.45,
+  },
+  hudActionTopText: {
+    color: '#eef7ff',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  hudActionMainText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 1,
+  },
+  hudActionBottomText: {
+    color: '#eff9ff',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  quickJoinButtonTopText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  quickJoinButtonMainText: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '900',
+    marginTop: 1,
+  },
+  quickJoinButtonBottomText: {
+    color: '#effbff',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  recruitmentTicker: {
+    marginTop: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(49, 31, 111, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 169, 77, 0.72)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 10,
+  },
+  recruitmentTickerBadge: {
+    borderRadius: 10,
+    backgroundColor: 'rgba(100, 136, 189, 0.96)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  recruitmentTickerBadgeText: {
+    color: '#fffaf0',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  recruitmentTickerText: {
+    flex: 1,
+    color: '#eee3ff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bossQuickInfoRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  bossQuickInfoChip: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(47, 26, 101, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 169, 77, 0.6)',
+    alignItems: 'center',
+  },
+  bossQuickInfoLabel: {
+    color: '#ffd88a',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  bossQuickInfoValue: {
+    color: '#fff9e4',
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 2,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingTop: 6,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   headerSpacer: {
     width: 58,
   },
-  title: {
-    color: '#ffffff',
-    fontSize: 20,
+  headerCenter: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  titleEyebrow: {
+    color: '#ffd88a',
+    fontSize: 10,
     fontWeight: '900',
-    textShadowColor: 'rgba(0,0,0,0.75)',
-    textShadowOffset: { width: 0, height: 3 },
-    textShadowRadius: 10,
+    letterSpacing: 1.2,
+  },
+  title: {
+    color: '#fff7de',
+    fontSize: 22,
+    fontWeight: '900',
+    textShadowColor: 'rgba(19,8,35,0.9)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   friendsBtnWrap: {
     minWidth: 58,
@@ -1690,39 +2425,147 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignItems: 'center',
-    backgroundColor: 'rgba(196, 164, 255, 0.24)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(36, 30, 93, 0.76)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(236, 183, 96, 0.65)',
+    shadowColor: '#080311',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  friendsBtn: { color: '#f4f0ff', fontSize: 12, fontWeight: '800' },
+  friendsBtn: { color: '#fff4d7', fontSize: 12, fontWeight: '800' },
   modeTabs: {
     flexDirection: 'row',
     marginHorizontal: 14,
-    marginBottom: 10,
-    backgroundColor: 'rgba(54, 39, 108, 0.7)',
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 12,
+    backgroundColor: 'rgba(43, 27, 99, 0.76)',
+    borderRadius: 18,
+    padding: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(232, 178, 90, 0.4)',
   },
   modeTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 11,
+    paddingVertical: 10,
+    borderRadius: 14,
   },
-  modeTabActive: { backgroundColor: 'rgba(128, 88, 255, 0.9)' },
-  modeTabText: { color: '#d3c9ff', fontSize: 13, fontWeight: '700' },
-  modeTabTextActive: { color: '#fff' },
+  modeTabActive: {
+    backgroundColor: 'rgba(108, 58, 214, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(236, 183, 96, 0.75)',
+  },
+  modeTabText: { color: '#dfd2ff', fontSize: 13, fontWeight: '800' },
+  modeTabTextActive: { color: '#fff5d4' },
+  heroCard: {
+    marginHorizontal: 14,
+    marginBottom: 14,
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    alignItems: 'center',
+    backgroundColor: 'rgba(33, 20, 82, 0.94)',
+    borderWidth: 2.5,
+    borderColor: '#e2a94d',
+    shadowColor: '#0b0419',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 14,
+  },
+  heroRibbon: {
+    alignSelf: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(108, 58, 214, 0.94)',
+    borderWidth: 2,
+    borderColor: 'rgba(235, 184, 92, 0.95)',
+  },
+  heroRibbonText: {
+    color: '#fff0bb',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  heroSprite: {
+    width: 124,
+    height: 124,
+    marginBottom: 8,
+  },
+  heroEmoji: {
+    fontSize: 72,
+    marginBottom: 8,
+  },
+  heroTitle: {
+    color: '#fff8e1',
+    fontSize: 24,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  heroSubtitle: {
+    color: '#ddd0ff',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  heroChipRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 8,
+    marginTop: 12,
+  },
+  heroChip: {
+    flex: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  heroChipLabel: {
+    color: '#d4c6ff',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  heroChipValue: {
+    color: '#fff5d7',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 3,
+  },
+  heroActionBtn: {
+    marginTop: 14,
+    minWidth: 190,
+    borderRadius: 18,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    backgroundColor: '#2da8ff',
+    borderWidth: 2,
+    borderColor: '#dff5ff',
+  },
+  heroActionBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
   scrollView: {
     flex: 1,
   },
-  scrollContent: { paddingBottom: 20, paddingHorizontal: 14 },
+  scrollContent: { paddingBottom: 30, paddingHorizontal: 14 },
   loadErrorCard: {
-    backgroundColor: 'rgba(127,29,29,0.35)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(248,113,113,0.45)',
+    backgroundColor: 'rgba(110, 20, 58, 0.52)',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 131, 154, 0.45)',
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
@@ -1752,10 +2595,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   modeDesc: {
-    color: '#94a3b8',
+    color: '#e0d6ff',
     fontSize: 12,
-    marginBottom: 8,
+    marginBottom: 10,
     lineHeight: 18,
+    textAlign: 'center',
   },
   skinHint: {
     color: '#f59e0b',
@@ -1771,90 +2615,109 @@ const styles = StyleSheet.create({
   normalRaidCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(66, 46, 135, 0.68)',
-    borderRadius: 12,
-    borderWidth: 1.5,
+    backgroundColor: 'rgba(33, 20, 82, 0.92)',
+    borderRadius: 20,
+    borderWidth: 2,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 8,
+    marginBottom: 10,
     gap: 10,
+    shadowColor: '#0b0419',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
   },
   nrEmoji: { fontSize: 30 },
   nrInfo: { flex: 1, gap: 4 },
   nrName: { fontSize: 14, fontWeight: '800' },
-  nrReward: { color: '#94a3b8', fontSize: 11 },
+  nrReward: { color: '#ded4ff', fontSize: 11 },
   killBar: {
     height: 4,
-    backgroundColor: '#334155',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 2,
     overflow: 'hidden',
     marginTop: 2,
   },
   killBarFill: { height: 4, borderRadius: 2 },
-  killCount: { color: '#64748b', fontSize: 10 },
+  killCount: { color: '#cabdff', fontSize: 10 },
   nrChallengeBtn: {
-    borderWidth: 1.5,
-    borderRadius: 8,
+    borderWidth: 2,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
   nrChallengeBtnText: { fontSize: 13, fontWeight: '900' },
   challengeBtnDisabled: {
     opacity: 0.55,
   },
   bossRaidScheduleCard: {
-    backgroundColor: 'rgba(66, 46, 135, 0.72)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(33, 20, 82, 0.9)',
+    borderRadius: 20,
     padding: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 139, 111, 0.9)',
+    borderWidth: 2,
+    borderColor: 'rgba(226, 169, 77, 0.86)',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   bossRaidScheduleTitle: {
-    color: '#ef4444',
+    color: '#fff5d7',
     fontSize: 18,
     fontWeight: '900',
     marginBottom: 6,
   },
   bossRaidScheduleDesc: {
-    color: '#94a3b8',
+    color: '#ddd0ff',
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 20,
   },
   bossRaidTimer: {
     marginTop: 12,
-    backgroundColor: 'rgba(18, 11, 48, 0.7)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 16,
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: 10,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
-  bossRaidTimerLabel: { color: '#64748b', fontSize: 11 },
+  bossRaidTimerLabel: { color: '#d4c6ff', fontSize: 11 },
   bossRaidTimerValue: {
-    color: '#f8fafc',
+    color: '#fff7de',
     fontSize: 18,
     fontWeight: '900',
     marginTop: 2,
   },
   section: { marginBottom: 12 },
   sectionTitle: {
-    color: '#e2e8f0',
-    fontSize: 15,
-    fontWeight: '800',
+    color: '#fff1c7',
+    fontSize: 14,
+    fontWeight: '900',
     marginBottom: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(75, 43, 155, 0.82)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(232, 178, 90, 0.72)',
   },
   activeRaidCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: 'rgba(66, 46, 135, 0.68)',
-    borderRadius: 12,
-    borderWidth: 1.5,
+    backgroundColor: 'rgba(33, 20, 82, 0.92)',
+    borderRadius: 18,
+    borderWidth: 2,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 8,
+    marginBottom: 10,
+    shadowColor: '#0b0419',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
   },
   activeRaidCardDisabled: {
     opacity: 0.45,
@@ -1862,25 +2725,39 @@ const styles = StyleSheet.create({
   activeRaidEmoji: { fontSize: 28 },
   activeRaidSprite: { width: 40, height: 40 },
   activeRaidInfo: { flex: 1 },
-  activeRaidName: { color: '#f8fafc', fontSize: 14, fontWeight: '800' },
-  activeRaidHp: { color: '#94a3b8', fontSize: 11, marginTop: 2 },
-  activeRaidTimer: { color: '#f87171', fontSize: 13, fontWeight: '800' },
+  activeRaidName: { color: '#fff5d7', fontSize: 14, fontWeight: '800' },
+  activeRaidHp: { color: '#ddd0ff', fontSize: 11, marginTop: 2 },
+  activeRaidTimer: {
+    color: '#fff7de',
+    fontSize: 12,
+    fontWeight: '900',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(219, 63, 82, 0.85)',
+    overflow: 'hidden',
+  },
   bossGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   bossCard: {
     width: '47%',
-    backgroundColor: 'rgba(66, 46, 135, 0.68)',
-    borderRadius: 12,
-    borderWidth: 1.5,
+    backgroundColor: 'rgba(33, 20, 82, 0.92)',
+    borderRadius: 20,
+    borderWidth: 2,
     padding: 12,
     alignItems: 'center',
-    minHeight: 132,
+    minHeight: 140,
+    shadowColor: '#0b0419',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 8,
   },
   bossCardLocked: { opacity: 0.45 },
   bossCardPartyLocked: { opacity: 0.55 },
   bossEmoji: { fontSize: 30 },
   bossSprite: { width: 54, height: 54 },
   bossStage: {
-    color: '#e2e8f0',
+    color: '#fff1c7',
     fontSize: 12,
     fontWeight: '800',
     marginTop: 6,
@@ -1892,29 +2769,33 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bossNameLocked: { color: '#64748b' },
-  bossHp: { color: '#94a3b8', fontSize: 11, marginTop: 4 },
+  bossHp: { color: '#ddd0ff', fontSize: 11, marginTop: 4 },
   unlockState: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     marginTop: 8,
     textAlign: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
   },
-  unlocked: { color: '#22c55e' },
-  locked: { color: '#f87171' },
+  unlocked: { color: '#fff8e1', backgroundColor: 'rgba(34, 197, 94, 0.7)' },
+  locked: { color: '#fff8e1', backgroundColor: 'rgba(219, 63, 82, 0.78)' },
   inviteInboxCard: {
-    backgroundColor: 'rgba(45, 34, 95, 0.82)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(196, 164, 255, 0.32)',
+    backgroundColor: 'rgba(33, 20, 82, 0.92)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(232, 178, 90, 0.36)',
     padding: 12,
     marginTop: 12,
     marginBottom: 12,
     gap: 10,
   },
   inviteInboxTitle: {
-    color: '#dbeafe',
+    color: '#fff4d7',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   inviteInboxRow: {
     flexDirection: 'row',
@@ -1926,12 +2807,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   inviteInboxName: {
-    color: '#f8fafc',
+    color: '#fff7de',
     fontSize: 13,
     fontWeight: '800',
   },
   inviteInboxMeta: {
-    color: '#94a3b8',
+    color: '#d4c6ff',
     fontSize: 11,
   },
   inviteInboxActions: {
@@ -1939,8 +2820,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inviteAcceptBtn: {
-    borderRadius: 8,
-    backgroundColor: '#16a34a',
+    borderRadius: 12,
+    backgroundColor: '#2da8ff',
+    borderWidth: 1.5,
+    borderColor: '#dff5ff',
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
@@ -1950,8 +2833,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   inviteDeclineBtn: {
-    borderRadius: 8,
-    backgroundColor: '#475569',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.16)',
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
@@ -1961,21 +2846,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   partyHintCard: {
-    backgroundColor: 'rgba(66, 46, 135, 0.72)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
+    backgroundColor: 'rgba(33, 20, 82, 0.92)',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(232, 178, 90, 0.32)',
     padding: 12,
     gap: 6,
     marginTop: 4,
   },
   partyHintTitle: {
-    color: '#f8fafc',
+    color: '#fff7de',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   partyHintText: {
-    color: '#cbd5e1',
+    color: '#ddd0ff',
     fontSize: 12,
     lineHeight: 18,
   },

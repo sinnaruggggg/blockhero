@@ -1,7 +1,8 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import MageSprite from '../components/MageSprite';
 import KnightSprite from '../components/KnightSprite';
 import GameBottomNav from '../components/GameBottomNav';
+import MenuFloatingBlocks from '../components/MenuFloatingBlocks';
 import {CHARACTER_CLASSES, getCharacterAtk, getCharacterHp} from '../constants/characters';
 import {loadCharacterData, CharacterData} from '../stores/gameStore';
 import {
@@ -59,6 +60,7 @@ const {width: SCREEN_W, height: SCREEN_H} = Dimensions.get('window');
 const W = SCREEN_W;
 const H = SCREEN_H;
 const HOME_BACKGROUND_SCALE = 1.1;
+const ANNOUNCE_SLOT_HEIGHT = 34;
 
 const IMG_BG = require('../assets/ui/background.jpg');
 const IMG_TITLE = require('../assets/ui/title.png');
@@ -147,6 +149,15 @@ export default function HomeScreen({navigation}: any) {
   );
   const pendingGrantsCheckedRef = useRef(false);
   const announcementsLoadedRef = useRef(false);
+  const characterRows = useMemo(() => {
+    const rows: Array<(typeof CHARACTERS)[number][]> = [];
+
+    for (let index = 0; index < CHARACTERS.length; index += 2) {
+      rows.push(CHARACTERS.slice(index, index + 2));
+    }
+
+    return rows;
+  }, []);
 
   const tiltX = useRef(new Animated.Value(0)).current;
   const tiltY = useRef(new Animated.Value(0)).current;
@@ -191,6 +202,16 @@ export default function HomeScreen({navigation}: any) {
   );
   const mainCharacterTapWidth = Math.round(mainCharacterDisplayWidth * 0.5);
   const mainCharacterTapHeight = Math.round(mainCharacterDisplayHeight * 0.86);
+  const selectedCharacterLevel =
+    charDataMap[selectedCharacterClass.id]?.level ?? charData?.level ?? 1;
+  const selectedCharacterAtk = getCharacterAtk(
+    selectedCharacterClass.id,
+    selectedCharacterLevel,
+  );
+  const selectedCharacterHp = getCharacterHp(
+    selectedCharacterClass.id,
+    selectedCharacterLevel,
+  );
 
   useEffect(() => {
     setUpdateIntervalForType(SensorTypes.accelerometer, 50);
@@ -581,6 +602,10 @@ export default function HomeScreen({navigation}: any) {
           ]}
           resizeMode="cover"
         />
+        <View pointerEvents="none" style={styles.bgVignette} />
+        <View pointerEvents="none" style={styles.bgTopGlow} />
+        <View pointerEvents="none" style={styles.bgBottomGlow} />
+        <MenuFloatingBlocks />
       </View>
     );
   }
@@ -599,33 +624,55 @@ export default function HomeScreen({navigation}: any) {
         ]}
         resizeMode="cover"
       />
+      <View pointerEvents="none" style={styles.bgVignette} />
+      <View pointerEvents="none" style={styles.bgTopGlow} />
+      <View pointerEvents="none" style={styles.bgBottomGlow} />
+      <MenuFloatingBlocks />
       <SafeAreaView style={styles.safeArea}>
         <StatusBar
           translucent
           backgroundColor="transparent"
-          barStyle="dark-content"
+          barStyle="light-content"
         />
 
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+          <TouchableOpacity
+            style={styles.topIconButton}
+            onPress={() => navigation.navigate('Profile')}>
             <Image source={IMG_PROFILE} style={styles.topIcon} resizeMode="contain" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+          <TouchableOpacity
+            style={styles.topIconButton}
+            onPress={() => navigation.navigate('Settings')}>
             <Image source={IMG_SETTINGS} style={styles.topIcon} resizeMode="contain" />
           </TouchableOpacity>
         </View>
 
-        <Image source={IMG_TITLE} style={styles.titleImage} resizeMode="contain" />
+        <View style={styles.titleStack}>
+          <Image source={IMG_TITLE} style={styles.titleImage} resizeMode="contain" />
+          <View style={styles.titleRibbon}>
+            <Text style={styles.titleRibbonText}>MAGICAL HERO COMMAND</Text>
+          </View>
+        </View>
 
-        {announcement && (
-          <TouchableOpacity
-            style={styles.announceBanner}
-            onPress={() => {
-              setShowAnnouncementModal(true);
-            }}>
-            <Text style={styles.announceText}>공지 · {announcement.title}</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.announceSlot}>
+          {announcement ? (
+            <TouchableOpacity
+              style={styles.announceBanner}
+              onPress={() => {
+                setShowAnnouncementModal(true);
+              }}>
+              <View style={styles.announceBadge}>
+                <Text style={styles.announceBadgeText}>NOTICE</Text>
+              </View>
+              <Text style={styles.announceText}>공지 · {announcement.title}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View pointerEvents="none" style={styles.announceBannerPlaceholder}>
+              <View style={styles.announceBannerPlaceholderInner} />
+            </View>
+          )}
+        </View>
 
         <TouchableOpacity
           style={styles.currencyBarWrapper}
@@ -655,6 +702,11 @@ export default function HomeScreen({navigation}: any) {
         </TouchableOpacity>
 
         <View style={styles.centerArea}>
+          <View pointerEvents="none" style={styles.heroSceneDecor}>
+            <View style={styles.heroAura} />
+            <View style={styles.heroSpotlight} />
+            <View style={styles.heroPedestal} />
+          </View>
           <Animated.View
             style={[styles.knightContainer, parallax(18)]}
             pointerEvents="box-none">
@@ -687,7 +739,25 @@ export default function HomeScreen({navigation}: any) {
               onPress={() => setShowCharSelect(true)}
             />
             <View pointerEvents="none" style={styles.characterTapHint}>
-              <Text style={styles.characterTapHintText}>캐릭터 터치</Text>
+              <Text style={styles.characterTapHintText}>캐릭터 선택</Text>
+            </View>
+            <View pointerEvents="none" style={styles.heroBanner}>
+              <Text style={styles.heroBannerEyebrow}>MAIN HERO</Text>
+              <Text style={styles.heroBannerTitle}>{selectedCharacterClass.name}</Text>
+              <View style={styles.heroBannerStats}>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>Lv.</Text>
+                  <Text style={styles.heroStatValue}>{selectedCharacterLevel}</Text>
+                </View>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>ATK</Text>
+                  <Text style={styles.heroStatValue}>{selectedCharacterAtk}</Text>
+                </View>
+                <View style={styles.heroStatChip}>
+                  <Text style={styles.heroStatLabel}>HP</Text>
+                  <Text style={styles.heroStatValue}>{selectedCharacterHp}</Text>
+                </View>
+              </View>
             </View>
           </Animated.View>
 
@@ -695,6 +765,7 @@ export default function HomeScreen({navigation}: any) {
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Missions')}>
+              <View style={styles.modeBtnShell} />
               <Image source={IMG_REWARD} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>보상</Text>
             </TouchableOpacity>
@@ -702,6 +773,7 @@ export default function HomeScreen({navigation}: any) {
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Ranking')}>
+              <View style={styles.modeBtnShell} />
               <Image source={IMG_RANKING} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>랭킹</Text>
             </TouchableOpacity>
@@ -711,6 +783,7 @@ export default function HomeScreen({navigation}: any) {
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Levels')}>
+              <View style={styles.modeBtnShell} />
               <Image source={IMG_LEVEL} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>레벨 모드</Text>
             </TouchableOpacity>
@@ -718,6 +791,7 @@ export default function HomeScreen({navigation}: any) {
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Lobby')}>
+              <View style={styles.modeBtnShell} />
               <Image source={IMG_BATTLE} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>대전 모드</Text>
             </TouchableOpacity>
@@ -727,6 +801,7 @@ export default function HomeScreen({navigation}: any) {
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Endless')}>
+              <View style={styles.modeBtnShell} />
               <Image source={IMG_ENDLESS} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>무한 모드</Text>
             </TouchableOpacity>
@@ -734,7 +809,11 @@ export default function HomeScreen({navigation}: any) {
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('RaidLobby')}>
+              <View style={styles.modeBtnShell} />
               <Image source={IMG_RAID} style={styles.modeIcon} resizeMode="contain" />
+              <View style={styles.modeAlertDot}>
+                <Text style={styles.modeAlertDotText}>!</Text>
+              </View>
               <Text style={styles.modeLabel}>레이드 모드</Text>
             </TouchableOpacity>
           </View>
@@ -796,14 +875,14 @@ export default function HomeScreen({navigation}: any) {
                 style={[
                   styles.charFeaturedCard,
                   {
-                    borderColor: selectedCharacterTheme.frame,
-                    backgroundColor: selectedCharacterTheme.accentSoft,
+                    borderColor: '#e2a94d',
+                    backgroundColor: 'rgba(33, 20, 82, 0.94)',
                   },
                 ]}>
                 <View
                   style={[
                     styles.charFeaturedPortrait,
-                    {backgroundColor: `${selectedCharacterTheme.accent}22`},
+                    {backgroundColor: 'rgba(255,255,255,0.08)'},
                   ]}>
                   {renderCharacterPreview(selectedCharacterClass.id, 118)}
                 </View>
@@ -811,7 +890,7 @@ export default function HomeScreen({navigation}: any) {
                   <Text
                     style={[
                       styles.charFeaturedName,
-                      {color: selectedCharacterTheme.ink},
+                      {color: '#fff5d8'},
                     ]}>
                     {selectedCharacterClass.name}
                   </Text>
@@ -822,34 +901,20 @@ export default function HomeScreen({navigation}: any) {
                     <View
                       style={[
                         styles.charFeaturedStatChip,
-                        {backgroundColor: `${selectedCharacterTheme.accent}22`},
+                        {backgroundColor: 'rgba(255,255,255,0.1)'},
                       ]}>
                       <Text style={styles.charFeaturedStatLabel}>Lv.</Text>
                       <Text style={styles.charFeaturedStatValue}>
-                        {charDataMap[selectedCharacterClass.id]?.level ?? charData?.level ?? 1}
+                        {selectedCharacterLevel}
                       </Text>
                     </View>
                     <View style={styles.charFeaturedStatChip}>
                       <Text style={styles.charFeaturedStatLabel}>ATK</Text>
-                      <Text style={styles.charFeaturedStatValue}>
-                        {getCharacterAtk(
-                          selectedCharacterClass.id,
-                          charDataMap[selectedCharacterClass.id]?.level ??
-                            charData?.level ??
-                            1,
-                        )}
-                      </Text>
+                      <Text style={styles.charFeaturedStatValue}>{selectedCharacterAtk}</Text>
                     </View>
                     <View style={styles.charFeaturedStatChip}>
                       <Text style={styles.charFeaturedStatLabel}>HP</Text>
-                      <Text style={styles.charFeaturedStatValue}>
-                        {getCharacterHp(
-                          selectedCharacterClass.id,
-                          charDataMap[selectedCharacterClass.id]?.level ??
-                            charData?.level ??
-                            1,
-                        )}
-                      </Text>
+                      <Text style={styles.charFeaturedStatValue}>{selectedCharacterHp}</Text>
                     </View>
                   </View>
                 </View>
@@ -859,62 +924,95 @@ export default function HomeScreen({navigation}: any) {
                 style={styles.charSelectList}
                 contentContainerStyle={styles.charSelectGrid}
                 showsVerticalScrollIndicator={false}>
-                {CHARACTERS.map(characterClass => {
-                  const currentData = charDataMap[characterClass.id];
-                  const level = currentData?.level ?? 1;
-                  const atk = getCharacterAtk(characterClass.id, level);
-                  const hp = getCharacterHp(characterClass.id, level);
-                  const theme =
-                    CHARACTER_THEMES[characterClass.id] ?? CHARACTER_THEMES.knight;
-                  const isSelected = selectedChar === characterClass.id;
+                {characterRows.map((row, rowIndex) => (
+                  <View key={`char-row-${rowIndex}`} style={styles.charSelectGridRow}>
+                    {row.map(characterClass => {
+                      const currentData = charDataMap[characterClass.id];
+                      const level = currentData?.level ?? 1;
+                      const atk = getCharacterAtk(characterClass.id, level);
+                      const hp = getCharacterHp(characterClass.id, level);
+                      const theme =
+                        CHARACTER_THEMES[characterClass.id] ?? CHARACTER_THEMES.knight;
+                      const isSelected = selectedChar === characterClass.id;
 
-                  return (
-                    <TouchableOpacity
-                      key={characterClass.id}
-                      style={[
-                        styles.charSelectTile,
-                        {
-                          borderColor: isSelected ? theme.frame : 'rgba(132, 94, 57, 0.28)',
-                          backgroundColor: isSelected ? '#fff6e7' : 'rgba(255, 247, 233, 0.94)',
-                        },
-                      ]}
-                      onPress={() => handleSelectCharacter(characterClass.id)}>
-                      <View
-                        style={[
-                          styles.charSelectTilePortrait,
-                          {backgroundColor: `${theme.accent}20`},
-                        ]}>
-                        {renderCharacterPreview(characterClass.id, 76, true)}
-                      </View>
-                      <View style={styles.charSelectTileInfo}>
-                        <View style={styles.charSelectTileHeader}>
-                          <Text
+                      return (
+                        <TouchableOpacity
+                          key={characterClass.id}
+                          style={[
+                            styles.charSelectTile,
+                            {
+                              borderColor: isSelected
+                                ? '#f2bb5f'
+                                : 'rgba(242, 187, 95, 0.2)',
+                              backgroundColor: isSelected
+                                ? 'rgba(77, 49, 155, 0.98)'
+                                : 'rgba(30, 19, 67, 0.92)',
+                            },
+                          ]}
+                          onPress={() => handleSelectCharacter(characterClass.id)}>
+                          <View
                             style={[
-                              styles.charSelectName,
-                              {color: isSelected ? theme.ink : '#53361f'},
+                              styles.charSelectTilePortrait,
+                              {backgroundColor: 'rgba(255,255,255,0.07)'},
                             ]}>
-                            {characterClass.name}
-                          </Text>
-                          {isSelected ? (
-                            <View
-                              style={[
-                                styles.charSelectActivePill,
-                                {backgroundColor: theme.accent},
-                              ]}>
-                              <Text style={styles.charSelectActivePillText}>선택 중</Text>
+                            {renderCharacterPreview(characterClass.id, 76, true)}
+                          </View>
+                          <View style={styles.charSelectTileInfo}>
+                            <View style={styles.charSelectTileHeader}>
+                              <Text
+                                style={[
+                                  styles.charSelectName,
+                                  {color: isSelected ? '#fff7de' : '#f0e9ff'},
+                                ]}>
+                                {characterClass.name}
+                              </Text>
+                              {isSelected ? (
+                                <View
+                                  style={[
+                                    styles.charSelectActivePill,
+                                    {backgroundColor: theme.accent},
+                                  ]}>
+                                  <Text style={styles.charSelectActivePillText}>선택 중</Text>
+                                </View>
+                              ) : null}
                             </View>
-                          ) : null}
-                        </View>
-                        <Text style={styles.charSelectDesc}>{characterClass.description}</Text>
-                        <View style={styles.charStatRow}>
-                          <Text style={[styles.charStat, {color: theme.ink}]}>Lv.{level}</Text>
-                          <Text style={[styles.charStat, {color: theme.ink}]}>ATK {atk}</Text>
-                          <Text style={[styles.charStat, {color: theme.ink}]}>HP {hp}</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
+                            <Text style={styles.charSelectDesc}>
+                              {characterClass.description}
+                            </Text>
+                            <View style={styles.charStatRow}>
+                              <Text
+                                style={[
+                                  styles.charStat,
+                                  {color: isSelected ? '#fff6de' : '#d8cbff'},
+                                ]}>
+                                Lv.{level}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.charStat,
+                                  {color: isSelected ? '#fff6de' : '#d8cbff'},
+                                ]}>
+                                ATK {atk}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.charStat,
+                                  {color: isSelected ? '#fff6de' : '#d8cbff'},
+                                ]}>
+                                HP {hp}
+                              </Text>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {row.length === 1 ? (
+                      <View
+                        style={[styles.charSelectTile, styles.charSelectTilePlaceholder]}
+                      />
+                    ) : null}
+                  </View>
+                ))}
               </ScrollView>
               <TouchableOpacity
                 style={[
@@ -940,9 +1038,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     overflow: 'hidden',
+    backgroundColor: '#120f33',
   },
   bgImage: {
     ...StyleSheet.absoluteFillObject,
+  },
+  bgVignette: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 4, 28, 0.24)',
+  },
+  bgTopGlow: {
+    position: 'absolute',
+    top: -H * 0.08,
+    left: W * 0.1,
+    width: W * 0.8,
+    height: H * 0.28,
+    borderRadius: 999,
+    backgroundColor: 'rgba(176, 110, 255, 0.2)',
+  },
+  bgBottomGlow: {
+    position: 'absolute',
+    bottom: H * 0.06,
+    left: W * 0.12,
+    width: W * 0.76,
+    height: H * 0.24,
+    borderRadius: 999,
+    backgroundColor: 'rgba(53, 170, 255, 0.12)',
   },
   safeArea: {
     flex: 1,
@@ -951,25 +1072,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: W * 0.035,
-    paddingTop: H * 0.005,
+    paddingHorizontal: W * 0.04,
+    paddingTop: H * 0.008,
+  },
+  topIconButton: {
+    width: TOP_ICON_SIZE + 10,
+    height: TOP_ICON_SIZE + 10,
+    borderRadius: (TOP_ICON_SIZE + 10) / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(36, 30, 93, 0.72)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(236, 183, 96, 0.65)',
+    shadowColor: '#080311',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
   },
   topIcon: {
     width: TOP_ICON_SIZE,
     height: TOP_ICON_SIZE,
   },
+  titleStack: {
+    alignItems: 'center',
+    marginTop: -H * 0.004,
+  },
   titleImage: {
-    width: W * 0.9,
-    height: H * 0.13,
+    width: W * 0.84,
+    height: H * 0.12,
     alignSelf: 'center',
-    marginTop: -H * 0.01,
+  },
+  titleRibbon: {
+    marginTop: -H * 0.012,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(108, 58, 214, 0.88)',
+    borderWidth: 2,
+    borderColor: 'rgba(235, 184, 92, 0.9)',
+    shadowColor: '#19082b',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  titleRibbonText: {
+    color: '#fff0bb',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   currencyBarWrapper: {
     alignSelf: 'center',
     width: W * 0.68 * 1.5,
     height: H * 0.052 * 1.5,
-    marginTop: H * 0.01,
-    marginBottom: H * 0.002,
+    marginTop: H * 0.012,
+    marginBottom: H * 0.008,
+    shadowColor: '#12071d',
+    shadowOffset: {width: 0, height: 10},
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
   },
   currencyBarImage: {
     width: '100%',
@@ -1006,42 +1170,112 @@ const styles = StyleSheet.create({
   centerArea: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: W * 0.01,
-    gap: H * 0.008,
+    paddingHorizontal: W * 0.02,
+    paddingTop: H * 0.02,
+    gap: H * 0.012,
+  },
+  heroSceneDecor: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroAura: {
+    position: 'absolute',
+    top: H * 0.08,
+    width: W * 0.56,
+    height: W * 0.56,
+    borderRadius: W * 0.28,
+    backgroundColor: 'rgba(128, 96, 255, 0.32)',
+  },
+  heroSpotlight: {
+    position: 'absolute',
+    top: H * 0.12,
+    width: W * 0.4,
+    height: H * 0.28,
+    borderRadius: 999,
+    backgroundColor: 'rgba(94, 220, 255, 0.14)',
+  },
+  heroPedestal: {
+    position: 'absolute',
+    bottom: H * 0.14,
+    width: W * 0.48,
+    height: H * 0.06,
+    borderRadius: 999,
+    backgroundColor: 'rgba(11, 10, 40, 0.7)',
+    borderWidth: 2,
+    borderColor: 'rgba(229, 174, 90, 0.4)',
   },
   modeRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginVertical: 2,
   },
   modeBtnWrapper: {
     width: MODE_BTN_SIZE,
     height: MODE_BTN_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#140916',
+    shadowOffset: {width: 0, height: 10},
+    shadowOpacity: 0.26,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modeBtnShell: {
+    position: 'absolute',
+    top: MODE_BTN_SIZE * 0.08,
+    right: MODE_BTN_SIZE * 0.08,
+    bottom: MODE_BTN_SIZE * 0.08,
+    left: MODE_BTN_SIZE * 0.08,
+    borderRadius: 24,
+    backgroundColor: 'rgba(58, 39, 118, 0.72)',
+    borderWidth: 2,
+    borderColor: 'rgba(232, 178, 90, 0.72)',
   },
   modeIcon: {
-    width: '100%',
-    height: '100%',
+    width: '92%',
+    height: '92%',
     position: 'absolute',
   },
   modeLabel: {
     position: 'absolute',
     bottom: MODE_BTN_SIZE * 0.12,
-    color: '#5a4a6a',
+    color: '#fff4da',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '900',
     textAlign: 'center',
+    textShadowColor: 'rgba(31, 14, 61, 0.9)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
+  modeAlertDot: {
+    position: 'absolute',
+    top: MODE_BTN_SIZE * 0.11,
+    right: MODE_BTN_SIZE * 0.12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#db3f52',
+    borderWidth: 2,
+    borderColor: '#fff4d8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeAlertDotText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
   },
   characterSpace: {
-    width: W * 0.46,
+    width: W * 0.44,
   },
   knightContainer: {
     position: 'absolute',
-    left: W * 0.35,
-    right: W * 0.35,
-    top: '10%',
-    bottom: 0,
+    left: W * 0.18,
+    right: W * 0.18,
+    top: '7%',
+    bottom: H * 0.08,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
@@ -1061,19 +1295,75 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
   characterTapHint: {
-    marginTop: -8,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    marginTop: -4,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(74, 45, 19, 0.68)',
+    backgroundColor: 'rgba(67, 46, 136, 0.88)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 224, 180, 0.4)',
+    borderColor: 'rgba(236, 182, 92, 0.8)',
   },
   characterTapHintText: {
-    color: '#fff2d0',
+    color: '#fff1cb',
     fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  heroBanner: {
+    marginTop: 10,
+    minWidth: W * 0.58,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderRadius: 22,
+    backgroundColor: 'rgba(28, 18, 76, 0.9)',
+    borderWidth: 2,
+    borderColor: 'rgba(235, 182, 95, 0.9)',
+    alignItems: 'center',
+    shadowColor: '#0f0620',
+    shadowOffset: {width: 0, height: 12},
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  heroBannerEyebrow: {
+    color: '#ffd88a',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  heroBannerTitle: {
+    color: '#fff7e1',
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  heroBannerStats: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  heroStatChip: {
+    minWidth: 64,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 236, 188, 0.14)',
+  },
+  heroStatLabel: {
+    color: '#d6c6ff',
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  heroStatValue: {
+    color: '#fff4d4',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginTop: 1,
   },
   knightShadow: {
     position: 'absolute',
@@ -1120,24 +1410,67 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.22)',
     marginTop: 10,
   },
-  announceBanner: {
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    borderRadius: 10,
-    padding: 8,
+  announceSlot: {
+    height: ANNOUNCE_SLOT_HEIGHT + 10,
     marginHorizontal: W * 0.04,
-    marginTop: 4,
+    marginTop: 2,
+  },
+  announceBanner: {
+    flex: 1,
+    backgroundColor: 'rgba(65, 40, 144, 0.82)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(237, 183, 98, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    shadowColor: '#160624',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  announceBannerPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  announceBannerPlaceholderInner: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(237, 183, 98, 0.18)',
+    backgroundColor: 'rgba(54, 32, 110, 0.24)',
+  },
+  announceBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  announceBadgeText: {
+    color: '#ffe19b',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   announceText: {
-    color: '#6366f1',
+    flex: 1,
+    color: '#fff2cb',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
     textAlign: 'center',
+    textShadowColor: 'rgba(22, 7, 36, 0.8)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 2,
   },
   announcementModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(17, 12, 7, 0.62)',
+    backgroundColor: 'rgba(10, 7, 27, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 18,
@@ -1145,14 +1478,14 @@ const styles = StyleSheet.create({
   announcementModalCard: {
     width: W * 0.9,
     maxHeight: H * 0.72,
-    backgroundColor: '#f4e2c0',
+    backgroundColor: '#251550',
     borderRadius: 24,
     borderWidth: 3,
-    borderColor: '#9a6139',
+    borderColor: '#e2a94d',
     paddingHorizontal: 18,
     paddingTop: 18,
     paddingBottom: 16,
-    shadowColor: '#2b1608',
+    shadowColor: '#0b0419',
     shadowOffset: {width: 0, height: 14},
     shadowOpacity: 0.28,
     shadowRadius: 18,
@@ -1162,7 +1495,7 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   announcementModalEyebrow: {
-    color: '#8a5b2e',
+    color: '#ffd98c',
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1.1,
@@ -1170,7 +1503,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   announcementModalTitle: {
-    color: '#4f2c10',
+    color: '#fff5d7',
     fontSize: 24,
     fontWeight: '900',
     textAlign: 'center',
@@ -1184,7 +1517,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   announcementModalContent: {
-    color: '#5d3a1f',
+    color: '#ece4ff',
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'left',
@@ -1194,25 +1527,27 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     minWidth: 128,
     borderRadius: 999,
-    backgroundColor: '#8f5732',
+    backgroundColor: '#2da8ff',
     paddingHorizontal: 22,
     paddingVertical: 11,
+    borderWidth: 2,
+    borderColor: '#dff5ff',
   },
   announcementModalCloseText: {
-    color: '#fff7ea',
+    color: '#ffffff',
     fontSize: 15,
     fontWeight: '800',
     textAlign: 'center',
   },
   charSelectOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(21,16,10,0.58)',
+    backgroundColor: 'rgba(10, 7, 28, 0.74)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 14,
   },
   charSelectModal: {
-    backgroundColor: '#f4e2c0',
+    backgroundColor: '#23134e',
     borderRadius: 26,
     paddingHorizontal: 18,
     paddingTop: 18,
@@ -1221,8 +1556,8 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     maxHeight: H * 0.84,
     borderWidth: 3,
-    borderColor: '#9a6139',
-    shadowColor: '#2b1608',
+    borderColor: '#e2a94d',
+    shadowColor: '#0b0419',
     shadowOffset: {width: 0, height: 16},
     shadowOpacity: 0.32,
     shadowRadius: 20,
@@ -1233,7 +1568,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   charSelectEyebrow: {
-    color: '#9b6a3f',
+    color: '#ffd88b',
     fontSize: 11,
     fontWeight: '900',
     letterSpacing: 1.2,
@@ -1242,12 +1577,12 @@ const styles = StyleSheet.create({
   charSelectTitle: {
     fontSize: 27,
     fontWeight: '900',
-    color: '#5a3316',
+    color: '#fff6da',
     textAlign: 'center',
   },
   charSelectSubtitle: {
     fontSize: 12,
-    color: '#7a5a3d',
+    color: '#d8cbff',
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -1255,7 +1590,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 22,
-    borderWidth: 2,
+    borderWidth: 3,
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginBottom: 14,
@@ -1268,6 +1603,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     marginRight: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   charFeaturedInfo: {
     flex: 1,
@@ -1278,7 +1615,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   charFeaturedDesc: {
-    color: '#73563c',
+    color: '#dbd0ff',
     fontSize: 12,
     lineHeight: 17,
   },
@@ -1293,17 +1630,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(122, 86, 51, 0.18)',
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   charFeaturedStatLabel: {
-    color: '#8d6847',
+    color: '#d4c6ff',
     fontSize: 10,
     fontWeight: '800',
   },
   charFeaturedStatValue: {
-    color: '#553319',
+    color: '#fff5d7',
     fontSize: 15,
     fontWeight: '900',
     marginTop: 1,
@@ -1312,18 +1649,28 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   charSelectGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     gap: 10,
     paddingBottom: 4,
   },
+  charSelectGridRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   charSelectTile: {
-    width: '48.4%',
+    flex: 1,
+    minWidth: 0,
     borderRadius: 20,
     borderWidth: 2,
     paddingHorizontal: 10,
     paddingVertical: 12,
+    shadowColor: '#090416',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  charSelectTilePlaceholder: {
+    opacity: 0,
   },
   charSelectTilePortrait: {
     height: 82,
@@ -1337,17 +1684,16 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   charSelectTileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 4,
   },
   charSelectName: {
     fontSize: 15,
     fontWeight: '900',
-    flex: 1,
+    width: '100%',
   },
   charSelectActivePill: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
@@ -1359,7 +1705,7 @@ const styles = StyleSheet.create({
   },
   charSelectDesc: {
     fontSize: 11,
-    color: '#73563c',
+    color: '#dcd1ff',
     lineHeight: 16,
   },
   charStatRow: {
@@ -1372,17 +1718,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   charSelectCloseBtn: {
-    backgroundColor: '#8f5732',
+    backgroundColor: '#2da8ff',
     paddingHorizontal: 40,
     paddingVertical: 14,
     borderRadius: 16,
     marginTop: 12,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#6e3f20',
+    borderColor: '#dff5ff',
   },
   charSelectCloseText: {
-    color: '#fff7ea',
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '900',
   },
