@@ -83,6 +83,10 @@ export function randomColor(colors?: string[]): string {
 // The 1x1 block is no longer part of the default pool and is only added when unlocked.
 const DEFAULT_FILL_FRIENDLY = [1, 2, 3, 4, 9];
 const REDUCED_SMALL_PIECE_PROBABILITY = 0.5;
+const SPECIAL_HALF_WEIGHT_SHAPE_INDICES = new Set([0, 20, 21, 23, 24]);
+const SAME_DIRECTION_REPEAT_PENALTY = 24;
+const DIRECTION_SATURATION_PENALTY = 18;
+const SAME_LINE_DIRECTION_REPEAT_PENALTY = 14;
 const PIECE_HISTORY_LIMIT = 8;
 let recentGeneratedPieces: Piece[] = [];
 
@@ -118,6 +122,58 @@ function getNormalizedPiecePatternKey(shape: PieceShape): string {
 
 function isLineShape(shape: PieceShape): boolean {
   return shape.length === 1 || shape[0].length === 1;
+}
+
+type PieceDirection = 'horizontal' | 'vertical' | 'balanced';
+
+function getOccupiedShapeBounds(shape: PieceShape): {
+  width: number;
+  height: number;
+} {
+  let minRow = Infinity;
+  let maxRow = -1;
+  let minCol = Infinity;
+  let maxCol = -1;
+
+  for (let row = 0; row < shape.length; row++) {
+    for (let col = 0; col < shape[row].length; col++) {
+      if (shape[row][col] !== 1) {
+        continue;
+      }
+      minRow = Math.min(minRow, row);
+      maxRow = Math.max(maxRow, row);
+      minCol = Math.min(minCol, col);
+      maxCol = Math.max(maxCol, col);
+    }
+  }
+
+  if (maxRow < 0 || maxCol < 0) {
+    return {width: shape[0]?.length ?? 0, height: shape.length};
+  }
+
+  return {
+    width: maxCol - minCol + 1,
+    height: maxRow - minRow + 1,
+  };
+}
+
+function getPieceDirection(shape: PieceShape): PieceDirection {
+  if (shape.length === 1 && shape[0].length > 1) {
+    return 'horizontal';
+  }
+
+  if (shape[0].length === 1 && shape.length > 1) {
+    return 'vertical';
+  }
+
+  const {width, height} = getOccupiedShapeBounds(shape);
+  if (width > height) {
+    return 'horizontal';
+  }
+  if (height > width) {
+    return 'vertical';
+  }
+  return 'balanced';
 }
 
 function getPieceFamilyKey(shape: PieceShape): string {
@@ -221,15 +277,21 @@ function getReducedSmallPieceWeightMultiplier(
   );
 }
 
+function getSpecialShapeWeightMultiplier(shapeIndex: number): number {
+  return SPECIAL_HALF_WEIGHT_SHAPE_INDICES.has(shapeIndex) ? 0.5 : 1;
+}
+
 export function getShapeSpawnWeight(
   shapeIndex: number,
   pool: number[],
 ): number {
-  if (!isReducedSmallPieceShapeIndex(shapeIndex)) {
-    return 1;
+  let weight = 1;
+
+  if (isReducedSmallPieceShapeIndex(shapeIndex)) {
+    weight *= getReducedSmallPieceWeightMultiplier(pool);
   }
 
-  return getReducedSmallPieceWeightMultiplier(pool);
+  return weight * getSpecialShapeWeightMultiplier(shapeIndex);
 }
 
 function pickWeightedShapeIndex(
@@ -279,12 +341,22 @@ function getBalanceScore(candidate: Piece, history: Piece[]): number {
   const recent = history.slice(-6);
   const candidateCount = countBlocks(candidate.shape);
   const candidateFamilyKey = getPieceFamilyKey(candidate.shape);
+  const candidateDirection = getPieceDirection(candidate.shape);
   const recentFamilyMatches = recent.filter(
     previous => getPieceFamilyKey(previous.shape) === candidateFamilyKey,
   ).length;
   const recentCountMatches = recent.filter(
     previous => countBlocks(previous.shape) === candidateCount,
   ).length;
+  const recentDirectionalMatches =
+    candidateDirection === 'balanced'
+      ? 0
+      : recent
+          .slice(-3)
+          .filter(
+            previous => getPieceDirection(previous.shape) === candidateDirection,
+          ).length;
+  const previous = recent.length > 0 ? recent[recent.length - 1] : null;
 
   let score = recent.reduce((scoreValue, previous, index) => {
     const weight = recent.length - index;
@@ -308,6 +380,21 @@ function getBalanceScore(candidate: Piece, history: Piece[]): number {
 
   if (recentFamilyMatches >= 2) {
     score += 200;
+  }
+
+  if (
+    previous &&
+    candidateDirection !== 'balanced' &&
+    getPieceDirection(previous.shape) === candidateDirection
+  ) {
+    score += SAME_DIRECTION_REPEAT_PENALTY;
+    if (isLineShape(candidate.shape) && isLineShape(previous.shape)) {
+      score += SAME_LINE_DIRECTION_REPEAT_PENALTY;
+    }
+  }
+
+  if (recentDirectionalMatches >= 2) {
+    score += DIRECTION_SATURATION_PENALTY;
   }
 
   return score;
@@ -380,21 +467,35 @@ function pickFromRankedCandidates(
   const preferredCandidates = candidates.filter(
     candidate => candidate.score <= bestScore + 8,
   );
-  const weightedPool = preferredCandidates.flatMap(candidate => {
+  const weightedCandidates = preferredCandidates.map(candidate => {
     const duplicateCount = sourcePool.filter(
       entry => entry === candidate.shapeIndex,
     ).length;
-    return Array.from(
-      { length: Math.max(1, duplicateCount) },
-      () => candidate.shapeIndex,
-    );
+    return {
+      shapeIndex: candidate.shapeIndex,
+      weight:
+        Math.max(1, duplicateCount) *
+        getShapeSpawnWeight(candidate.shapeIndex, sourcePool),
+    };
   });
+  const totalWeight = weightedCandidates.reduce(
+    (sum, candidate) => sum + candidate.weight,
+    0,
+  );
 
-  if (weightedPool.length === 0) {
+  if (totalWeight <= 0) {
     return preferredCandidates[0].shapeIndex;
   }
 
-  return weightedPool[Math.floor(Math.random() * weightedPool.length)];
+  let cursor = Math.random() * totalWeight;
+  for (const candidate of weightedCandidates) {
+    cursor -= candidate.weight;
+    if (cursor < 0) {
+      return candidate.shapeIndex;
+    }
+  }
+
+  return weightedCandidates[weightedCandidates.length - 1].shapeIndex;
 }
 
 function getPreferredSourcePool(
