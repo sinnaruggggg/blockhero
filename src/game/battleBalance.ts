@@ -8,10 +8,23 @@ export interface EnemyAttackStats {
 
 const ENEMY_ATTACK_BUFF_MULTIPLIER = 1.1;
 const LEVEL_ENEMY_ATTACK_MULTIPLIER = 0.5;
+const ENEMY_ATTACK_GLOBAL_MULTIPLIER = 0.5;
+const ENEMY_HP_GLOBAL_MULTIPLIER = 2;
+
+export function adjustEnemyAttackValue(baseAttack: number): number {
+  return Math.max(
+    1,
+    Math.round(baseAttack * ENEMY_ATTACK_GLOBAL_MULTIPLIER),
+  );
+}
+
+export function adjustEnemyHpValue(baseHp: number): number {
+  return Math.max(1, Math.round(baseHp * ENEMY_HP_GLOBAL_MULTIPLIER));
+}
 
 function getBaseRaidAttack(stage: number): number {
-  return Math.round(
-    (12 + Math.max(1, stage) * 2.5) * ENEMY_ATTACK_BUFF_MULTIPLIER,
+  return adjustEnemyAttackValue(
+    Math.round((12 + Math.max(1, stage) * 2.5) * ENEMY_ATTACK_BUFF_MULTIPLIER),
   );
 }
 
@@ -31,8 +44,7 @@ export function getLevelEnemyStats(
   }
 
   return {
-    attack: Math.max(
-      1,
+    attack: adjustEnemyAttackValue(
       Math.round(
         (12 +
           world * 5 +
@@ -48,7 +60,7 @@ export function getLevelEnemyStats(
 }
 
 export function getAdjustedLevelMonsterHp(baseHp: number): number {
-  return Math.max(1, Math.round(baseHp * 2));
+  return adjustEnemyHpValue(Math.max(1, Math.round(baseHp * 2)));
 }
 
 export function getNormalRaidAttackStats(stage: number): EnemyAttackStats {

@@ -80,6 +80,7 @@ import {
   listCreatorRaids,
   resolveCreatorRaidRuntime,
 } from '../game/creatorManifest';
+import { adjustEnemyHpValue } from '../game/battleBalance';
 import { getUnlockedBossRaidStages } from '../game/levelProgress';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
 import { getAdminStatus } from '../services/adminSync';
@@ -469,7 +470,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
       const staticBoss =
         RAID_BOSSES.find(entry => entry.stage === stage) ?? RAID_BOSSES[0];
       const normalRaidMaxHp =
-        creatorNormalRaid?.maxHp ?? getNormalRaidMaxHp(stage);
+        creatorNormalRaid
+          ? adjustEnemyHpValue(creatorNormalRaid.maxHp)
+          : getNormalRaidMaxHp(stage);
       return {
         name: creatorRaid?.name ?? t(staticBoss.nameKey),
         color: creatorRaid?.monsterColor ?? staticBoss.color,

@@ -7,20 +7,20 @@ import {
 } from '../src/game/raidRules';
 
 describe('raid rules', () => {
-  test('boss raid is configured for 10 stages with 100k hp increments', () => {
+  test('boss raid is configured for 10 stages with doubled max hp', () => {
     expect(RAID_BOSSES).toHaveLength(10);
     expect(MAX_RAID_PLAYERS).toBe(30);
     expect(RAID_BOSSES.map(boss => boss.maxHp)).toEqual([
-      100000,
-      200000,
-      300000,
-      400000,
-      500000,
-      600000,
-      700000,
-      800000,
-      900000,
-      1000000,
+      4000000,
+      8000000,
+      12000000,
+      16000000,
+      20000000,
+      24000000,
+      28000000,
+      32000000,
+      36000000,
+      40000000,
     ]);
   });
 
