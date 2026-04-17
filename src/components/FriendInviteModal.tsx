@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {t} from '../i18n';
+import { t } from '../i18n';
 
 export interface InviteCandidate {
   id: string;
@@ -42,7 +42,7 @@ function CandidateRow({
       <View
         style={[
           styles.onlineDot,
-          {backgroundColor: candidate.isOnline ? '#2da8ff' : 'rgba(255,255,255,0.24)'},
+          { backgroundColor: candidate.isOnline ? '#22c55e' : '#64748b' },
         ]}
       />
       <View style={styles.identityBlock}>
@@ -50,9 +50,13 @@ function CandidateRow({
         <Text style={styles.idText}>{candidate.id}</Text>
       </View>
       <TouchableOpacity
-        style={[styles.inviteBtn, !candidate.isOnline && styles.inviteBtnDisabled]}
+        style={[
+          styles.inviteBtn,
+          !candidate.isOnline && styles.inviteBtnDisabled,
+        ]}
         disabled={!candidate.isOnline}
-        onPress={() => onInvite(candidate.id)}>
+        onPress={() => onInvite(candidate.id)}
+      >
         <Text style={styles.inviteBtnText}>
           {candidate.isOnline ? t('party.invite') : '오프라인'}
         </Text>
@@ -77,11 +81,11 @@ export default function FriendInviteModal({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
-      onRequestClose={onClose}>
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <View style={styles.content}>
-          <Text style={styles.eyebrow}>PARTY INVITE</Text>
           <Text style={styles.title}>{title || t('party.inviteFriend')}</Text>
 
           <View style={styles.searchRow}>
@@ -89,7 +93,7 @@ export default function FriendInviteModal({
               value={searchQuery}
               onChangeText={onChangeSearchQuery}
               placeholder="닉네임 또는 ID 검색"
-              placeholderTextColor="#b7a8e6"
+              placeholderTextColor="#94a3b8"
               style={styles.searchInput}
               autoCapitalize="none"
               autoCorrect={false}
@@ -102,9 +106,10 @@ export default function FriendInviteModal({
                 (!searchQuery.trim() || searching) && styles.searchBtnDisabled,
               ]}
               disabled={!searchQuery.trim() || searching}
-              onPress={onSearch}>
+              onPress={onSearch}
+            >
               {searching ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.searchBtnText}>검색</Text>
               )}
@@ -133,7 +138,7 @@ export default function FriendInviteModal({
               <Text style={styles.sectionTitle}>검색 결과</Text>
               {searchResults.length === 0 ? (
                 <Text style={styles.emptyText}>
-                  검색한 플레이어가 여기에 표시됩니다.
+                  검색 후 온라인 유저가 여기에 표시됩니다.
                 </Text>
               ) : (
                 searchResults.map(candidate => (
@@ -159,38 +164,21 @@ export default function FriendInviteModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 7, 28, 0.74)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     padding: 20,
   },
   content: {
-    backgroundColor: '#23134e',
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 16,
+    backgroundColor: '#1e1b4b',
+    borderRadius: 16,
+    padding: 20,
     maxHeight: '78%',
-    borderWidth: 2,
-    borderColor: '#e2a94d',
-    shadowColor: '#0b0419',
-    shadowOffset: {width: 0, height: 16},
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 12,
-  },
-  eyebrow: {
-    color: '#ffd88b',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    textAlign: 'center',
-    marginBottom: 4,
   },
   title: {
-    color: '#fff6da',
-    fontSize: 22,
-    fontWeight: '900',
-    marginBottom: 14,
+    color: '#e2e8f0',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 16,
     textAlign: 'center',
   },
   searchRow: {
@@ -200,21 +188,17 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
-    backgroundColor: 'rgba(12, 7, 36, 0.82)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.12)',
+    minHeight: 44,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
     paddingHorizontal: 12,
-    color: '#fff7de',
+    color: '#e2e8f0',
     fontSize: 14,
   },
   searchBtn: {
-    minWidth: 74,
-    borderRadius: 14,
-    backgroundColor: '#2da8ff',
-    borderWidth: 1.5,
-    borderColor: '#dff5ff',
+    minWidth: 72,
+    borderRadius: 10,
+    backgroundColor: '#6366f1',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
@@ -223,9 +207,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   searchBtnText: {
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   list: {
     maxHeight: 360,
@@ -234,20 +218,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   sectionTitle: {
-    alignSelf: 'flex-start',
-    color: '#fff1c7',
+    color: '#cbd5f5',
     fontSize: 13,
-    fontWeight: '900',
+    fontWeight: '800',
     marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(75, 43, 155, 0.82)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(232, 178, 90, 0.72)',
   },
   emptyText: {
-    color: '#d4c6ff',
+    color: '#94a3b8',
     fontSize: 13,
     lineHeight: 18,
     paddingVertical: 8,
@@ -257,57 +234,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
-    gap: 10,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    gap: 8,
   },
   onlineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   identityBlock: {
     flex: 1,
     gap: 2,
   },
   name: {
-    color: '#fff7de',
+    color: '#e2e8f0',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   idText: {
-    color: '#d4c6ff',
+    color: '#94a3b8',
     fontSize: 11,
   },
   inviteBtn: {
-    backgroundColor: 'rgba(108, 58, 214, 0.96)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(235, 184, 92, 0.85)',
+    backgroundColor: '#6366f1',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   inviteBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#475569',
   },
   inviteBtnText: {
-    color: '#fff7de',
-    fontSize: 12,
-    fontWeight: '900',
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   closeBtn: {
     marginTop: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 46,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.16)',
+    paddingVertical: 12,
+    backgroundColor: '#374151',
+    borderRadius: 10,
   },
   closeBtnText: {
-    color: '#fff4d7',
-    fontSize: 15,
-    fontWeight: '900',
+    color: '#e2e8f0',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

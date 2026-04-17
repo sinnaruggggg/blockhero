@@ -1,9 +1,7 @@
-import { getSkillEffectDetail } from '../src/game/skillEffectDetails';
-import type { CharacterData } from '../src/stores/gameStore';
+import {getSkillEffectDetail} from '../src/game/skillEffectDetails';
+import type {CharacterData} from '../src/stores/gameStore';
 
-function createCharacterData(
-  overrides: Partial<CharacterData> = {},
-): CharacterData {
+function createCharacterData(overrides: Partial<CharacterData> = {}): CharacterData {
   return {
     characterId: 'knight',
     level: 1,
@@ -57,19 +55,5 @@ describe('getSkillEffectDetail', () => {
     );
 
     expect(detail.contextNote).toContain('레이드 4인 기준');
-  });
-
-  it('shows battle-only details with a battle marker for knight skills', () => {
-    const detail = getSkillEffectDetail(
-      'knight',
-      createCharacterData(),
-      'personal',
-      3,
-    );
-
-    expect(detail.contextNote).toContain('[대전]');
-    expect(detail.nextLines).toContain(
-      '[대전] 공격 시 추가 1줄 발사 확률 +10%',
-    );
   });
 });

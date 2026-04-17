@@ -24,15 +24,6 @@
       "desktop-preload.js",
       "app/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "bundled-platform-tools",
-        "to": "platform-tools",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
     "win": {
       "target": [
         {

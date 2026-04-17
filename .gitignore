@@ -83,6 +83,3 @@ screenshot*.png
 
 # Android bundle assets (generated)
 android/app/src/main/assets/
-
-# Local design pipeline outputs
-output/design_refs/

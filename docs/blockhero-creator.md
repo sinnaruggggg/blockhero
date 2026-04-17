@@ -13,14 +13,6 @@
 3. 그 창에 관리자 이메일과 비밀번호를 한 번만 입력합니다.
 4. 설정 파일이 만들어지면 다음부터는 로그인 창 없이 자동으로 실행됩니다.
 
-### EXE에서 실기 화면 같이 보기
-1. 로그인 후 왼쪽 `프로젝트 상태` 패널 아래 `실기 화면 작업` 영역을 찾습니다.
-2. `실기 작업 시작` 버튼을 누르면 다음을 자동 실행합니다.
-- UI Studio 서버 실행
-- ADB 기기 viewport 자동 반영
-- `scrcpy`가 설치되어 있으면 폰 미러 창 실행
-3. 필요하면 `UI Studio 열기` 버튼으로 `http://localhost:4173` 화면을 다시 엽니다.
-
 ### 웹 실행
 1. 루트에서 [run-blockhero-creator.bat](/C:/www/game/blockhero_codex/run-blockhero-creator.bat)을 실행합니다.
 2. 브라우저에서 `http://localhost:4273`을 엽니다.

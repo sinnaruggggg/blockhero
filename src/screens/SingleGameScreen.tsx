@@ -60,11 +60,15 @@ import {
   Board as BoardType,
 } from '../game/engine';
 import {
+  adjustEnemyAttackValue,
   getAdjustedLevelMonsterHp,
   getLevelEnemyStats,
 } from '../game/battleBalance';
 import { resolveCombatTurn } from '../game/combatFlow';
-import { getLevelClearRewards } from '../game/levelProgress';
+import {
+  adjustCharacterXpReward,
+  getLevelClearRewards,
+} from '../game/levelProgress';
 import {
   applyCombatDamageEffectsDetailed,
   applyRewardMultipliers,
@@ -383,7 +387,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const maxMonsterHp = getAdjustedLevelMonsterHp(monster.monsterHp);
   const enemyStats = creatorLevelRuntime
     ? {
-        attack: creatorLevelRuntime.enemyAttack,
+        attack: adjustEnemyAttackValue(creatorLevelRuntime.enemyAttack),
         attackIntervalMs: creatorLevelRuntime.attackIntervalMs,
         tier: creatorLevelRuntime.enemyTier,
       }
@@ -1129,7 +1133,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 (wasFirstClear
                   ? creatorLevelRuntime.reward.firstClearBonusGold
                   : 0),
-              xp: creatorLevelRuntime.reward.characterExp,
+              xp: adjustCharacterXpReward(
+                creatorLevelRuntime.reward.characterExp,
+              ),
             }
           : getLevelClearRewards(world, levelId, !wasFirstClear, {
               isAdmin: isAdminRef.current,

@@ -21,6 +21,7 @@ import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
+import VisualElementView from '../components/VisualElementView';
 import { useBattleNotice } from '../hooks/useBattleNotice';
 import { useDragDrop } from '../game/useDragDrop';
 import { ATTACKS } from '../constants';
@@ -1014,18 +1015,21 @@ export default function BattleScreen({ route, navigation }: any) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View
-        style={[
-          styles.screenContent,
-          {
-            paddingTop: modeVerticalGutter,
-            paddingBottom: modeVerticalGutter,
-          },
-        ]}
-      >
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          paddingTop: modeVerticalGutter,
+          paddingBottom: modeVerticalGutter,
+        },
+      ]}
+    >
       {!gameOver && (
-        <View style={styles.backButtonDock}>
+        <VisualElementView
+          screenId="battle"
+          elementId="back_button"
+          style={styles.backButtonDock}
+        >
           <BackImageButton
             onPress={() => {
               Alert.alert(
@@ -1052,16 +1056,24 @@ export default function BattleScreen({ route, navigation }: any) {
             }}
             size={42}
           />
-        </View>
+        </VisualElementView>
       )}
-      <View style={styles.opponentPanelSection}>
+      <VisualElementView
+        screenId="battle"
+        elementId="opponent_panel"
+        style={styles.visualWrapper}
+      >
         <View style={styles.opponentSection}>
           <Text style={styles.opponentName}>상대 {opponentName}</Text>
           <Board board={opponentBoard} small viewport={visualViewport} />
         </View>
-      </View>
+      </VisualElementView>
 
-      <View style={styles.attackBarSection}>
+      <VisualElementView
+        screenId="battle"
+        elementId="attack_bar"
+        style={styles.visualWrapper}
+      >
         <View style={styles.attackBar}>
           <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
           {ATTACKS.map((atk, i) => (
@@ -1081,9 +1093,13 @@ export default function BattleScreen({ route, navigation }: any) {
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </VisualElementView>
 
-      <View style={styles.boardSection}>
+      <VisualElementView
+        screenId="battle"
+        elementId="board"
+        style={styles.visualWrapper}
+      >
         <Animated.View
           style={[
             styles.boardContainer,
@@ -1102,16 +1118,22 @@ export default function BattleScreen({ route, navigation }: any) {
             invalidPreview={dragDrop.invalidPreview}
             clearGuideCells={dragDrop.clearGuideCells}
           />
-          <View style={styles.skillEffectLayer} pointerEvents="none">
+          <VisualElementView
+            screenId="battle"
+            elementId="skill_effect"
+            style={styles.skillEffectLayer}
+            pointerEvents="none"
+            viewport={visualViewport}
+          >
             <SkillTriggerBoardEffect
               message={battleNoticeMessage}
               triggerKey={battleNoticeKey}
             />
-          </View>
+          </VisualElementView>
         </Animated.View>
-      </View>
+      </VisualElementView>
 
-      <View style={styles.pieceTraySection}>
+      <VisualElementView screenId="battle" elementId="piece_tray">
         <PieceSelector
           pieces={pieces}
           onDragStart={dragDrop.onDragStart}
@@ -1122,8 +1144,7 @@ export default function BattleScreen({ route, navigation }: any) {
           boardCompact
           viewport={visualViewport}
         />
-      </View>
-      </View>
+      </VisualElementView>
 
       {placementEffect && (
         <PiecePlacementEffect
@@ -1231,8 +1252,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a0a3e',
   },
-  screenContent: {
-    flex: 1,
+  visualWrapper: {
     alignSelf: 'stretch',
   },
   skillEffectLayer: {
@@ -1251,9 +1271,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  opponentPanelSection: {
-    flexShrink: 0,
-  },
   opponentName: {
     color: '#e2e8f0',
     fontSize: 12,
@@ -1267,9 +1284,6 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 5,
     backgroundColor: 'rgba(30,27,75,0.6)',
-  },
-  attackBarSection: {
-    flexShrink: 0,
   },
   attackLabel: {
     color: '#ef4444',
@@ -1293,14 +1307,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
-  },
-  boardSection: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  pieceTraySection: {
-    flexShrink: 0,
-    justifyContent: 'flex-end',
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

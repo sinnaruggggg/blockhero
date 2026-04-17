@@ -40,6 +40,8 @@ import { COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import { RAID_BOSSES, getNormalRaidMaxHp } from '../constants/raidBosses';
 import { formatAttackTimer } from '../constants/raidConfig';
 import {
+  adjustEnemyAttackValue,
+  adjustEnemyHpValue,
   getNormalRaidAttackStats,
   getRaidBossAttackStats,
 } from '../game/battleBalance';
@@ -299,10 +301,12 @@ export default function RaidScreen({ route, navigation }: any) {
   const bossColor = creatorRaidRuntime?.monsterColor ?? staticBoss.color;
   const bossEmoji = creatorRaidRuntime?.monsterEmoji ?? staticBoss.emoji;
   const normalRaidBaseHp =
-    creatorNormalRaidRuntime?.maxHp ?? getNormalRaidMaxHp(bossStage);
+    creatorNormalRaidRuntime
+      ? adjustEnemyHpValue(creatorNormalRaidRuntime.maxHp)
+      : getNormalRaidMaxHp(bossStage);
   const normalRaidAttackStats = creatorNormalRaidRuntime
     ? {
-        attack: creatorNormalRaidRuntime.enemyAttack,
+        attack: adjustEnemyAttackValue(creatorNormalRaidRuntime.enemyAttack),
         attackIntervalMs: creatorNormalRaidRuntime.attackIntervalMs,
         tier: 'boss' as const,
       }

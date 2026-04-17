@@ -131,10 +131,7 @@ RETURNS TABLE(
     nickname TEXT,
     provider TEXT,
     is_admin BOOLEAN,
-    created_at TIMESTAMP WITH TIME ZONE,
-    selected_character_id TEXT,
-    selected_character_level INTEGER,
-    highest_character_level INTEGER
+    created_at TIMESTAMP WITH TIME ZONE
 ) AS $$
 BEGIN
     IF NOT is_admin() THEN
@@ -147,19 +144,9 @@ BEGIN
         p.nickname,
         p.provider,
         p.is_admin,
-        p.created_at,
-        ps.selected_character_id,
-        ((ps.character_data -> ps.selected_character_id) ->> 'level')::INTEGER,
-        level_meta.highest_character_level
+        p.created_at
     FROM profiles p
     JOIN auth.users u ON u.id = p.id
-    LEFT JOIN player_state ps ON ps.user_id = p.id
-    LEFT JOIN LATERAL (
-        SELECT MAX((entry.value ->> 'level')::INTEGER) AS highest_character_level
-        FROM jsonb_each(COALESCE(ps.character_data, '{}'::jsonb)) AS entry(key, value)
-        WHERE jsonb_typeof(entry.value) = 'object'
-          AND entry.value ? 'level'
-    ) level_meta ON TRUE
     ORDER BY p.created_at DESC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

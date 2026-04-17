@@ -13,12 +13,7 @@ import MenuScreenFrame from '../components/MenuScreenFrame';
 import {getAdminStatus} from '../services/adminSync';
 import {openGameDialog, showGameConfirm} from '../services/gameDialogService';
 import {supabase} from '../services/supabase';
-import {
-  checkForUpdate,
-  CURRENT_VERSION_NAME,
-  downloadAndInstall,
-  showUpdateDialog,
-} from '../services/updateService';
+import {CURRENT_VERSION_NAME} from '../services/updateService';
 import {
   loadGameSettings,
   saveGameSettings,
@@ -80,7 +75,6 @@ export default function SettingsScreen({navigation}: any) {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [skillNoticeMode, setSkillNoticeMode] =
     useState<SkillTriggerNoticeMode>('triggered_only');
-  const [updateChecking, setUpdateChecking] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -185,53 +179,6 @@ export default function SettingsScreen({navigation}: any) {
     }
   };
 
-  const handleCheckForUpdate = async () => {
-    if (updateChecking) {
-      return;
-    }
-
-    setUpdateChecking(true);
-
-    try {
-      const {update, errorMessage} = await checkForUpdate();
-
-      if (errorMessage) {
-        openGameDialog({
-          title: '업데이트 확인 실패',
-          message: errorMessage,
-          variant: 'error',
-        });
-        return;
-      }
-
-      if (!update) {
-        openGameDialog({
-          title: '업데이트',
-          message: '이미 최신 버전입니다.',
-          variant: 'notice',
-        });
-        return;
-      }
-
-      showUpdateDialog(update, nextUpdate => {
-        downloadAndInstall(
-          nextUpdate,
-          () => {},
-          () => {},
-          message => {
-            openGameDialog({
-              title: '업데이트 실패',
-              message,
-              variant: 'error',
-            });
-          },
-        );
-      });
-    } finally {
-      setUpdateChecking(false);
-    }
-  };
-
   return (
     <MenuScreenFrame
       title="설정"
@@ -328,11 +275,6 @@ export default function SettingsScreen({navigation}: any) {
 
       <GamePanel>
         <Text style={styles.sectionTitle}>지원</Text>
-        <TouchableOpacity style={styles.menuItem} onPress={handleCheckForUpdate}>
-          <Text style={styles.menuText}>
-            {updateChecking ? '업데이트 확인 중...' : '업데이트 확인'}
-          </Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={handleClearCache}>
           <Text style={styles.menuText}>캐시 삭제</Text>
         </TouchableOpacity>

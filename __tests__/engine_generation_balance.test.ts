@@ -1,10 +1,9 @@
+import {PIECES_EASY} from '../src/constants';
 import {
   createBoard,
   countBlocks,
   generatePieceWithEffects,
   generatePlaceablePieces,
-  getFillFriendlyGenerationPool,
-  getGenerationPoolForDifficulty,
   getShapeSpawnWeight,
   resetPieceGenerationHistory,
   type Piece,
@@ -15,10 +14,9 @@ function shapeKey(piece: Piece): string {
 }
 
 function rotateShape(shape: number[][]): number[][] {
-  return Array.from({ length: shape[0].length }, (_, colIndex) =>
-    Array.from(
-      { length: shape.length },
-      (_, rowIndex) => shape[shape.length - 1 - rowIndex][colIndex],
+  return Array.from({length: shape[0].length}, (_, colIndex) =>
+    Array.from({length: shape.length}, (_, rowIndex) =>
+      shape[shape.length - 1 - rowIndex][colIndex],
     ),
   );
 }
@@ -36,11 +34,7 @@ function normalizedFamilyKey(piece: Piece): string {
   let current = piece.shape;
   for (let step = 0; step < 4; step += 1) {
     variants.push(current.map(row => row.join('')).join('|'));
-    variants.push(
-      mirrorShape(current)
-        .map(row => row.join(''))
-        .join('|'),
-    );
+    variants.push(mirrorShape(current).map(row => row.join('')).join('|'));
     current = rotateShape(current);
   }
 
@@ -57,13 +51,9 @@ function expectNoImmediateRepeat(sequence: Piece[]) {
 }
 
 function getShapeProbability(shapeIndex: number, pool: number[]): number {
-  const totalWeight = pool.reduce(
-    (sum, entry) => sum + getShapeSpawnWeight(entry, pool),
-    0,
-  );
+  const totalWeight = pool.reduce((sum, entry) => sum + getShapeSpawnWeight(entry, pool), 0);
   const shapeWeight =
-    pool.filter(entry => entry === shapeIndex).length *
-    getShapeSpawnWeight(shapeIndex, pool);
+    pool.filter(entry => entry === shapeIndex).length * getShapeSpawnWeight(shapeIndex, pool);
   return shapeWeight / totalWeight;
 }
 
@@ -104,40 +94,19 @@ describe('engine piece generation balance', () => {
 
     for (let index = 0; index <= sequence.length - 5; index += 1) {
       const recentWindow = sequence.slice(index, index + 5);
-      const uniqueFamilyCount = new Set(recentWindow.map(normalizedFamilyKey))
-        .size;
+      const uniqueFamilyCount = new Set(recentWindow.map(normalizedFamilyKey)).size;
       expect(uniqueFamilyCount).toBeGreaterThanOrEqual(3);
     }
   });
 
-  it('keeps the one-cell block out of the default generation pools', () => {
-    expect(getGenerationPoolForDifficulty('easy')).not.toContain(0);
-    expect(getGenerationPoolForDifficulty('medium')).not.toContain(0);
-    expect(getGenerationPoolForDifficulty('hard')).not.toContain(0);
-    expect(getFillFriendlyGenerationPool()).not.toContain(0);
-  });
+  it('halves 1-cell and 2-cell spawn probability in normal and fill-friendly pools', () => {
+    const fillFriendlyPool = [0, 1, 2, 3, 4, 9];
 
-  it('adds purchased special shapes back into the generation pools', () => {
-    const options = { unlockedSpecialShapeIndices: [0, 20, 23, 26] };
-
-    expect(getGenerationPoolForDifficulty('easy', options)).toEqual(
-      expect.arrayContaining([0, 20, 23, 26]),
-    );
-    expect(getFillFriendlyGenerationPool(options)).toContain(0);
-  });
-
-  it('halves 2-cell spawn probability in default and fill-friendly pools', () => {
-    const easyPool = getGenerationPoolForDifficulty('easy');
-    const fillFriendlyPool = getFillFriendlyGenerationPool();
-
-    for (const pool of [easyPool, fillFriendlyPool]) {
-      for (const shapeIndex of [1, 2]) {
+    for (const pool of [PIECES_EASY, fillFriendlyPool]) {
+      for (const shapeIndex of [0, 1, 2]) {
         const originalProbability =
           pool.filter(entry => entry === shapeIndex).length / pool.length;
-        expect(getShapeProbability(shapeIndex, pool)).toBeCloseTo(
-          originalProbability / 2,
-          10,
-        );
+        expect(getShapeProbability(shapeIndex, pool)).toBeCloseTo(originalProbability / 2, 10);
       }
     }
   });

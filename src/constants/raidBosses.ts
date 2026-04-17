@@ -1,4 +1,5 @@
 import { BOSS_RAID_HP } from './index';
+import { adjustEnemyHpValue } from '../game/battleBalance';
 
 export interface RaidBossDef {
   stage: number;
@@ -10,7 +11,7 @@ export interface RaidBossDef {
 
 export function getNormalRaidMaxHp(stage: number): number {
   const normalizedStage = Math.max(1, Math.min(BOSS_RAID_HP.length, stage));
-  return BOSS_RAID_HP[normalizedStage - 1];
+  return adjustEnemyHpValue(BOSS_RAID_HP[normalizedStage - 1]);
 }
 
 export function getBossRaidMaxHp(stage: number): number {

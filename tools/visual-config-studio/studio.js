@@ -1,7 +1,7 @@
 const LOCAL_STORAGE_KEY = 'blockhero-ui-studio-v3';
 const DEFAULT_SUPABASE_URL = 'https://alhlmdhixmlmsdvgzhdu.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsaGxtZGhpeG1sbXNkdmd6aGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNTY4NTQsImV4cCI6MjA4ODYzMjg1NH0.lkTNn1jeXzkQdCRnmtNAjejezJN_RfC1n5HEhCbV_n8';
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImFsaGxtZGhpeG1sbXNkdmd6aGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNTY4NTQsImV4cCI6MjA4ODYzMjg1NH0.lkTNn1jeXzkQdCRnmtNAjejezJN_RfC1n5HEhCbV_n8';
 const AUTH_STORAGE_KEY = 'blockhero-ui-studio-auth-v1';
 
 const DEFAULT_REFERENCE_VIEWPORT = {
@@ -400,83 +400,6 @@ function decodeJwtPayload(token) {
   } catch {
     return null;
   }
-}
-
-function parseBackendErrorText(payload) {
-  if (!payload) {
-    return '';
-  }
-  try {
-    const parsed = JSON.parse(payload);
-    if (typeof parsed === 'string') {
-      return parsed;
-    }
-    if (parsed && typeof parsed === 'object') {
-      if (typeof parsed.msg === 'string' && parsed.msg.trim()) {
-        return parsed.msg.trim();
-      }
-      if (typeof parsed.message === 'string' && parsed.message.trim()) {
-        return parsed.message.trim();
-      }
-      if (typeof parsed.error_description === 'string' && parsed.error_description.trim()) {
-        return parsed.error_description.trim();
-      }
-      if (typeof parsed.error === 'string' && parsed.error.trim()) {
-        return parsed.error.trim();
-      }
-      if (typeof parsed.details === 'string' && parsed.details.trim()) {
-        return parsed.details.trim();
-      }
-      if (typeof parsed.hint === 'string' && parsed.hint.trim()) {
-        return parsed.hint.trim();
-      }
-    }
-  } catch {
-    // ignore JSON parse failures and fallback to raw string
-  }
-  return String(payload).trim();
-}
-
-function localizeErrorMessage(errorLike) {
-  const raw =
-    typeof errorLike === 'string'
-      ? errorLike
-      : errorLike && typeof errorLike.message === 'string'
-        ? errorLike.message
-        : '요청 처리 중 오류가 발생했습니다.';
-  const message = parseBackendErrorText(raw) || '요청 처리 중 오류가 발생했습니다.';
-
-  const tableMatch = message.match(
-    /Could not find the table 'public\.([a-zA-Z0-9_]+)' in the schema cache/i,
-  );
-  if (tableMatch) {
-    return `DB 테이블 ${tableMatch[1]} 이(가) 없습니다. SQL 초기화 파일을 먼저 실행하세요.`;
-  }
-  if (/invalid login credentials/i.test(message)) {
-    return '이메일 또는 비밀번호가 올바르지 않습니다.';
-  }
-  if (/email not confirmed/i.test(message)) {
-    return '이메일 인증이 완료되지 않은 계정입니다.';
-  }
-  if (/Invalid API key/i.test(message)) {
-    return 'Supabase 익명 키가 올바르지 않습니다.';
-  }
-  if (/Failed to fetch|NetworkError|network request failed/i.test(message)) {
-    return '서버에 연결하지 못했습니다. 인터넷 또는 Supabase 주소를 확인하세요.';
-  }
-  if (/permission denied|new row violates row-level security policy/i.test(message)) {
-    return '권한이 없습니다. 관리자 계정으로 다시 로그인하세요.';
-  }
-  if (/relation .* does not exist/i.test(message)) {
-    return '필수 DB 테이블이 없습니다. SQL 초기화 파일을 먼저 실행하세요.';
-  }
-  if (/duplicate key value violates unique constraint/i.test(message)) {
-    return '이미 같은 키의 데이터가 존재합니다.';
-  }
-  if (/jwt expired/i.test(message)) {
-    return '로그인 세션이 만료되었습니다. 다시 로그인하세요.';
-  }
-  return message;
 }
 
 function isJwtExpired(token) {
@@ -949,7 +872,7 @@ async function fetchJson(path, options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(localizeErrorMessage(await response.text()));
+    throw new Error(await response.text());
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -1040,50 +963,6 @@ function restoreEditorPrefs() {
   }
 }
 
-function applyLaunchOverridesFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  if (!params.toString()) {
-    return '';
-  }
-
-  const profileId = params.get('profile');
-  if (profileId && DEVICE_PROFILES.some(profile => profile.id === profileId)) {
-    state.profileId = profileId;
-  }
-
-  const hasViewportOverride =
-    params.has('viewportWidth') ||
-    params.has('viewportHeight') ||
-    params.has('safeTop') ||
-    params.has('safeBottom');
-
-  if (hasViewportOverride) {
-    const viewport = sanitizeViewport({
-      width: params.get('viewportWidth'),
-      height: params.get('viewportHeight'),
-      safeTop: params.get('safeTop'),
-      safeBottom: params.get('safeBottom'),
-    });
-    state.profileId = 'custom';
-    byId('viewport-width').value = String(viewport.width);
-    byId('viewport-height').value = String(viewport.height);
-    byId('safe-top').value = String(viewport.safeTop);
-    byId('safe-bottom').value = String(viewport.safeBottom);
-  }
-
-  byId('device-profile').value = state.profileId;
-  syncViewportFields(getViewport());
-
-  const deviceLabel = (params.get('deviceLabel') || '').trim();
-  if (hasViewportOverride && deviceLabel) {
-    return `연결 기기(${deviceLabel}) viewport를 자동 적용했습니다.`;
-  }
-  if (hasViewportOverride) {
-    return 'URL viewport 설정을 자동 적용했습니다.';
-  }
-  return '';
-}
-
 function setStatus(message, tone = 'muted') {
   const status = byId('server-status');
   const line = byId('status-line');
@@ -1113,7 +992,7 @@ async function fetchProfileForToken(token, fallbackUserId = '') {
   );
 
   if (!response.ok) {
-    throw new Error(localizeErrorMessage(await response.text()));
+    throw new Error(await response.text());
   }
 
   const rows = await response.json();
@@ -1136,7 +1015,7 @@ async function signInAdmin(email, password) {
   });
 
   if (!response.ok) {
-    throw new Error(localizeErrorMessage(await response.text()));
+    throw new Error(await response.text());
   }
 
   const session = await response.json();
@@ -2441,7 +2320,6 @@ async function bootstrap() {
   restoreEditorPrefs();
   refreshScreenOptions();
   refreshDeviceOptions();
-  const launchMessage = applyLaunchOverridesFromUrl();
   refreshElementOptions();
   refreshInspectorFields();
   renderElementHelp();
@@ -2456,9 +2334,6 @@ async function bootstrap() {
   renderReleaseHistory();
   await tryRefreshAdminSession();
   await autoLoadWorkspace();
-  if (launchMessage) {
-    setStatus(launchMessage, 'success');
-  }
   scheduleRender();
 }
 
