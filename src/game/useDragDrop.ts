@@ -3,6 +3,7 @@ import {
   Board,
   Piece,
   canPlacePiece,
+  getPieceRewardMarkerCell,
   PieceShape,
   predictClearLines,
 } from './engine';
@@ -14,6 +15,9 @@ export interface PreviewCell {
   row: number;
   col: number;
   color: string;
+  isGem?: boolean;
+  isItem?: boolean;
+  itemType?: string;
 }
 
 export interface ClearGuideCell {
@@ -139,16 +143,30 @@ export function useDragDrop(
 
   const getPreviewCells = useCallback(
     (
-      shape: PieceShape,
-      color: string,
+      piece: Piece,
       originR: number,
       originC: number,
     ): PreviewCell[] => {
       const cells: PreviewCell[] = [];
-      for (let r = 0; r < shape.length; r++) {
-        for (let c = 0; c < shape[r].length; c++) {
-          if (shape[r][c] === 1) {
-            cells.push({ row: originR + r, col: originC + c, color });
+      const rewardMarker =
+        piece.isGem || piece.isItem
+          ? getPieceRewardMarkerCell(piece.shape)
+          : null;
+      for (let r = 0; r < piece.shape.length; r++) {
+        for (let c = 0; c < piece.shape[r].length; c++) {
+          if (piece.shape[r][c] === 1) {
+            const isRewardMarker =
+              rewardMarker !== null &&
+              rewardMarker.row === r &&
+              rewardMarker.col === c;
+            cells.push({
+              row: originR + r,
+              col: originC + c,
+              color: piece.color,
+              isGem: isRewardMarker ? piece.isGem : undefined,
+              isItem: isRewardMarker ? piece.isItem : undefined,
+              itemType: isRewardMarker ? piece.itemType : undefined,
+            });
           }
         }
       }
@@ -220,8 +238,7 @@ export function useDragDrop(
         lastPreviewPos.current = { row: snapResult.r, col: snapResult.c };
         lastRawPos.current = { r, c };
         const cells = getPreviewCells(
-          piece.shape,
-          piece.color,
+          piece,
           snapResult.r,
           snapResult.c,
         );

@@ -1,6 +1,7 @@
 import {
   checkAndClearLines,
   createBoard,
+  getPieceRewardMarkerCell,
   placePiece,
   type Board,
 } from '../src/game/engine';
@@ -21,6 +22,15 @@ function fillRowForClear(board: Board, row: number, startCol: number) {
 }
 
 describe('special block rewards', () => {
+  it('uses the first filled cell as the visible reward marker', () => {
+    expect(
+      getPieceRewardMarkerCell([
+        [0, 1, 0],
+        [1, 1, 1],
+      ]),
+    ).toEqual({row: 0, col: 1});
+  });
+
   it('keeps gem metadata on the board and rewards one diamond per special piece', () => {
     const board = createBoard();
     const placed = placePiece(

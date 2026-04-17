@@ -1,5 +1,5 @@
-import {RAID_BOSSES} from '../src/constants/raidBosses';
-import {MAX_RAID_PLAYERS} from '../src/constants/raidConfig';
+import { RAID_BOSSES } from '../src/constants/raidBosses';
+import { MAX_RAID_PLAYERS } from '../src/constants/raidConfig';
 import {
   formatBossRaidCountdownLabel,
   getBossRaidWindowInfo,
@@ -7,20 +7,12 @@ import {
 } from '../src/game/raidRules';
 
 describe('raid rules', () => {
-  test('boss raid is configured for 10 stages with 100k hp increments', () => {
+  test('boss raid is configured for 10 stages with 20x normal raid hp', () => {
     expect(RAID_BOSSES).toHaveLength(10);
     expect(MAX_RAID_PLAYERS).toBe(30);
     expect(RAID_BOSSES.map(boss => boss.maxHp)).toEqual([
-      100000,
-      200000,
-      300000,
-      400000,
-      500000,
-      600000,
-      700000,
-      800000,
-      900000,
-      1000000,
+      2000000, 4000000, 6000000, 8000000, 10000000, 12000000, 14000000,
+      16000000, 18000000, 20000000,
     ]);
   });
 
@@ -32,7 +24,9 @@ describe('raid rules', () => {
     const open = getBossRaidWindowInfo(4 * 60 * 60 * 1000 + 2 * 60 * 1000);
     expect(open.isOpen).toBe(true);
     expect(open.windowEndAt).toBe(4 * 60 * 60 * 1000 + 10 * 60 * 1000);
-    expect(formatBossRaidCountdownLabel(4 * 60 * 60 * 1000 + 9 * 60 * 1000)).toContain('진행 중');
+    expect(
+      formatBossRaidCountdownLabel(4 * 60 * 60 * 1000 + 9 * 60 * 1000),
+    ).toContain('진행 중');
   });
 
   test('normal raid rewards use first-clear diamonds and unlock skin on 10th kill', () => {
@@ -43,14 +37,14 @@ describe('raid rules', () => {
     expect(firstClear.unlocksSkin).toBe(false);
 
     const repeat = getNormalRaidRewardPreview(1, {
-      1: {firstCleared: true, killCount: 4, firstClearDiaClaimed: true},
+      1: { firstCleared: true, killCount: 4, firstClearDiaClaimed: true },
     });
     expect(repeat.diamonds).toBe(1);
     expect(repeat.firstClearReward).toBe(false);
     expect(repeat.killCountAfter).toBe(5);
 
     const unlock = getNormalRaidRewardPreview(2, {
-      2: {firstCleared: true, killCount: 9, firstClearDiaClaimed: true},
+      2: { firstCleared: true, killCount: 9, firstClearDiaClaimed: true },
     });
     expect(unlock.diamonds).toBe(1);
     expect(unlock.unlocksSkin).toBe(true);

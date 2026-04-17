@@ -24,16 +24,20 @@ function createWindow() {
       const state = await win.webContents.executeJavaScript(`(() => ({
         title: document.querySelector('#loginCard h2')?.textContent ?? '',
         loginVisible: !document.getElementById('loginCard')?.classList.contains('hidden'),
-        workspaceHidden: document.getElementById('workspace')?.classList.contains('hidden'),
+        workspaceVisible: !document.getElementById('workspace')?.classList.contains('hidden'),
         supabaseUrlFilled: Boolean(document.getElementById('supabaseUrl')?.value),
         supabaseAnonKeyFilled: Boolean(document.getElementById('supabaseAnonKey')?.value),
         connectionStatus: document.getElementById('connectionStatus')?.textContent ?? '',
+        activeViewStatus: document.getElementById('activeViewStatus')?.textContent ?? '',
         alerts: Array.isArray(window.__creatorSmokeAlerts) ? window.__creatorSmokeAlerts : [],
       }))()`);
       console.log(JSON.stringify(state));
       clearTimeout(timeout);
       app.exit(
-        state.loginVisible && state.workspaceHidden && state.supabaseUrlFilled && state.supabaseAnonKeyFilled
+        state.workspaceVisible &&
+          state.supabaseUrlFilled &&
+          state.supabaseAnonKeyFilled &&
+          state.activeViewStatus
           ? 0
           : 1,
       );

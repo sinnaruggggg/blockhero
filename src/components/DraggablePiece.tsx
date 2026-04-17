@@ -1,9 +1,10 @@
 import React, { useRef, useMemo, useEffect } from 'react';
 import { View, StyleSheet, PanResponder, Animated } from 'react-native';
-import { Piece } from '../game/engine';
+import { Piece, getPieceRewardMarkerCell } from '../game/engine';
 import { getBoardMetrics } from './Board';
 import { getGameplayLayoutScale } from '../game/layoutScale';
 import type { VisualViewport } from '../game/visualConfig';
+import SpecialBlockBadge from './SpecialBlockBadge';
 
 const BLOCK_SIZE = 18;
 const COMPACT_BLOCK_SIZE = 16;
@@ -37,7 +38,19 @@ function darken(hex: string, amount: number): string {
   )})`;
 }
 
-function VoxelBlock({ color, size }: { color: string; size: number }) {
+function VoxelBlock({
+  color,
+  size,
+  isGem = false,
+  isItem = false,
+  itemType,
+}: {
+  color: string;
+  size: number;
+  isGem?: boolean;
+  isItem?: boolean;
+  itemType?: string;
+}) {
   return (
     <View style={{ width: size, height: size, margin: 1 }}>
       {/* Shadow edge */}
@@ -88,6 +101,12 @@ function VoxelBlock({ color, size }: { color: string; size: number }) {
           backgroundColor: 'rgba(255,255,255,0.3)',
         }}
       />
+      <SpecialBlockBadge
+        isGem={isGem}
+        isItem={isItem}
+        itemType={itemType}
+        size={size}
+      />
     </View>
   );
 }
@@ -130,6 +149,10 @@ export default function DraggablePiece({
       (compact ? TRAY_SLOT_SIZE_COMPACT : TRAY_SLOT_SIZE) * layoutScale,
     ),
   );
+  const rewardMarker =
+    piece && (piece.isGem || piece.isItem)
+      ? getPieceRewardMarkerCell(piece.shape)
+      : null;
 
   const callbacksRef = useRef({
     onDragStart,
@@ -230,7 +253,30 @@ export default function DraggablePiece({
         <View key={r} style={styles.pieceRow}>
           {row.map((cell, c) =>
             cell === 1 ? (
-              <VoxelBlock key={c} color={piece.color} size={blockSize} />
+              <VoxelBlock
+                key={c}
+                color={piece.color}
+                size={blockSize}
+                isGem={
+                  rewardMarker !== null &&
+                  rewardMarker.row === r &&
+                  rewardMarker.col === c &&
+                  piece.isGem === true
+                }
+                isItem={
+                  rewardMarker !== null &&
+                  rewardMarker.row === r &&
+                  rewardMarker.col === c &&
+                  piece.isItem === true
+                }
+                itemType={
+                  rewardMarker !== null &&
+                  rewardMarker.row === r &&
+                  rewardMarker.col === c
+                    ? piece.itemType
+                    : undefined
+                }
+              />
             ) : (
               <View
                 key={c}

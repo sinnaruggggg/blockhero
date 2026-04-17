@@ -14,7 +14,9 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  ImageBackground,
   StatusBar,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GameBottomNav, {
@@ -126,9 +128,65 @@ interface LoadSummary {
 const QUERY_TIMEOUT_MS = 10000;
 const PARTIAL_LOAD_DETAIL = '일반 레이드는 계속 플레이할 수 있습니다.';
 const IMG_BG = require('../assets/ui/lobby_bg.jpg');
+const IMG_FRIENDS = require('../assets/ui/friends.png');
 const IMG_PROFILE = require('../assets/ui/profile.png');
-const IMG_SETTINGS = require('../assets/ui/settings.png');
 const IMG_CODEX = require('../assets/ui/codex.png');
+const IMG_BTN_CREATE = require('../assets/ui/btn_create.png');
+const IMG_BTN_JOIN = require('../assets/ui/btn_join.png');
+const IMG_BTN_RANDOM = require('../assets/ui/btn_random.png');
+const IMG_HERO_KNIGHT = require('../assets/ui/hero_knight.png');
+const IMG_HERO_MAGE = require('../assets/ui/hero_mage.png');
+const IMG_RAID_BUTTON_SIDE = require('../assets/ui/raid/button_side.png');
+const IMG_RAID_BUTTON_PRIMARY = require('../assets/ui/raid/button_primary.png');
+const IMG_RAID_BOSS_SHOWCASE = require('../assets/ui/raid/boss_showcase_gargoyle.png');
+const IMG_RAID_CHAT_ORB = require('../assets/ui/raid/chat_orb.png');
+const IMG_RAID_CORNER_BUTTON = require('../assets/ui/raid/corner_button.png');
+const IMG_RAID_PARTY_SLOT = require('../assets/ui/raid/party_slot_frame.png');
+const IMG_RAID_RECRUIT_BAR = require('../assets/ui/raid/recruit_bar.png');
+const IMG_RAID_STAGE_MEDAL_BLUE = require('../assets/ui/raid/stage_medal_blue.png');
+const IMG_RAID_STAGE_MEDAL_GREEN = require('../assets/ui/raid/stage_medal_green.png');
+const IMG_RAID_STAGE_MEDAL_RED = require('../assets/ui/raid/stage_medal_red.png');
+const IMG_RAID_TIMER_RIBBON = require('../assets/ui/raid/timer_ribbon.png');
+const IMG_RAID_LABEL_RIBBON = require('../assets/ui/raid/label_ribbon.png');
+const IMG_RAID_STAGE_MEDAL_FINAL = require('../assets/ui/raid/stage_medal_final.png');
+const IMG_RAID_BOSS_NAMEPLATE = require('../assets/ui/raid/boss_nameplate.png');
+
+const PARTY_PREVIEW_IMAGES = [
+  IMG_HERO_KNIGHT,
+  IMG_HERO_MAGE,
+  IMG_HERO_KNIGHT,
+  IMG_HERO_MAGE,
+];
+const PARTY_PREVIEW_FALLBACKS = [
+  { name: 'HeroOne', role: 'TANK', accent: '#55b6ff' },
+  { name: 'MageGirl', role: 'HEALER', accent: '#9b6cff' },
+  { name: 'RogueGuy', role: 'DPS', accent: '#ff6a5d' },
+  { name: 'Maton', role: 'TANK', accent: '#f5b44a' },
+];
+const RAID_BOSS_SHOWCASE_NAME = 'Giga-Gargoyle';
+const RAID_BOSS_REFERENCE_WIDTH = 434;
+const RAID_BOSS_REFERENCE_HEIGHT = 688;
+const RAID_BOSS_LAYOUT = {
+  topInfo: { x: 382, y: 10, w: 40, h: 40 },
+  topChat: { x: 382, y: 66, w: 40, h: 40 },
+  timer: { x: 90, y: 8, w: 252, h: 92 },
+  boss: { x: 94, y: 122, w: 244, h: 250 },
+  bossAura: { x: 110, y: 166, w: 212, h: 126 },
+  medals: [
+    { x: 16, y: 164, w: 82, h: 82 },
+    { x: 24, y: 266, w: 82, h: 82 },
+    { x: 336, y: 164, w: 82, h: 82 },
+    { x: 330, y: 272, w: 88, h: 88 },
+  ],
+  nameplate: { x: 82, y: 392, w: 272, h: 54 },
+  nameplateInfo: { x: 362, y: 398, w: 36, h: 36 },
+  partyRow: { x: 52, y: 451, w: 332, h: 108 },
+  leftButton: { x: 18, y: 556, w: 94, h: 58 },
+  centerButton: { x: 118, y: 549, w: 198, h: 66 },
+  rightButton: { x: 322, y: 556, w: 94, h: 58 },
+  recruitBar: { x: 12, y: 620, w: 330, h: 46 },
+  chatOrb: { x: 348, y: 604, w: 66, h: 66 },
+} as const;
 const SOCIAL_LOAD_LABELS = new Set([
   'friendIds',
   'friends',
@@ -335,8 +393,10 @@ function inferPartyRaidIsNormal(instance: {
 }
 
 export default function RaidLobbyScreen({ navigation }: any) {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { manifest: creatorManifest } = useCreatorConfig();
   const [raidMode, setRaidMode] = useState<'normal' | 'boss'>('normal');
+  const [showBossDetails, setShowBossDetails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const [, setTick] = useState(0);
@@ -1225,10 +1285,14 @@ export default function RaidLobbyScreen({ navigation }: any) {
     : 0;
   const featuredBossStage =
     activeRaids[0]?.boss_stage ?? unlockedBossStages[0] ?? bossRaidEntries[0]?.stage ?? 1;
-  const featuredBossDisplay = resolveRaidDisplay('boss', featuredBossStage);
-  const featuredBossSprite = getRaidBossSprite(featuredBossStage);
   const featuredBossUnlocked =
     isAdmin || unlockedBossStages.includes(featuredBossStage);
+  const bossReferenceScale = Math.min(
+    (windowWidth - 18) / RAID_BOSS_REFERENCE_WIDTH,
+    (windowHeight - 180) / RAID_BOSS_REFERENCE_HEIGHT,
+  );
+  const bossReferenceWidth = RAID_BOSS_REFERENCE_WIDTH * bossReferenceScale;
+  const bossReferenceHeight = RAID_BOSS_REFERENCE_HEIGHT * bossReferenceScale;
   const bossShowcaseEntries = (() => {
     const picks: typeof bossRaidEntries = [];
     const pushUnique = (entry?: (typeof bossRaidEntries)[number]) => {
@@ -1251,6 +1315,23 @@ export default function RaidLobbyScreen({ navigation }: any) {
   })();
   const bossPartySlots = Array.from({length: 4}, (_, index) => {
     return partyMembers[index] ?? null;
+  });
+  const bossPartyCards = bossPartySlots.map((member, index) => {
+    const fallback = PARTY_PREVIEW_FALLBACKS[index];
+    return {
+      member,
+      image: PARTY_PREVIEW_IMAGES[index % PARTY_PREVIEW_IMAGES.length],
+      role:
+        member != null
+          ? index === 1
+            ? 'HEALER'
+            : index === 2
+              ? 'DPS'
+              : 'TANK'
+          : fallback.role,
+      name: member?.nickname ?? fallback.name,
+      accent: fallback.accent,
+    };
   });
   const quickJoinRaid = activeRaids[0] ?? null;
   const partyActionTitle = !partyId
@@ -1275,6 +1356,33 @@ export default function RaidLobbyScreen({ navigation }: any) {
           ? '모집 채팅을 열고 레이드 파티원을 더 모아보세요.'
           : '파티장이 시작하면 같은 레이드로 자동 합류합니다.'
         : '파티를 만들거나 빠른 입장으로 즉시 보스 레이드에 참가할 수 있습니다.';
+  const recruitBadgeCount = Math.min(incomingInvites.length, 9);
+
+  useEffect(() => {
+    if (raidMode !== 'boss') {
+      setShowBossDetails(false);
+    }
+  }, [raidMode]);
+
+  const refBox = useCallback(
+    (box: { x: number; y: number; w: number; h: number }) => ({
+      left: box.x * bossReferenceScale,
+      top: box.y * bossReferenceScale,
+      width: box.w * bossReferenceScale,
+      height: box.h * bossReferenceScale,
+    }),
+    [bossReferenceScale],
+  );
+  const refSize = useCallback(
+    (value: number, min = 10) => Math.max(min, Math.round(value * bossReferenceScale)),
+    [bossReferenceScale],
+  );
+  const medalSources = [
+    IMG_RAID_STAGE_MEDAL_GREEN,
+    IMG_RAID_STAGE_MEDAL_BLUE,
+    IMG_RAID_STAGE_MEDAL_RED,
+    IMG_RAID_STAGE_MEDAL_FINAL,
+  ];
 
   if (loading) {
     return (
@@ -1295,184 +1403,318 @@ export default function RaidLobbyScreen({ navigation }: any) {
       <View pointerEvents="none" style={styles.bgBottomGlow} />
       <MenuFloatingBlocks />
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.raidHudTopBar}>
-          <TouchableOpacity
-            style={styles.cornerIconButton}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Image source={IMG_PROFILE} resizeMode="contain" style={styles.cornerIconImage} />
-          </TouchableOpacity>
-
-          <View style={styles.modeToggleWrap}>
-            <TouchableOpacity
-              style={[
-                styles.modeToggleButton,
-                raidMode === 'normal' && styles.modeToggleButtonActive,
-              ]}
-              onPress={() => setRaidMode('normal')}
-            >
-              <Text
-                style={[
-                  styles.modeToggleText,
-                  raidMode === 'normal' && styles.modeToggleTextActive,
-                ]}
+        <View style={[styles.raidHudTopBar, raidMode === 'boss' && styles.raidHudTopBarBoss]}>
+          {raidMode === 'boss' ? (
+            <View style={styles.referenceTopBarSpacer} />
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.cornerIconButton}
+                onPress={() => navigation.navigate('Profile')}
               >
-                NORMAL
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.modeToggleButton,
-                raidMode === 'boss' && styles.modeToggleButtonActive,
-              ]}
-              onPress={() => setRaidMode('boss')}
-            >
-              <Text
-                style={[
-                  styles.modeToggleText,
-                  raidMode === 'boss' && styles.modeToggleTextActive,
-                ]}
-              >
-                BOSS
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <Image source={IMG_PROFILE} resizeMode="contain" style={styles.cornerIconImage} />
+              </TouchableOpacity>
 
-          <View style={styles.topActionStack}>
-            <TouchableOpacity
-              style={styles.cornerIconButton}
-              onPress={() => navigation.navigate('BossCodex')}
-            >
-              <Image source={IMG_CODEX} resizeMode="contain" style={styles.cornerIconImage} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cornerIconButton}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <Image source={IMG_SETTINGS} resizeMode="contain" style={styles.cornerIconImage} />
-            </TouchableOpacity>
-          </View>
+              <View style={styles.modeToggleWrap}>
+                <TouchableOpacity
+                  style={[
+                    styles.modeToggleButton,
+                    styles.modeToggleButtonActive,
+                  ]}
+                  onPress={() => setRaidMode('normal')}
+                >
+                  <Text
+                    style={[
+                      styles.modeToggleText,
+                      styles.modeToggleTextActive,
+                    ]}
+                  >
+                    NORMAL
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modeToggleButton}
+                  onPress={() => setRaidMode('boss')}
+                >
+                  <Text style={styles.modeToggleText}>BOSS</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.topActionStack}>
+                <TouchableOpacity
+                  style={styles.cornerIconButton}
+                  onPress={() => navigation.navigate('BossCodex')}
+                >
+                  <Image source={IMG_CODEX} resizeMode="contain" style={styles.cornerIconImage} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.cornerIconButton}
+                  onPress={() => {
+                    if (incomingInvites.length > 0) {
+                      setShowBossDetails(true);
+                      return;
+                    }
+                    lobbyChat.toggleOpen();
+                  }}
+                >
+                  <Text style={styles.cornerChatGlyph}>💬</Text>
+                  {incomingInvites.length > 0 ? (
+                    <View style={styles.cornerAlertBadge}>
+                      <Text style={styles.cornerAlertBadgeText}>
+                        {Math.min(incomingInvites.length, 9)}
+                      </Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
         </View>
 
         {raidMode === 'boss' ? (
-          <View style={styles.raidHudHeroCard}>
-            <View style={styles.timerBanner}>
-              <Text style={styles.timerBannerLabel}>
-                {bossWindowInfo.isOpen ? 'RAID ENDS IN:' : 'RAID STARTS IN:'}
-              </Text>
-              <Text style={styles.timerBannerValue}>
-                {formatBossRaidCountdownLabel(Date.now())}
-              </Text>
-            </View>
+          <View style={styles.referenceBossShell}>
+            <View
+              style={[
+                styles.referenceBossSurface,
+                { width: bossReferenceWidth, height: bossReferenceHeight },
+              ]}
+            >
+              <TouchableOpacity
+                style={[styles.referenceFloatingButton, refBox(RAID_BOSS_LAYOUT.topInfo)]}
+                activeOpacity={0.86}
+                onPress={() => setShowBossDetails(current => !current)}
+              >
+                <ImageBackground
+                  source={IMG_RAID_CORNER_BUTTON}
+                  resizeMode="stretch"
+                  style={styles.referenceIconBackground}
+                >
+                  <Text style={[styles.referenceIconText, { fontSize: refSize(24, 18) }]}>
+                    i
+                  </Text>
+                </ImageBackground>
+              </TouchableOpacity>
 
-            <View style={styles.stageArena}>
+              <TouchableOpacity
+                style={[styles.referenceFloatingButton, refBox(RAID_BOSS_LAYOUT.topChat)]}
+                activeOpacity={0.86}
+                onPress={() => {
+                  if (incomingInvites.length > 0) {
+                    setShowBossDetails(true);
+                    return;
+                  }
+                  lobbyChat.toggleOpen();
+                }}
+              >
+                <ImageBackground
+                  source={IMG_RAID_CORNER_BUTTON}
+                  resizeMode="stretch"
+                  style={styles.referenceIconBackground}
+                >
+                  <Text style={[styles.referenceIconText, { fontSize: refSize(19, 15) }]}>
+                    💬
+                  </Text>
+                </ImageBackground>
+                {recruitBadgeCount > 0 ? (
+                  <View
+                    style={[
+                      styles.referenceBadge,
+                      {
+                        minWidth: refSize(18, 14),
+                        height: refSize(18, 14),
+                        borderRadius: refSize(9, 7),
+                        right: -refSize(4, 3),
+                        top: -refSize(4, 3),
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.referenceBadgeText, { fontSize: refSize(10, 8) }]}>
+                      {recruitBadgeCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+
+              <ImageBackground
+                source={IMG_RAID_TIMER_RIBBON}
+                resizeMode="stretch"
+                style={[styles.referenceTimerRibbon, refBox(RAID_BOSS_LAYOUT.timer)]}
+              >
+                <Text style={[styles.referenceTimerLabel, { fontSize: refSize(12, 10) }]}>
+                  RAID STARTS IN:
+                </Text>
+                <Text style={[styles.referenceTimerValue, { fontSize: refSize(31, 22) }]}>
+                  {formatBossRaidCountdownLabel(Date.now())}
+                </Text>
+              </ImageBackground>
+
               {bossShowcaseEntries.map((entry, index) => {
                 const unlocked = isAdmin || unlockedBossStages.includes(entry.stage);
                 const disabled = partyStartLocked || !unlocked;
-                const stagePositionStyle =
-                  index === 0
-                    ? styles.stageMedalLeftTop
-                    : index === 1
-                      ? styles.stageMedalLeftBottom
-                      : index === 2
-                        ? styles.stageMedalRightTop
-                        : styles.stageMedalRightBottom;
 
                 return (
                   <TouchableOpacity
-                    key={`showcase-stage-${entry.stage}`}
+                    key={`reference-stage-${entry.stage}`}
                     style={[
-                      styles.stageMedal,
-                      stagePositionStyle,
-                      index === 3 && styles.stageMedalFinal,
-                      disabled && styles.stageMedalDisabled,
+                      styles.referenceMedalTouch,
+                      refBox(RAID_BOSS_LAYOUT.medals[index]),
                     ]}
-                    activeOpacity={0.86}
+                    activeOpacity={0.88}
                     disabled={disabled}
                     onPress={() => {
                       void handleChallengeBoss(entry.stage);
                     }}
                   >
-                    <Text style={styles.stageMedalTopText}>
-                      {index === 3 ? 'FINAL' : 'STAGE'}
-                    </Text>
-                    <Text style={styles.stageMedalMainText}>
-                      {index === 3 ? 'BOSS' : entry.stage}
-                    </Text>
-                    <Text style={styles.stageMedalBottomText}>
-                      {unlocked ? '0' : 'LOCK'}
-                    </Text>
+                    <ImageBackground
+                      source={medalSources[index] ?? IMG_RAID_STAGE_MEDAL_FINAL}
+                      resizeMode="contain"
+                      style={[styles.referenceMedalFrame, disabled && styles.referenceDisabled]}
+                    >
+                      {index === 3 ? (
+                        <>
+                          <Text
+                            style={[styles.referenceMedalTitle, { fontSize: refSize(11, 9) }]}
+                          >
+                            FINAL
+                          </Text>
+                          <Text
+                            style={[
+                              styles.referenceMedalFinalText,
+                              { fontSize: refSize(19, 14) },
+                            ]}
+                          >
+                            BOSS
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text
+                            style={[styles.referenceMedalTitle, { fontSize: refSize(11, 9) }]}
+                          >
+                            STAGE
+                          </Text>
+                          <Text
+                            style={[styles.referenceMedalNumber, { fontSize: refSize(30, 22) }]}
+                          >
+                            {entry.stage}
+                          </Text>
+                        </>
+                      )}
+                      <View style={styles.referenceMedalFooter}>
+                        <View
+                          style={[
+                            styles.referenceMedalGem,
+                            {
+                              width: refSize(11, 8),
+                              height: refSize(11, 8),
+                              borderRadius: refSize(5, 4),
+                            },
+                          ]}
+                        />
+                        <Text
+                          style={[styles.referenceMedalFooterText, { fontSize: refSize(11, 9) }]}
+                        >
+                          {unlocked ? '0' : 'LOCK'}
+                        </Text>
+                      </View>
+                    </ImageBackground>
                   </TouchableOpacity>
                 );
               })}
 
-              <View style={styles.bossMonsterDock}>
-                {featuredBossSprite ? (
-                  <Image
-                    source={featuredBossSprite}
-                    resizeMode="contain"
-                    fadeDuration={0}
-                    style={styles.bossMonsterSprite}
-                  />
-                ) : (
-                  <Text style={styles.bossMonsterEmoji}>{featuredBossDisplay.emoji}</Text>
-                )}
+              <View style={[styles.referenceBossAura, refBox(RAID_BOSS_LAYOUT.bossAura)]} />
+              <View style={[styles.referenceBossDock, refBox(RAID_BOSS_LAYOUT.boss)]}>
+                <Image
+                  source={IMG_RAID_BOSS_SHOWCASE}
+                  resizeMode="contain"
+                  fadeDuration={0}
+                  style={styles.referenceBossSprite}
+                />
               </View>
-            </View>
 
-            <View style={styles.bossNamePlate}>
-              <View style={styles.bossNamePlateTextBlock}>
-                <Text style={styles.bossNamePlateTitle}>{featuredBossDisplay.name}</Text>
-                <Text style={styles.bossNamePlateSubtitle}>
-                  {featuredBossUnlocked
-                    ? `체력 ${formatHp(featuredBossDisplay.maxHp)} · ${
-                        quickJoinRaid ? '진행 중 레이드 있음' : '직접 도전 가능'
-                      }`
-                    : '해당 월드 30스테이지를 클리어하면 도전할 수 있습니다.'}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.bossInfoOrb}
-                onPress={() => navigation.navigate('BossCodex')}
+              <ImageBackground
+                source={IMG_RAID_BOSS_NAMEPLATE}
+                resizeMode="stretch"
+                style={[styles.referenceNameplate, refBox(RAID_BOSS_LAYOUT.nameplate)]}
               >
-                <Image source={IMG_CODEX} resizeMode="contain" style={styles.bossInfoOrbIcon} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.partyPreviewStrip}>
-              {bossPartySlots.map((member, index) => (
-                <View
-                  key={member?.playerId || `party-preview-${index}`}
-                  style={[
-                    styles.partyPreviewSlot,
-                    !member && styles.partyPreviewSlotEmpty,
-                  ]}
-                >
-                  <View style={styles.partyPreviewPortrait}>
-                    <Text style={styles.partyPreviewPortraitText}>
-                      {member ? member.nickname.slice(0, 1).toUpperCase() : '+'}
-                    </Text>
-                  </View>
-                  <Text style={styles.partyPreviewRole}>
-                    {member
-                      ? index === 1
-                        ? 'HEALER'
-                        : index === 2
-                          ? 'DPS'
-                          : 'TANK'
-                      : 'EMPTY'}
+                <View style={styles.referenceNameplateTextBlock}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.referenceNameplateTitle, { fontSize: refSize(21, 15) }]}
+                  >
+                    {RAID_BOSS_SHOWCASE_NAME}
                   </Text>
-                  <Text style={styles.partyPreviewName}>
-                    {member ? member.nickname : '빈 슬롯'}
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.referenceNameplateSubtitle, { fontSize: refSize(10, 8) }]}
+                  >
+                    {featuredBossUnlocked
+                      ? 'Tap a medal to challenge'
+                      : 'Clear World 30 to unlock'}
                   </Text>
                 </View>
-              ))}
-            </View>
+              </ImageBackground>
 
-            <View style={styles.hudActionRow}>
               <TouchableOpacity
-                style={styles.hudSideActionButton}
-                activeOpacity={0.85}
+                style={[styles.referenceFloatingButton, refBox(RAID_BOSS_LAYOUT.nameplateInfo)]}
+                activeOpacity={0.86}
+                onPress={() => navigation.navigate('BossCodex')}
+              >
+                <ImageBackground
+                  source={IMG_RAID_CORNER_BUTTON}
+                  resizeMode="stretch"
+                  style={styles.referenceIconBackground}
+                >
+                  <Text style={[styles.referenceIconText, { fontSize: refSize(22, 16) }]}>
+                    i
+                  </Text>
+                </ImageBackground>
+              </TouchableOpacity>
+
+              <View style={[styles.referencePartyRow, refBox(RAID_BOSS_LAYOUT.partyRow)]}>
+                {bossPartyCards.map((card, index) => (
+                  <ImageBackground
+                    key={`reference-party-${index}`}
+                    source={IMG_RAID_PARTY_SLOT}
+                    resizeMode="stretch"
+                    style={styles.referencePartySlot}
+                    imageStyle={!card.member ? styles.referenceDisabled : undefined}
+                  >
+                    <View
+                      style={[
+                        styles.referencePartyRoleOrb,
+                        { backgroundColor: card.accent },
+                      ]}
+                    />
+                    <View style={styles.referencePartyPortraitWrap}>
+                      <Image
+                        source={card.image}
+                        resizeMode="contain"
+                        style={[
+                          styles.referencePartyPortrait,
+                          !card.member && styles.referencePartyPortraitMuted,
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.referencePartyRole, { fontSize: refSize(10, 8) }]}
+                    >
+                      {card.role}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.referencePartyName, { fontSize: refSize(9, 8) }]}
+                    >
+                      {card.name}
+                    </Text>
+                  </ImageBackground>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.referenceActionTouch, refBox(RAID_BOSS_LAYOUT.leftButton)]}
+                activeOpacity={0.86}
                 onPress={() => {
                   if (!partyId) {
                     void handleCreateParty();
@@ -1491,18 +1733,23 @@ export default function RaidLobbyScreen({ navigation }: any) {
                   void handleLeaveParty();
                 }}
               >
-                <Text style={styles.hudActionTopText}>PARTY</Text>
-                <Text style={styles.hudActionMainText}>{partyActionTitle}</Text>
-                <Text style={styles.hudActionBottomText}>{partyActionHint}</Text>
+                <ImageBackground
+                  source={IMG_RAID_BUTTON_SIDE}
+                  resizeMode="stretch"
+                  style={styles.referenceActionFrame}
+                >
+                  <Text style={[styles.referenceActionLabel, { fontSize: refSize(10, 8) }]}>
+                    PARTY
+                  </Text>
+                  <Text style={[styles.referenceActionText, { fontSize: refSize(16, 12) }]}>
+                    {partyActionTitle}
+                  </Text>
+                </ImageBackground>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
-                  styles.quickJoinButton,
-                  ((!quickJoinRaid && !featuredBossUnlocked) || partyStartLocked) &&
-                    styles.quickJoinButtonDisabled,
-                ]}
-                activeOpacity={0.88}
+                style={[styles.referenceActionTouch, refBox(RAID_BOSS_LAYOUT.centerButton)]}
+                activeOpacity={0.9}
                 disabled={(!quickJoinRaid && !featuredBossUnlocked) || partyStartLocked}
                 onPress={() => {
                   if (quickJoinRaid) {
@@ -1512,52 +1759,137 @@ export default function RaidLobbyScreen({ navigation }: any) {
                   void handleChallengeBoss(featuredBossStage);
                 }}
               >
-                <Text style={styles.quickJoinButtonTopText}>QUICK</Text>
-                <Text style={styles.quickJoinButtonMainText}>JOIN</Text>
-                <Text style={styles.quickJoinButtonBottomText}>
-                  {partyStartLocked
-                    ? '파티장 시작 대기'
-                    : quickJoinRaid
-                      ? '진행 중 레이드 합류'
-                      : '대표 보스 도전'}
-                </Text>
+                <ImageBackground
+                  source={IMG_RAID_BUTTON_PRIMARY}
+                  resizeMode="stretch"
+                  style={[
+                    styles.referenceActionFrame,
+                    ((!quickJoinRaid && !featuredBossUnlocked) || partyStartLocked) &&
+                      styles.referenceDisabled,
+                  ]}
+                >
+                  <Text style={[styles.referenceQuickLabel, { fontSize: refSize(12, 10) }]}>
+                    QUICK JOIN
+                  </Text>
+                </ImageBackground>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.hudSideActionButton}
-                activeOpacity={0.85}
+                style={[styles.referenceActionTouch, refBox(RAID_BOSS_LAYOUT.rightButton)]}
+                activeOpacity={0.86}
+                onPress={() => {
+                  if (incomingInvites.length > 0) {
+                    setShowBossDetails(true);
+                    return;
+                  }
+                  lobbyChat.toggleOpen();
+                }}
+              >
+                <ImageBackground
+                  source={IMG_RAID_BUTTON_SIDE}
+                  resizeMode="stretch"
+                  style={styles.referenceActionFrame}
+                >
+                  <Text style={[styles.referenceActionText, { fontSize: refSize(16, 12) }]}>
+                    RECRUIT
+                  </Text>
+                </ImageBackground>
+                {recruitBadgeCount > 0 ? (
+                  <View
+                    style={[
+                      styles.referenceBadge,
+                      {
+                        minWidth: refSize(20, 14),
+                        height: refSize(20, 14),
+                        borderRadius: refSize(10, 7),
+                        right: -refSize(5, 3),
+                        top: -refSize(5, 3),
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.referenceBadgeText, { fontSize: refSize(10, 8) }]}>
+                      {recruitBadgeCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.referenceRecruitTouch, refBox(RAID_BOSS_LAYOUT.recruitBar)]}
+                activeOpacity={0.86}
                 onPress={() => lobbyChat.toggleOpen()}
               >
-                <Text style={styles.hudActionTopText}>RECRUIT</Text>
-                <Text style={styles.hudActionMainText}>
-                  {incomingInvites.length > 0 ? 'ALERT' : 'CHAT'}
-                </Text>
-                <Text style={styles.hudActionBottomText}>
-                  {incomingInvites.length > 0
-                    ? `${incomingInvites.length}건 도착`
-                    : '모집 열기'}
-                </Text>
+                <ImageBackground
+                  source={IMG_RAID_RECRUIT_BAR}
+                  resizeMode="stretch"
+                  style={styles.referenceRecruitFrame}
+                >
+                  <View style={styles.referenceRecruitBadgeInner}>
+                    <Image
+                      source={IMG_FRIENDS}
+                      resizeMode="contain"
+                      style={styles.referenceRecruitBadgeIcon}
+                    />
+                    <Text
+                      style={[styles.referenceRecruitBadgeText, { fontSize: refSize(10, 8) }]}
+                    >
+                      RECRUITMENT
+                    </Text>
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.referenceRecruitText, { fontSize: refSize(11, 9) }]}
+                  >
+                    {recruitmentLine}
+                  </Text>
+                </ImageBackground>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.referenceFloatingButton, refBox(RAID_BOSS_LAYOUT.chatOrb)]}
+                activeOpacity={0.86}
+                onPress={() => lobbyChat.toggleOpen()}
+              >
+                <ImageBackground
+                  source={IMG_RAID_CHAT_ORB}
+                  resizeMode="stretch"
+                  style={styles.referenceChatOrbFrame}
+                >
+                  <Text style={[styles.referenceChatOrbText, { fontSize: refSize(24, 18) }]}>
+                    💬
+                  </Text>
+                </ImageBackground>
+                {recruitBadgeCount > 0 ? (
+                  <View
+                    style={[
+                      styles.referenceBadge,
+                      {
+                        minWidth: refSize(18, 14),
+                        height: refSize(18, 14),
+                        borderRadius: refSize(9, 7),
+                        right: -refSize(4, 3),
+                        top: -refSize(4, 3),
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.referenceBadgeText, { fontSize: refSize(10, 8) }]}>
+                      {recruitBadgeCount}
+                    </Text>
+                  </View>
+                ) : null}
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              style={styles.recruitmentTicker}
-              activeOpacity={0.86}
-              onPress={() => lobbyChat.toggleOpen()}
-            >
-              <View style={styles.recruitmentTickerBadge}>
-                <Text style={styles.recruitmentTickerBadgeText}>RECRUITMENT</Text>
-              </View>
-              <Text style={styles.recruitmentTickerText} numberOfLines={1}>
-                {recruitmentLine}
-              </Text>
-            </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.heroCard}>
-            <View style={styles.heroRibbon}>
+            <ImageBackground
+              source={IMG_RAID_LABEL_RIBBON}
+              resizeMode="stretch"
+              style={styles.heroRibbon}
+              imageStyle={styles.heroRibbonImage}
+            >
               <Text style={styles.heroRibbonText}>NORMAL RAID OPEN</Text>
-            </View>
+            </ImageBackground>
             <Text style={styles.heroEmoji}>{featuredNormalEntry?.emoji ?? '⚔'}</Text>
             <Text style={styles.heroTitle}>
               {featuredNormalEntry?.name ?? '일반 레이드'}
@@ -1710,145 +2042,157 @@ export default function RaidLobbyScreen({ navigation }: any) {
           </>
         ) : (
           <>
-            <View style={styles.bossQuickInfoRow}>
-              <View style={styles.bossQuickInfoChip}>
-                <Text style={styles.bossQuickInfoLabel}>ENTRY</Text>
-                <Text style={styles.bossQuickInfoValue}>
-                  {bossWindowInfo.isOpen ? 'OPEN NOW' : 'COUNTDOWN'}
-                </Text>
-              </View>
-              <View style={styles.bossQuickInfoChip}>
-                <Text style={styles.bossQuickInfoLabel}>CAPACITY</Text>
-                <Text style={styles.bossQuickInfoValue}>
-                  MAX {BOSS_RAID_MAX_PLAYERS}
-                </Text>
-              </View>
-              <View style={styles.bossQuickInfoChip}>
-                <Text style={styles.bossQuickInfoLabel}>VOICE</Text>
-                <Text style={styles.bossQuickInfoValue}>IN RAID</Text>
-              </View>
-            </View>
+            {showBossDetails ? (
+              <>
+                <View style={styles.bossModeDetailSwitch}>
+                  <TouchableOpacity
+                    style={styles.bossModeDetailSwitchBtn}
+                    onPress={() => setRaidMode('normal')}
+                  >
+                    <Text style={styles.bossModeDetailSwitchBtnText}>NORMAL 보기</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.bossQuickInfoRow}>
+                  <View style={styles.bossQuickInfoChip}>
+                    <Text style={styles.bossQuickInfoLabel}>ENTRY</Text>
+                    <Text style={styles.bossQuickInfoValue}>
+                      {bossWindowInfo.isOpen ? 'OPEN NOW' : 'COUNTDOWN'}
+                    </Text>
+                  </View>
+                  <View style={styles.bossQuickInfoChip}>
+                    <Text style={styles.bossQuickInfoLabel}>CAPACITY</Text>
+                    <Text style={styles.bossQuickInfoValue}>
+                      MAX {BOSS_RAID_MAX_PLAYERS}
+                    </Text>
+                  </View>
+                  <View style={styles.bossQuickInfoChip}>
+                    <Text style={styles.bossQuickInfoLabel}>VOICE</Text>
+                    <Text style={styles.bossQuickInfoValue}>IN RAID</Text>
+                  </View>
+                </View>
 
-            {activeRaids.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>진행 중인 보스 레이드</Text>
-                {activeRaids.map(raid => {
-                  const raidDisplay = resolveRaidDisplay(
-                    'boss',
-                    raid.boss_stage,
-                  );
+                {activeRaids.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>진행 중인 보스 레이드</Text>
+                    {activeRaids.map(raid => {
+                      const raidDisplay = resolveRaidDisplay(
+                        'boss',
+                        raid.boss_stage,
+                      );
 
-                  const remainingMs = Math.max(
-                    0,
-                    new Date(raid.expires_at).getTime() - Date.now(),
-                  );
-                  const minutes = Math.floor(remainingMs / 60000);
-                  const seconds = Math.floor((remainingMs % 60000) / 1000);
+                      const remainingMs = Math.max(
+                        0,
+                        new Date(raid.expires_at).getTime() - Date.now(),
+                      );
+                      const minutes = Math.floor(remainingMs / 60000);
+                      const seconds = Math.floor((remainingMs % 60000) / 1000);
 
-                  return (
-                    <TouchableOpacity
-                      key={raid.id}
-                      style={[
-                        styles.activeRaidCard,
-                        { borderColor: raidDisplay.color },
-                        partyId && styles.activeRaidCardDisabled,
-                      ]}
-                      disabled={Boolean(partyId)}
-                      onPress={() => handleJoinRaid(raid)}
-                    >
-                      {getRaidBossSprite(raid.boss_stage) ? (
-                        <Image
-                          source={getRaidBossSprite(raid.boss_stage)!}
-                          resizeMode="contain"
-                          fadeDuration={0}
-                          style={styles.activeRaidSprite}
-                        />
-                      ) : (
-                        <Text style={styles.activeRaidEmoji}>
-                          {raidDisplay.emoji}
-                        </Text>
-                      )}
-                      <View style={styles.activeRaidInfo}>
-                        <Text style={styles.activeRaidName}>
-                          {raidDisplay.name}
-                        </Text>
-                        <Text style={styles.activeRaidHp}>
-                          체력 {formatHp(raid.boss_current_hp)} /{' '}
-                          {formatHp(raid.boss_max_hp)}
-                        </Text>
-                      </View>
-                      <Text style={styles.activeRaidTimer}>
-                        {minutes}:{seconds.toString().padStart(2, '0')}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
+                      return (
+                        <TouchableOpacity
+                          key={raid.id}
+                          style={[
+                            styles.activeRaidCard,
+                            { borderColor: raidDisplay.color },
+                            partyId && styles.activeRaidCardDisabled,
+                          ]}
+                          disabled={Boolean(partyId)}
+                          onPress={() => handleJoinRaid(raid)}
+                        >
+                          {getRaidBossSprite(raid.boss_stage) ? (
+                            <Image
+                              source={getRaidBossSprite(raid.boss_stage)!}
+                              resizeMode="contain"
+                              fadeDuration={0}
+                              style={styles.activeRaidSprite}
+                            />
+                          ) : (
+                            <Text style={styles.activeRaidEmoji}>
+                              {raidDisplay.emoji}
+                            </Text>
+                          )}
+                          <View style={styles.activeRaidInfo}>
+                            <Text style={styles.activeRaidName}>
+                              {raidDisplay.name}
+                            </Text>
+                            <Text style={styles.activeRaidHp}>
+                              체력 {formatHp(raid.boss_current_hp)} /{' '}
+                              {formatHp(raid.boss_max_hp)}
+                            </Text>
+                          </View>
+                          <Text style={styles.activeRaidTimer}>
+                            {minutes}:{seconds.toString().padStart(2, '0')}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>보스 단계</Text>
-              <View style={styles.bossGrid}>
-                {bossRaidEntries.map(entry => {
-                  const unlocked =
-                    isAdmin || unlockedBossStages.includes(entry.stage);
-                  const disabled = !unlocked;
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>보스 단계</Text>
+                  <View style={styles.bossGrid}>
+                    {bossRaidEntries.map(entry => {
+                      const unlocked =
+                        isAdmin || unlockedBossStages.includes(entry.stage);
+                      const disabled = !unlocked;
 
-                  return (
-                    <TouchableOpacity
-                      key={entry.stage}
-                      style={[
-                        styles.bossCard,
-                        { borderColor: entry.color },
-                        disabled && styles.bossCardLocked,
-                        partyStartLocked && styles.bossCardPartyLocked,
-                      ]}
-                      disabled={disabled || partyStartLocked}
-                      onPress={() => handleChallengeBoss(entry.stage)}
-                    >
-                      {getRaidBossSprite(entry.stage) ? (
-                        <Image
-                          source={getRaidBossSprite(entry.stage)!}
-                          resizeMode="contain"
-                          fadeDuration={0}
-                          style={styles.bossSprite}
-                        />
-                      ) : (
-                        <Text style={styles.bossEmoji}>{entry.emoji}</Text>
-                      )}
-                      <Text style={styles.bossStage}>{entry.stage}단계</Text>
-                      <Text
-                        style={[
-                          styles.bossName,
-                          unlocked
-                            ? getBossNameColorStyle(entry.color)
-                            : styles.bossNameLocked,
-                        ]}
-                      >
-                        {entry.name}
-                      </Text>
-                      <Text style={styles.bossHp}>{formatHp(entry.maxHp)}</Text>
-                      <Text
-                        style={[
-                          styles.unlockState,
-                          unlocked ? styles.unlocked : styles.locked,
-                        ]}
-                      >
-                        {unlocked
-                          ? bossWindowInfo.isOpen
-                            ? '입장 가능'
-                            : '개방 대기'
-                          : '월드 클리어 필요'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
+                      return (
+                        <TouchableOpacity
+                          key={entry.stage}
+                          style={[
+                            styles.bossCard,
+                            { borderColor: entry.color },
+                            disabled && styles.bossCardLocked,
+                            partyStartLocked && styles.bossCardPartyLocked,
+                          ]}
+                          disabled={disabled || partyStartLocked}
+                          onPress={() => handleChallengeBoss(entry.stage)}
+                        >
+                          {getRaidBossSprite(entry.stage) ? (
+                            <Image
+                              source={getRaidBossSprite(entry.stage)!}
+                              resizeMode="contain"
+                              fadeDuration={0}
+                              style={styles.bossSprite}
+                            />
+                          ) : (
+                            <Text style={styles.bossEmoji}>{entry.emoji}</Text>
+                          )}
+                          <Text style={styles.bossStage}>{entry.stage}단계</Text>
+                          <Text
+                            style={[
+                              styles.bossName,
+                              unlocked
+                                ? getBossNameColorStyle(entry.color)
+                                : styles.bossNameLocked,
+                            ]}
+                          >
+                            {entry.name}
+                          </Text>
+                          <Text style={styles.bossHp}>{formatHp(entry.maxHp)}</Text>
+                          <Text
+                            style={[
+                              styles.unlockState,
+                              unlocked ? styles.unlocked : styles.locked,
+                            ]}
+                          >
+                            {unlocked
+                              ? bossWindowInfo.isOpen
+                                ? '입장 가능'
+                                : '개방 대기'
+                              : '월드 클리어 필요'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </>
+            ) : null}
           </>
         )}
 
-        {incomingInvites.length > 0 && (
+        {(showBossDetails || raidMode !== 'boss') && incomingInvites.length > 0 && (
           <View style={styles.inviteInboxCard}>
             <Text style={styles.inviteInboxTitle}>받은 파티 초대</Text>
             {incomingInvites.map(invite => (
@@ -1884,7 +2228,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           </View>
         )}
 
-        {partyId ? (
+        {(showBossDetails || raidMode !== 'boss') && partyId ? (
           <View style={styles.partyHintCard}>
             <Text style={styles.partyHintTitle}>
               {isLeader ? '파티 레이드 시작 권한' : '파티 레이드 대기 중'}
@@ -1897,25 +2241,27 @@ export default function RaidLobbyScreen({ navigation }: any) {
           </View>
         ) : null}
 
-        <PartyPanel
-          partyId={partyId}
-          members={partyMembers}
-          isLeader={isLeader}
-          myPlayerId={playerIdRef.current}
-          onCreateParty={handleCreateParty}
-          onLeaveParty={handleLeaveParty}
-          onDisbandParty={handleDisbandParty}
-          onInviteFriends={() => {
-            if (
-              !partyId ||
-              !isLeader ||
-              partyMembers.length >= MAX_PARTY_SIZE
-            ) {
-              return;
-            }
-            setShowInviteModal(true);
-          }}
-        />
+        {(showBossDetails || raidMode !== 'boss') ? (
+          <PartyPanel
+            partyId={partyId}
+            members={partyMembers}
+            isLeader={isLeader}
+            myPlayerId={playerIdRef.current}
+            onCreateParty={handleCreateParty}
+            onLeaveParty={handleLeaveParty}
+            onDisbandParty={handleDisbandParty}
+            onInviteFriends={() => {
+              if (
+                !partyId ||
+                !isLeader ||
+                partyMembers.length >= MAX_PARTY_SIZE
+              ) {
+                return;
+              }
+              setShowInviteModal(true);
+            }}
+          />
+        ) : null}
         </ScrollView>
 
         <GameBottomNav
@@ -2014,6 +2360,16 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     marginBottom: 8,
   },
+  raidHudTopBarBoss: {
+    justifyContent: 'flex-end',
+    paddingHorizontal: 10,
+    paddingTop: 2,
+    marginBottom: 0,
+  },
+  referenceTopBarSpacer: {
+    width: 1,
+    height: 1,
+  },
   cornerIconButton: {
     width: 44,
     height: 44,
@@ -2033,8 +2389,299 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
   },
+  cornerChatGlyph: {
+    fontSize: 20,
+  },
+  cornerAlertBadge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    borderWidth: 1.5,
+    borderColor: '#fff3d7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  cornerAlertBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
   topActionStack: {
     gap: 8,
+  },
+  referenceBossShell: {
+    alignItems: 'center',
+    paddingTop: 2,
+    paddingBottom: 12,
+  },
+  referenceBossSurface: {
+    position: 'relative',
+  },
+  referenceFloatingButton: {
+    position: 'absolute',
+    zIndex: 20,
+  },
+  referenceIconBackground: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referenceIconText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    textShadowColor: 'rgba(15,20,34,0.75)',
+    textShadowOffset: {width: 0, height: 1},
+    textShadowRadius: 3,
+  },
+  referenceBadge: {
+    position: 'absolute',
+    backgroundColor: '#ef4444',
+    borderWidth: 2,
+    borderColor: '#fff3d7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    zIndex: 30,
+  },
+  referenceBadgeText: {
+    color: '#ffffff',
+    fontWeight: '900',
+  },
+  referenceTimerRibbon: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 12,
+    paddingBottom: 10,
+    paddingHorizontal: 18,
+  },
+  referenceTimerLabel: {
+    color: '#ffe7a6',
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  referenceTimerValue: {
+    color: '#ffffff',
+    fontWeight: '900',
+    marginTop: -1,
+    textShadowColor: 'rgba(28,8,52,0.75)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
+  referenceMedalTouch: {
+    position: 'absolute',
+    zIndex: 16,
+  },
+  referenceMedalFrame: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 6,
+  },
+  referenceMedalTitle: {
+    color: '#fff8d8',
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  referenceMedalNumber: {
+    color: '#ffffff',
+    fontWeight: '900',
+    lineHeight: 32,
+    marginTop: 1,
+  },
+  referenceMedalFinalText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    lineHeight: 24,
+    marginTop: -1,
+  },
+  referenceMedalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 3,
+  },
+  referenceMedalGem: {
+    backgroundColor: '#5fdcff',
+    borderWidth: 1.5,
+    borderColor: '#fff7d8',
+  },
+  referenceMedalFooterText: {
+    color: '#fff7d4',
+    fontWeight: '800',
+  },
+  referenceBossAura: {
+    position: 'absolute',
+    backgroundColor: 'rgba(122, 240, 255, 0.18)',
+    borderRadius: 999,
+    shadowColor: '#79eaff',
+    shadowOffset: {width: 0, height: 0},
+    shadowOpacity: 0.5,
+    shadowRadius: 22,
+    elevation: 14,
+  },
+  referenceBossDock: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  referenceBossSprite: {
+    width: '112%',
+    height: '112%',
+  },
+  referenceBossEmoji: {
+    textAlign: 'center',
+  },
+  referenceNameplate: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 18,
+    paddingRight: 18,
+    zIndex: 14,
+  },
+  referenceNameplateTextBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  referenceNameplateTitle: {
+    color: '#fff8e6',
+    fontWeight: '900',
+    textShadowColor: 'rgba(17, 18, 56, 0.72)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
+  referenceNameplateSubtitle: {
+    color: '#dbe6ff',
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  referencePartyRow: {
+    position: 'absolute',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    zIndex: 12,
+  },
+  referencePartySlot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginHorizontal: 3,
+    paddingTop: 10,
+    paddingHorizontal: 5,
+    paddingBottom: 8,
+  },
+  referencePartyRoleOrb: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  referencePartyPortraitWrap: {
+    width: '84%',
+    height: '54%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referencePartyPortrait: {
+    width: '100%',
+    height: '100%',
+  },
+  referencePartyPortraitMuted: {
+    opacity: 0.55,
+  },
+  referencePartyRole: {
+    color: '#ffffff',
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  referencePartyName: {
+    color: '#f7edd6',
+    fontWeight: '800',
+    marginTop: 1,
+  },
+  referenceActionTouch: {
+    position: 'absolute',
+    zIndex: 14,
+  },
+  referenceActionFrame: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingBottom: 2,
+  },
+  referenceActionLabel: {
+    color: '#ffffff',
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  referenceActionText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    marginTop: -1,
+    letterSpacing: 0.4,
+    textShadowColor: 'rgba(18, 31, 86, 0.72)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
+  referenceQuickLabel: {
+    color: '#ffffff',
+    fontWeight: '900',
+    letterSpacing: 0.6,
+    textShadowColor: 'rgba(17, 64, 98, 0.72)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
+  referenceRecruitTouch: {
+    position: 'absolute',
+    zIndex: 12,
+  },
+  referenceRecruitFrame: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  referenceRecruitBadgeInner: {
+    width: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  referenceRecruitBadgeIcon: {
+    width: 18,
+    height: 18,
+    marginBottom: 1,
+  },
+  referenceRecruitBadgeText: {
+    color: '#f8fbff',
+    fontWeight: '900',
+  },
+  referenceRecruitText: {
+    flex: 1,
+    color: '#eee4ff',
+    fontWeight: '700',
+  },
+  referenceChatOrbFrame: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referenceChatOrbText: {
+    color: '#ffffff',
+    fontWeight: '900',
+  },
+  referenceDisabled: {
+    opacity: 0.5,
   },
   modeToggleWrap: {
     flexDirection: 'row',
@@ -2069,27 +2716,25 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     marginBottom: 10,
     borderRadius: 26,
-    paddingTop: 14,
+    paddingTop: 10,
     paddingBottom: 14,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(70, 33, 147, 0.4)',
+    backgroundColor: 'rgba(54, 28, 123, 0.32)',
   },
   timerBanner: {
     alignSelf: 'center',
-    minWidth: 222,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 22,
-    backgroundColor: '#7d49cf',
-    borderWidth: 2,
-    borderColor: '#dca75b',
+    width: '100%',
+    maxWidth: 288,
+    minHeight: 96,
+    paddingHorizontal: 28,
+    paddingTop: 18,
+    paddingBottom: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2b0f56',
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 6,
+    marginBottom: 2,
+  },
+  timerBannerImage: {
+    resizeMode: 'stretch',
   },
   timerBannerLabel: {
     color: '#ffe8a8',
@@ -2104,40 +2749,38 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stageArena: {
-    height: 310,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 4,
   },
   bossMonsterDock: {
-    width: 230,
-    height: 230,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  bossMonsterAura: {
+    position: 'absolute',
+    backgroundColor: 'rgba(98, 235, 255, 0.26)',
+    borderWidth: 2,
+    borderColor: 'rgba(173, 244, 255, 0.45)',
+    shadowColor: '#60e9ff',
+    shadowOffset: {width: 0, height: 0},
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    elevation: 8,
+  },
   bossMonsterSprite: {
-    width: 228,
-    height: 228,
+    zIndex: 2,
   },
   bossMonsterEmoji: {
     fontSize: 120,
   },
   stageMedal: {
     position: 'absolute',
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: '#c7822a',
-    borderWidth: 3,
-    borderColor: '#f6dc9d',
+  },
+  stageMedalFrame: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 6,
-    shadowColor: '#411d00',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.24,
-    shadowRadius: 6,
-    elevation: 6,
   },
   stageMedalLeftTop: {
     left: 8,
@@ -2154,9 +2797,6 @@ const styles = StyleSheet.create({
   stageMedalRightBottom: {
     right: 16,
     top: 130,
-  },
-  stageMedalFinal: {
-    backgroundColor: '#9c3b42',
   },
   stageMedalDisabled: {
     opacity: 0.45,
@@ -2179,18 +2819,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bossNamePlate: {
-    marginTop: -8,
-    marginHorizontal: 20,
-    borderRadius: 18,
+    marginTop: -4,
+    marginHorizontal: 14,
     minHeight: 54,
-    backgroundColor: '#53338f',
-    borderWidth: 2,
-    borderColor: '#d8a55a',
     paddingLeft: 18,
     paddingRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  bossNamePlateImage: {
+    resizeMode: 'stretch',
   },
   bossNamePlateTextBlock: {
     flex: 1,
@@ -2241,13 +2880,15 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   partyPreviewPortrait: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 5,
+    overflow: 'hidden',
+  },
+  partyPreviewPortraitImage: {
+    width: '96%',
+    height: '96%',
   },
   partyPreviewPortraitText: {
     color: '#fff6dc',
@@ -2269,35 +2910,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
     marginTop: 12,
   },
-  hudSideActionButton: {
+  hudImageButtonWrap: {
     flex: 1,
-    minHeight: 66,
+    position: 'relative',
     borderRadius: 18,
-    backgroundColor: '#4c77b5',
-    borderWidth: 2,
-    borderColor: '#d3a35d',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    overflow: 'visible',
   },
-  quickJoinButton: {
+  hudImageButtonWrapPrimary: {
     flex: 1.2,
-    minHeight: 72,
-    borderRadius: 20,
-    backgroundColor: '#44b8ff',
-    borderWidth: 2,
-    borderColor: '#d9f4ff',
+  },
+  hudImageButtonDisabled: {
+    opacity: 0.45,
+  },
+  hudActionShadow: {
+    ...StyleSheet.absoluteFillObject,
+    top: 10,
+    borderRadius: 18,
+    backgroundColor: 'rgba(16, 10, 42, 0.38)',
+  },
+  hudImageButtonBackground: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  hudImageButtonImage: {
+    borderRadius: 18,
+  },
+  hudImageButtonTextOverlay: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-  },
-  quickJoinButtonDisabled: {
-    opacity: 0.45,
+    paddingHorizontal: 4,
+    paddingBottom: 2,
   },
   hudActionTopText: {
     color: '#eef7ff',
@@ -2335,6 +2981,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 2,
   },
+  hudActionAlertBadge: {
+    position: 'absolute',
+    right: -5,
+    top: -5,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ef4444',
+    borderWidth: 2,
+    borderColor: '#fff3d7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  hudActionAlertBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
   recruitmentTicker: {
     marginTop: 10,
     borderRadius: 16,
@@ -2363,6 +3028,38 @@ const styles = StyleSheet.create({
     color: '#eee3ff',
     fontSize: 12,
     fontWeight: '700',
+  },
+  detailTogglePill: {
+    alignSelf: 'center',
+    marginTop: 10,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(40, 24, 90, 0.9)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 169, 77, 0.72)',
+  },
+  detailTogglePillText: {
+    color: '#f2e7c5',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  bossModeDetailSwitch: {
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  bossModeDetailSwitchBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(34, 21, 88, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(226, 169, 77, 0.72)',
+  },
+  bossModeDetailSwitchBtnText: {
+    color: '#fff0ce',
+    fontSize: 11,
+    fontWeight: '900',
   },
   bossQuickInfoRow: {
     flexDirection: 'row',
@@ -2478,12 +3175,15 @@ const styles = StyleSheet.create({
   heroRibbon: {
     alignSelf: 'center',
     marginBottom: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(108, 58, 214, 0.94)',
-    borderWidth: 2,
-    borderColor: 'rgba(235, 184, 92, 0.95)',
+    minWidth: 178,
+    minHeight: 54,
+    paddingHorizontal: 24,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroRibbonImage: {
+    resizeMode: 'stretch',
   },
   heroRibbonText: {
     color: '#fff0bb',

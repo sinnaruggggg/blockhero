@@ -3,6 +3,7 @@ import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { ROWS, COLS } from '../constants';
 import { Board as BoardType, CellValue } from '../game/engine';
 import { type VisualViewport } from '../game/visualConfig';
+import SpecialBlockBadge from './SpecialBlockBadge';
 import {
   BOARD_PADDING,
   BOARD_REFERENCE_VIEWPORT,
@@ -50,7 +51,14 @@ function darken(hex: string, amount: number): string {
 
 interface BoardProps {
   board: BoardType;
-  previewCells?: { row: number; col: number; color: string }[];
+  previewCells?: {
+    row: number;
+    col: number;
+    color: string;
+    isGem?: boolean;
+    isItem?: boolean;
+    itemType?: string;
+  }[];
   invalidPreview?: boolean;
   clearGuideCells?: { row: number; col: number }[];
   onCellPress?: (row: number, col: number) => void;
@@ -65,12 +73,18 @@ const Cell = React.memo(function Cell({
   cell,
   isPreview,
   previewColor,
+  previewIsGem,
+  previewIsItem,
+  previewItemType,
   isInvalid,
   size,
 }: {
   cell: CellValue;
   isPreview: boolean;
   previewColor?: string;
+  previewIsGem?: boolean;
+  previewIsItem?: boolean;
+  previewItemType?: string;
   isInvalid: boolean;
   size: number;
 }) {
@@ -100,7 +114,14 @@ const Cell = React.memo(function Cell({
           backgroundColor: color,
           opacity: isInvalid ? 0.25 : 0.4,
         }}
-      />
+      >
+        <SpecialBlockBadge
+          isGem={previewIsGem}
+          isItem={previewIsItem}
+          itemType={previewItemType}
+          size={size}
+        />
+      </View>
     );
   }
 
@@ -200,6 +221,12 @@ const Cell = React.memo(function Cell({
           backgroundColor: 'rgba(255,255,255,0.3)',
         }}
       />
+      <SpecialBlockBadge
+        isGem={cell?.isGem}
+        isItem={cell?.isItem}
+        itemType={cell?.itemType}
+        size={size}
+      />
       {cell!.type === 'hard' && typeof cell!.hits === 'number' && (
         <View style={styles.hardBadge}>
           <Text style={styles.hardBadgeText}>x{cell!.hits}</Text>
@@ -236,10 +263,25 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
   );
   const { cellSize, gap, padding } = metrics;
 
-  const previewMap = useRef(new Map<string, string>());
+  const previewMap = useRef(
+    new Map<
+      string,
+      {
+        color: string;
+        isGem?: boolean;
+        isItem?: boolean;
+        itemType?: string;
+      }
+    >(),
+  );
   previewMap.current.clear();
   for (const p of previewCells) {
-    previewMap.current.set(`${p.row},${p.col}`, p.color);
+    previewMap.current.set(`${p.row},${p.col}`, {
+      color: p.color,
+      isGem: p.isGem,
+      isItem: p.isItem,
+      itemType: p.itemType,
+    });
   }
 
   const clearGuideMap = useRef(new Set<string>());
@@ -271,14 +313,18 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
         <View key={r} style={{ flexDirection: 'row', gap }}>
           {row.map((cell, c) => {
             const key = `${r},${c}`;
-            const isPreview = previewMap.current.has(key);
+            const previewCell = previewMap.current.get(key);
+            const isPreview = previewCell !== undefined;
             const isClearGuide = clearGuideMap.current.has(key);
             const cellNode = (
               <View key={c} style={{ width: cellSize, height: cellSize }}>
                 <Cell
                   cell={cell}
                   isPreview={isPreview}
-                  previewColor={previewMap.current.get(key)}
+                  previewColor={previewCell?.color}
+                  previewIsGem={previewCell?.isGem}
+                  previewIsItem={previewCell?.isItem}
+                  previewItemType={previewCell?.itemType}
                   isInvalid={invalidPreview && isPreview}
                   size={cellSize}
                 />

@@ -37,6 +37,20 @@ export interface Piece {
   itemType?: string; // 아이템 종류
 }
 
+export function getPieceRewardMarkerCell(
+  shape: PieceShape,
+): { row: number; col: number } | null {
+  for (let row = 0; row < shape.length; row += 1) {
+    for (let col = 0; col < shape[row].length; col += 1) {
+      if (shape[row][col] === 1) {
+        return { row, col };
+      }
+    }
+  }
+
+  return null;
+}
+
 export interface PlaceResult {
   board: Board;
   linesCleared: number;
@@ -760,18 +774,23 @@ export function placePiece(
   col: number,
 ): Board {
   const newBoard = board.map(r => [...r]);
-  let rewardMarkerPlaced = false;
+  const rewardMarker =
+    piece.isGem || piece.isItem
+      ? getPieceRewardMarkerCell(piece.shape)
+      : null;
   for (let r = 0; r < piece.shape.length; r++) {
     for (let c = 0; c < piece.shape[r].length; c++) {
       if (piece.shape[r][c] === 1) {
+        const isRewardMarker =
+          rewardMarker !== null &&
+          rewardMarker.row === r &&
+          rewardMarker.col === c;
         newBoard[row + r][col + c] = {
           color: piece.color,
-          isGem: !rewardMarkerPlaced && piece.isGem,
-          isItem: !rewardMarkerPlaced && piece.isItem,
-          itemType: !rewardMarkerPlaced ? piece.itemType : undefined,
+          isGem: isRewardMarker ? piece.isGem : undefined,
+          isItem: isRewardMarker ? piece.isItem : undefined,
+          itemType: isRewardMarker ? piece.itemType : undefined,
         };
-        rewardMarkerPlaced =
-          rewardMarkerPlaced || piece.isGem === true || piece.isItem === true;
       }
     }
   }

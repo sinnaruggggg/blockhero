@@ -23457,38 +23457,1241 @@ ${suffix}`;
     }
   };
 
+  // src/game/visualConfig.ts
+  var DEFAULT_VISUAL_REFERENCE_VIEWPORT = {
+    width: 412,
+    height: 915,
+    safeTop: 34,
+    safeBottom: 34
+  };
+  var DEFAULT_VISUAL_ELEMENT_RULE = {
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1,
+    widthScale: 1,
+    heightScale: 1,
+    opacity: 1,
+    visible: true,
+    zIndex: 0,
+    safeAreaAware: false
+  };
+  function cloneRule() {
+    return { ...DEFAULT_VISUAL_ELEMENT_RULE };
+  }
+  function createRules(ids) {
+    return ids.reduce((acc, id) => {
+      acc[id] = cloneRule();
+      return acc;
+    }, {});
+  }
+  var DEFAULT_VISUAL_CONFIG_MANIFEST = {
+    version: 0,
+    referenceViewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
+    screens: {
+      level: {
+        elements: createRules([
+          "header",
+          "battle_lane",
+          "board",
+          "skill_effect",
+          "piece_tray",
+          "item_bar",
+          "combo_gauge"
+        ]),
+        backgrounds: {
+          byWorld: {},
+          byLevel: {}
+        }
+      },
+      endless: {
+        elements: createRules([
+          "header",
+          "status_bar",
+          "summon_panel",
+          "next_preview",
+          "board",
+          "skill_effect",
+          "piece_tray",
+          "item_bar",
+          "combo_gauge"
+        ])
+      },
+      battle: {
+        elements: createRules([
+          "back_button",
+          "opponent_panel",
+          "attack_bar",
+          "board",
+          "skill_effect",
+          "piece_tray"
+        ])
+      },
+      raidNormal: {
+        elements: createRules([
+          "top_panel",
+          "skill_bar",
+          "info_bar",
+          "board",
+          "skill_effect",
+          "piece_tray",
+          "combo_gauge"
+        ]),
+        backgrounds: {
+          byBossStage: {}
+        }
+      },
+      raidBoss: {
+        elements: createRules([
+          "top_panel",
+          "skill_bar",
+          "info_bar",
+          "board",
+          "skill_effect",
+          "piece_tray",
+          "combo_gauge"
+        ]),
+        backgrounds: {
+          byBossStage: {}
+        }
+      }
+    }
+  };
+
+  // src/game/layoutScale.ts
+  function normalizeGameplayViewport(viewport) {
+    return {
+      ...DEFAULT_VISUAL_REFERENCE_VIEWPORT,
+      ...viewport ?? {}
+    };
+  }
+  function getGameplayLayoutScale(viewport) {
+    const currentViewport = normalizeGameplayViewport(viewport);
+    const currentUsableHeight = Math.max(
+      1,
+      currentViewport.height - currentViewport.safeTop - currentViewport.safeBottom
+    );
+    const referenceUsableHeight = Math.max(
+      1,
+      DEFAULT_VISUAL_REFERENCE_VIEWPORT.height - DEFAULT_VISUAL_REFERENCE_VIEWPORT.safeTop - DEFAULT_VISUAL_REFERENCE_VIEWPORT.safeBottom
+    );
+    return Math.min(
+      currentViewport.width / DEFAULT_VISUAL_REFERENCE_VIEWPORT.width,
+      currentUsableHeight / referenceUsableHeight
+    );
+  }
+  function scaleGameplayUnit(baseSize, viewport, minimum = 0) {
+    return Math.max(
+      minimum,
+      Math.round(baseSize * getGameplayLayoutScale(viewport))
+    );
+  }
+
+  // src/constants/index.ts
+  var COLS = 8;
+  var HEART_REGEN_MS = 5 * 60 * 1e3;
+  var WORLDS = [
+    { id: 1, name: "\uCD08\uC6D0", color: "#22c55e", emoji: "\u{1F33F}", bossName: "\uD0B9\uC2AC\uB77C\uC784", bossEmoji: "\u{1F451}", bossColor: "#4ade80" },
+    { id: 2, name: "\uC0AC\uB9C9", color: "#f59e0b", emoji: "\u{1F3DC}\uFE0F", bossName: "\uC804\uAC08\uC655", bossEmoji: "\u{1F982}", bossColor: "#fbbf24" },
+    { id: 3, name: "\uC124\uC6D0", color: "#93c5fd", emoji: "\u2744\uFE0F", bossName: "\uC124\uBE59 \uC5EC\uC655", bossEmoji: "\u{1F478}", bossColor: "#bfdbfe" },
+    { id: 4, name: "\uD574\uC800 \uB3D9\uAD74", color: "#06b6d4", emoji: "\u{1F30A}", bossName: "\uD06C\uB77C\uCF04", bossEmoji: "\u{1F991}", bossColor: "#22d3ee" },
+    { id: 5, name: "\uB3C5\uB9BC", color: "#84cc16", emoji: "\u{1F33F}", bossName: "\uD788\uB4DC\uB77C", bossEmoji: "\u{1F40D}", bossColor: "#a3e635" },
+    { id: 6, name: "\uACE0\uB300 \uC720\uC801", color: "#d97706", emoji: "\u{1F3DB}\uFE0F", bossName: "\uBA54\uB450\uC0AC", bossEmoji: "\u{1F409}", bossColor: "#f59e0b" },
+    { id: 7, name: "\uC554\uD751 \uC131", color: "#7c3aed", emoji: "\u{1F3F0}", bossName: "\uB9AC\uCE58 \uD0B9", bossEmoji: "\u{1F480}", bossColor: "#a78bfa" },
+    { id: 8, name: "\uCC9C\uACF5 \uC12C", color: "#38bdf8", emoji: "\u2601\uFE0F", bossName: "\uCC9C\uB465 \uC6A9", bossEmoji: "\u26A1", bossColor: "#7dd3fc" },
+    { id: 9, name: "\uC2EC\uC5F0", color: "#1e3a5f", emoji: "\u{1F311}", bossName: "\uC2EC\uC5F0\uC758 \uAD70\uC8FC", bossEmoji: "\u{1F47F}", bossColor: "#334155" },
+    { id: 10, name: "\uD654\uC0B0\uC9C0\uB300", color: "#dc2626", emoji: "\u{1F30B}", bossName: "\uB808\uB4DC \uB4DC\uB798\uACE4", bossEmoji: "\u{1F432}", bossColor: "#ef4444" }
+  ];
+  var WORLD_MONSTERS = [
+    // World 1 — 초원
+    {
+      entrance: [
+        { name: "\uC2AC\uB77C\uC784", emoji: "\u{1F7E2}", color: "#4ade80" },
+        { name: "\uCD08\uC6D0 \uD1A0\uB07C", emoji: "\u{1F430}", color: "#86efac" },
+        { name: "\uBC84\uC12F \uBCD1\uC0AC", emoji: "\u{1F344}", color: "#a3e635" }
+      ],
+      center: [
+        { name: "\uC11D\uC0C1 \uACE8\uB818", emoji: "\u{1FAA8}", color: "#9ca3af" },
+        { name: "\uB369\uAD74 \uC0DD\uBB3C", emoji: "\u{1F33F}", color: "#4ade80" },
+        { name: "\uC232\uC758 \uC815\uB839", emoji: "\u{1F9DA}", color: "#86efac" }
+      ],
+      boss: [
+        { name: "\uD3EC\uB808\uC2A4\uD2B8 \uAC00\uB514\uC5B8", emoji: "\u{1F333}", color: "#16a34a" },
+        { name: "\uADF8\uB9B0 \uBC14\uC2E4\uB9AC\uC2A4\uD06C", emoji: "\u{1F98E}", color: "#4ade80" },
+        { name: "\uD0B9\uC2AC\uB77C\uC784", emoji: "\u{1F451}", color: "#22c55e" }
+      ]
+    },
+    // World 2 — 사막
+    {
+      entrance: [
+        { name: "\uBAA8\uB798 \uAC8C", emoji: "\u{1F980}", color: "#fbbf24" },
+        { name: "\uC0AC\uB9C9 \uB3C4\uB9C8\uBC40", emoji: "\u{1F98E}", color: "#f59e0b" },
+        { name: "\uC120\uC778\uC7A5 \uBCD1\uC0AC", emoji: "\u{1F335}", color: "#86efac" }
+      ],
+      center: [
+        { name: "\uBBF8\uB77C", emoji: "\u{1F9DF}", color: "#d97706" },
+        { name: "\uBAA8\uB798 \uC9C0\uB801\uC774", emoji: "\u{1F41B}", color: "#fbbf24" },
+        { name: "\uC0AC\uB9C9 \uC5EC\uC6B0", emoji: "\u{1F98A}", color: "#f97316" }
+      ],
+      boss: [
+        { name: "\uC0AC\uB9C9 \uACE8\uB818", emoji: "\u{1FAA8}", color: "#d97706" },
+        { name: "\uC2A4\uD551\uD06C\uC2A4", emoji: "\u{1F981}", color: "#f59e0b" },
+        { name: "\uC804\uAC08\uC655", emoji: "\u{1F982}", color: "#ef4444" }
+      ]
+    },
+    // World 3 — 설원
+    {
+      entrance: [
+        { name: "\uC5BC\uC74C \uB291\uB300", emoji: "\u{1F43A}", color: "#93c5fd" },
+        { name: "\uB208 \uD1A0\uB07C", emoji: "\u{1F430}", color: "#bfdbfe" },
+        { name: "\uC11C\uB9AC \uC694\uC815", emoji: "\u{1F9DA}", color: "#dbeafe" }
+      ],
+      center: [
+        { name: "\uC5BC\uC74C \uAC70\uC778", emoji: "\u{1F9CA}", color: "#60a5fa" },
+        { name: "\uC124\uC6D0 \uB9E4", emoji: "\u{1F985}", color: "#93c5fd" },
+        { name: "\uB3D9\uACB0 \uACE8\uB818", emoji: "\u{1FAA8}", color: "#bfdbfe" }
+      ],
+      boss: [
+        { name: "\uBE59\uD558 \uB4DC\uB798\uACE4", emoji: "\u{1F409}", color: "#60a5fa" },
+        { name: "\uB208\uBCF4\uB77C \uC815\uB839", emoji: "\u2744\uFE0F", color: "#93c5fd" },
+        { name: "\uC124\uBE59 \uC5EC\uC655", emoji: "\u{1F478}", color: "#38bdf8" }
+      ]
+    },
+    // World 4 — 해저 동굴
+    {
+      entrance: [
+        { name: "\uD574\uD30C\uB9AC", emoji: "\u{1FABC}", color: "#22d3ee" },
+        { name: "\uC870\uAC1C \uAE30\uC0AC", emoji: "\u{1F41A}", color: "#06b6d4" },
+        { name: "\uC0B0\uD638 \uC815\uB839", emoji: "\u{1F33A}", color: "#f0abfc" }
+      ],
+      center: [
+        { name: "\uC804\uAE30\uBC40\uC7A5\uC5B4", emoji: "\u26A1", color: "#facc15" },
+        { name: "\uC0C1\uC5B4 \uC804\uC0AC", emoji: "\u{1F988}", color: "#0284c7" },
+        { name: "\uC2EC\uD574 \uC6A9", emoji: "\u{1F409}", color: "#0e7490" }
+      ],
+      boss: [
+        { name: "\uAC70\uB300 \uAC70\uBD81", emoji: "\u{1F422}", color: "#06b6d4" },
+        { name: "\uC2EC\uD574 \uB808\uBE44\uC544\uD0C4", emoji: "\u{1F40B}", color: "#0369a1" },
+        { name: "\uD06C\uB77C\uCF04", emoji: "\u{1F991}", color: "#0c4a6e" }
+      ]
+    },
+    // World 5 — 독림
+    {
+      entrance: [
+        { name: "\uB3C5\uBC84\uC12F", emoji: "\u{1F344}", color: "#a3e635" },
+        { name: "\uB3C5 \uAC1C\uAD6C\uB9AC", emoji: "\u{1F438}", color: "#84cc16" },
+        { name: "\uB369\uAD74 \uAC70\uBBF8", emoji: "\u{1F577}\uFE0F", color: "#65a30d" }
+      ],
+      center: [
+        { name: "\uC5ED\uBCD1 \uBC15\uC950", emoji: "\u{1F987}", color: "#7c3aed" },
+        { name: "\uB3C5\uC0AC", emoji: "\u{1F40D}", color: "#16a34a" },
+        { name: "\uB3C5 \uD2B8\uB808\uC778\uD2B8", emoji: "\u{1F333}", color: "#4d7c0f" }
+      ],
+      boss: [
+        { name: "\uB3C5 \uACE8\uB818", emoji: "\u{1F7E3}", color: "#8b5cf6" },
+        { name: "\uD0B9 \uB3C5\uAC70\uBBF8", emoji: "\u{1F577}\uFE0F", color: "#7c3aed" },
+        { name: "\uD788\uB4DC\uB77C", emoji: "\u{1F40D}", color: "#6d28d9" }
+      ]
+    },
+    // World 6 — 고대 유적
+    {
+      entrance: [
+        { name: "\uC11D\uC0C1", emoji: "\u{1F5FF}", color: "#92400e" },
+        { name: "\uC800\uC8FC\uBC1B\uC740 \uD48D\uB385\uC774", emoji: "\u{1F41E}", color: "#d97706" },
+        { name: "\uC720\uC801 \uC720\uB839", emoji: "\u{1F47B}", color: "#fbbf24" }
+      ],
+      center: [
+        { name: "\uACE8\uB818 \uAE30\uC0AC", emoji: "\u{1FAA8}", color: "#78716c" },
+        { name: "\uACE0\uB300 \uC2A4\uD551\uD06C\uC2A4", emoji: "\u{1F981}", color: "#d97706" },
+        { name: "\uC6A9\uC554 \uC815\uB839", emoji: "\u{1F525}", color: "#ef4444" }
+      ],
+      boss: [
+        { name: "\uACE0\uB300 \uAC10\uC2DC\uC790", emoji: "\u{1F441}\uFE0F", color: "#d97706" },
+        { name: "\uC11D\uD310 \uACE8\uB818", emoji: "\u{1FAA8}", color: "#92400e" },
+        { name: "\uBA54\uB450\uC0AC", emoji: "\u{1F409}", color: "#dc2626" }
+      ]
+    },
+    // World 7 — 암흑 성
+    {
+      entrance: [
+        { name: "\uADF8\uB9BC\uC790 \uBC15\uC950", emoji: "\u{1F987}", color: "#6d28d9" },
+        { name: "\uD574\uACE8 \uBCD1\uC0AC", emoji: "\u{1F480}", color: "#9ca3af" },
+        { name: "\uC720\uB839 \uAE30\uC0AC", emoji: "\u{1F47B}", color: "#7c3aed" }
+      ],
+      center: [
+        { name: "\uD761\uD608 \uBC15\uC950", emoji: "\u{1F9DB}", color: "#7f1d1d" },
+        { name: "\uC554\uD751 \uB9C8\uBC95\uC0AC", emoji: "\u{1F9D9}", color: "#4c1d95" },
+        { name: "\uC8FD\uC74C \uACE8\uB818", emoji: "\u{1F480}", color: "#1e1b4b" }
+      ],
+      boss: [
+        { name: "\uBC34\uC2DC", emoji: "\u{1F441}\uFE0F", color: "#7c3aed" },
+        { name: "\uB2E4\uD06C \uB098\uC774\uD2B8", emoji: "\u2694\uFE0F", color: "#4c1d95" },
+        { name: "\uB9AC\uCE58 \uD0B9", emoji: "\u{1F480}", color: "#1e1b4b" }
+      ]
+    },
+    // World 8 — 천공 섬
+    {
+      entrance: [
+        { name: "\uBC14\uB78C \uC694\uC815", emoji: "\u{1F9DA}", color: "#7dd3fc" },
+        { name: "\uAD6C\uB984 \uD1A0\uB07C", emoji: "\u{1F430}", color: "#bfdbfe" },
+        { name: "\uCC9C\uB465\uC0C8", emoji: "\u{1F985}", color: "#38bdf8" }
+      ],
+      center: [
+        { name: "\uD3ED\uD48D \uB3C5\uC218\uB9AC", emoji: "\u{1F985}", color: "#0ea5e9" },
+        { name: "\uD558\uB298 \uC218\uD638\uC790", emoji: "\u2694\uFE0F", color: "#38bdf8" },
+        { name: "\uCC9C\uC0C1 \uAE30\uC0AC", emoji: "\u{1F6E1}\uFE0F", color: "#bae6fd" }
+      ],
+      boss: [
+        { name: "\uC2A4\uD1B0 \uD53C\uB2C9\uC2A4", emoji: "\u{1F525}", color: "#f97316" },
+        { name: "\uCC9C\uACF5 \uAC00\uB514\uC5B8", emoji: "\u2601\uFE0F", color: "#7dd3fc" },
+        { name: "\uCC9C\uB465 \uC6A9", emoji: "\u26A1", color: "#facc15" }
+      ]
+    },
+    // World 9 — 심연
+    {
+      entrance: [
+        { name: "\uD5C8\uACF5 \uC2AC\uB77C\uC784", emoji: "\u{1F311}", color: "#334155" },
+        { name: "\uC554\uD751 \uAC70\uBA38\uB9AC", emoji: "\u{1F5A4}", color: "#1e293b" },
+        { name: "\uC2EC\uC5F0 \uAC10\uC2DC\uC790", emoji: "\u{1F441}\uFE0F", color: "#475569" }
+      ],
+      center: [
+        { name: "\uD63C\uB3C8 \uAE30\uC0AC", emoji: "\u2694\uFE0F", color: "#312e81" },
+        { name: "\uC545\uBABD \uC9D0\uC2B9", emoji: "\u{1F479}", color: "#1e1b4b" },
+        { name: "\uD5C8\uACF5 \uB4DC\uB798\uACE4", emoji: "\u{1F409}", color: "#0f172a" }
+      ],
+      boss: [
+        { name: "\uC2EC\uC5F0 \uC655", emoji: "\u{1F451}", color: "#1e293b" },
+        { name: "\uACF5\uD5C8\uC758 \uC2E0", emoji: "\u{1F311}", color: "#0f172a" },
+        { name: "\uC2EC\uC5F0\uC758 \uAD70\uC8FC", emoji: "\u{1F47F}", color: "#020617" }
+      ]
+    },
+    // World 10 — 화산지대
+    {
+      entrance: [
+        { name: "\uC6A9\uC554 \uC2AC\uB77C\uC784", emoji: "\u{1F7E0}", color: "#f97316" },
+        { name: "\uBD88 \uB3C4\uB9C8\uBC40", emoji: "\u{1F98E}", color: "#ef4444" },
+        { name: "\uB9C8\uADF8\uB9C8 \uAC8C", emoji: "\u{1F980}", color: "#dc2626" }
+      ],
+      center: [
+        { name: "\uD654\uC5FC \uAC70\uC778", emoji: "\u{1F525}", color: "#ef4444" },
+        { name: "\uC6A9\uC735 \uACE8\uB818", emoji: "\u{1FAA8}", color: "#b91c1c" },
+        { name: "\uBD88\uAF43 \uC640\uC774\uBC88", emoji: "\u{1F98E}", color: "#f97316" }
+      ],
+      boss: [
+        { name: "\uD654\uC0B0 \uAD70\uC8FC", emoji: "\u{1F30B}", color: "#dc2626" },
+        { name: "\uC778\uD398\uB974\uB178 \uB4DC\uB808\uC774\uD06C", emoji: "\u{1F409}", color: "#b91c1c" },
+        { name: "\uB808\uB4DC \uB4DC\uB798\uACE4", emoji: "\u{1F432}", color: "#991b1b" }
+      ]
+    }
+  ];
+  function getMonsterForStage(worldIdx, stage) {
+    const monsters = WORLD_MONSTERS[worldIdx];
+    if (stage <= 10) {
+      return monsters.entrance[Math.floor((stage - 1) / 10 * monsters.entrance.length) % monsters.entrance.length];
+    } else if (stage <= 20) {
+      return monsters.center[Math.floor((stage - 11) / 10 * monsters.center.length) % monsters.center.length];
+    } else {
+      if (stage === 30) return monsters.boss[monsters.boss.length - 1];
+      const idx = Math.min(Math.floor((stage - 21) / 9 * (monsters.boss.length - 1)), monsters.boss.length - 2);
+      return monsters.boss[idx];
+    }
+  }
+  var STAGE_NAME_PREFIXES = ["\uC785\uAD6C", "\uCD08\uC785", "\uC804\uCD08", "\uC678\uACFD", "\uC811\uACBD"];
+  var STAGE_NAME_CENTER = ["\uC911\uC2EC\uBD80", "\uD575\uC2EC", "\uC2EC\uCE35\uBD80", "\uC694\uC0C8", "\uBCF8\uAC70\uC9C0"];
+  var STAGE_NAME_BOSS = ["\uACB0\uC804 \uAD6C\uC5ED", "\uBCF4\uC2A4 \uC601\uC5ED", "\uC655\uC758 \uAC70\uCC98"];
+  function getStageName(world, stage) {
+    const w = WORLDS[world - 1];
+    if (stage <= 10) {
+      const prefix = STAGE_NAME_PREFIXES[(stage - 1) % STAGE_NAME_PREFIXES.length];
+      return `${w.emoji} ${w.name} ${prefix} ${stage}`;
+    } else if (stage <= 20) {
+      const prefix = STAGE_NAME_CENTER[(stage - 11) % STAGE_NAME_CENTER.length];
+      return `${w.emoji} ${w.name} ${prefix} ${stage}`;
+    } else if (stage < 30) {
+      const prefix = STAGE_NAME_BOSS[(stage - 21) % STAGE_NAME_BOSS.length];
+      return `${w.emoji} ${w.name} ${prefix} ${stage}`;
+    } else {
+      return `${w.emoji} ${w.name} \u2014 ${w.bossName}`;
+    }
+  }
+  var WORLD_BASE_HP = [800, 1800, 3200, 5200, 8e3, 12e3, 17500, 25e3, 36e3, 5e4];
+  function getMonsterHp(world, stage) {
+    const base = WORLD_BASE_HP[world - 1];
+    const multiplier = 1 + (stage - 1) / 29 * 4;
+    return Math.round(base * multiplier);
+  }
+  function getObstacles(world, stage) {
+    if (world <= 2 && stage <= 10) return void 0;
+    if (world <= 2) {
+      return [{ type: "stone", count: 1 }];
+    }
+    if (world <= 4) {
+      if (stage <= 10) return [{ type: "stone", count: 1 }];
+      if (stage <= 20) return [{ type: "ice", count: 2 }];
+      return [{ type: "ice", count: 2 }, { type: "stone", count: 1 }];
+    }
+    if (world <= 6) {
+      if (stage <= 10) return [{ type: "ice", count: 2 }];
+      if (stage <= 20) return [{ type: "ice", count: 2 }, { type: "stone", count: 2 }];
+      return [{ type: "hard", count: 2, hits: 2 }, { type: "stone", count: 1 }];
+    }
+    if (world <= 8) {
+      if (stage <= 10) return [{ type: "hard", count: 2, hits: 2 }];
+      if (stage <= 20) return [{ type: "hard", count: 3, hits: 3 }];
+      return [{ type: "hard", count: 3, hits: 3 }, { type: "stone", count: 2 }];
+    }
+    if (stage <= 10) return [{ type: "hard", count: 3, hits: 3 }];
+    if (stage <= 20) return [{ type: "hard", count: 4, hits: 4 }];
+    return [{ type: "hard", count: 4, hits: 5 }, { type: "stone", count: 2 }];
+  }
+  function generateLevels() {
+    const levels = [];
+    for (let world = 1; world <= 10; world++) {
+      for (let stage = 1; stage <= 30; stage++) {
+        const id = (world - 1) * 30 + stage;
+        const monster = getMonsterForStage(world - 1, stage);
+        levels.push({
+          id,
+          world,
+          name: getStageName(world, stage),
+          goal: {
+            type: "monster",
+            monsterHp: getMonsterHp(world, stage),
+            monsterName: monster.name,
+            monsterEmoji: monster.emoji,
+            monsterColor: monster.color
+          },
+          obstacles: getObstacles(world, stage)
+        });
+      }
+    }
+    return levels;
+  }
+  var LEVELS = generateLevels();
+  var BOSS_RAID_INTERVAL_MS = 4 * 60 * 60 * 1e3;
+  var BOSS_RAID_WINDOW_MS = 10 * 60 * 1e3;
+  var BOSS_RAID_HP = Array.from({ length: 10 }, (_, i) => (i + 1) * 1e5);
+
+  // src/game/gameplayMetrics.ts
+  var SCREEN_WIDTH = DEFAULT_VISUAL_REFERENCE_VIEWPORT.width;
+  var BOARD_PADDING = 8;
+  var CELL_GAP = 2;
+  var BOARD_WIDTH = Math.min(SCREEN_WIDTH - 48, 388);
+  var COMPACT_SCALE = 0.82;
+  var PIECE_TRAY_HEIGHT = 124;
+  var PIECE_TRAY_HEIGHT_COMPACT = 108;
+  var CELL_SIZE = (BOARD_WIDTH - BOARD_PADDING * 2 - CELL_GAP * (COLS - 1)) / COLS;
+  function getBoardMetrics(viewport = DEFAULT_VISUAL_REFERENCE_VIEWPORT, options) {
+    const resolvedViewport = typeof viewport === "number" ? normalizeGameplayViewport({
+      width: viewport,
+      height: DEFAULT_VISUAL_REFERENCE_VIEWPORT.height
+    }) : normalizeGameplayViewport(viewport);
+    const layoutScale = getGameplayLayoutScale(resolvedViewport);
+    const modeScale = options?.small ? 0.4 : options?.compact ? COMPACT_SCALE : 1;
+    const combinedScale = layoutScale * modeScale;
+    const cellSize = CELL_SIZE * combinedScale;
+    const gap = CELL_GAP * combinedScale;
+    const padding = BOARD_PADDING * combinedScale;
+    const boardSize = cellSize * COLS + gap * (COLS - 1) + padding * 2;
+    return {
+      scale: combinedScale,
+      layoutScale,
+      modeScale,
+      cellSize,
+      gap,
+      padding,
+      boardSize
+    };
+  }
+  function getPieceTrayHeight(viewport, compact = false) {
+    const layoutScale = getGameplayLayoutScale(viewport);
+    return Math.max(
+      88,
+      Math.round(
+        (compact ? PIECE_TRAY_HEIGHT_COMPACT : PIECE_TRAY_HEIGHT) * layoutScale
+      )
+    );
+  }
+  function getComboGaugeMetrics(viewport, compact = false) {
+    const currentViewport = normalizeGameplayViewport(viewport);
+    const widthRatio = compact ? 0.46 : 0.48;
+    const minWidth = compact ? 120 : 136;
+    const maxWidth = compact ? 172 : 196;
+    return {
+      top: compact ? 6 : 8,
+      width: Math.round(
+        Math.max(
+          minWidth,
+          Math.min(maxWidth, currentViewport.width * widthRatio)
+        )
+      ),
+      height: compact ? 24 : 27
+    };
+  }
+
+  // src/game/visualRuntimeLayout.ts
+  function clampSize(value, minimum = 0) {
+    return Math.max(minimum, Math.round(value));
+  }
+  function makeRect(left, top, width, height) {
+    return {
+      left: clampSize(left),
+      top: clampSize(top),
+      width: clampSize(width),
+      height: clampSize(height)
+    };
+  }
+  function getCenteredBoardRect(boardRect, boardSize) {
+    return makeRect(
+      boardRect.left + Math.max(0, (boardRect.width - boardSize) / 2),
+      boardRect.top + Math.max(0, (boardRect.height - boardSize) / 2),
+      boardSize,
+      boardSize
+    );
+  }
+  function getContentBounds(viewport) {
+    const gutter = scaleGameplayUnit(46, viewport, 16);
+    return {
+      left: 0,
+      top: viewport.safeTop + gutter,
+      width: viewport.width,
+      height: Math.max(
+        0,
+        viewport.height - viewport.safeTop - viewport.safeBottom - gutter * 2
+      ),
+      bottom: viewport.height - viewport.safeBottom - gutter
+    };
+  }
+  function getHeaderHeight(screenId) {
+    switch (screenId) {
+      case "level":
+        return 48;
+      case "endless":
+        return 126;
+      default:
+        return 0;
+    }
+  }
+  function getLevelBattleLaneHeight() {
+    return 130;
+  }
+  function getStatusBarHeight() {
+    return 34;
+  }
+  function getNextPreviewHeight() {
+    return 80;
+  }
+  function getSummonPanelHeight() {
+    return 78;
+  }
+  function getItemBarHeight() {
+    return 66;
+  }
+  function getBattleOpponentPanelHeight(viewport) {
+    return clampSize(getBoardMetrics(viewport, { small: true }).boardSize + 22);
+  }
+  function getBattleAttackBarHeight() {
+    return 44;
+  }
+  function getRaidTopPanelHeight(screenId) {
+    return screenId === "raidNormal" ? 186 : 176;
+  }
+  function getRaidSkillBarHeight() {
+    return 38;
+  }
+  function getRaidInfoBarHeight() {
+    return 20;
+  }
+  function buildLevelLayout(viewport) {
+    const content = getContentBounds(viewport);
+    const headerHeight = getHeaderHeight("level");
+    const battleLaneHeight = getLevelBattleLaneHeight();
+    const itemBarHeight = getItemBarHeight();
+    const pieceTrayHeight = getPieceTrayHeight(viewport, false);
+    const bottomRowHeight = pieceTrayHeight + 2;
+    const boardTop = content.top + headerHeight + battleLaneHeight;
+    const pieceTrayTop = content.bottom - itemBarHeight - bottomRowHeight;
+    const boardHeight = Math.max(0, pieceTrayTop - boardTop);
+    const trayWidth = Math.max(0, viewport.width - 24);
+    const gauge = getComboGaugeMetrics(viewport, false);
+    const boardMetrics = getBoardMetrics(viewport);
+    const boardRect = makeRect(0, boardTop, viewport.width, boardHeight);
+    const skillEffectRect = getCenteredBoardRect(
+      boardRect,
+      boardMetrics.boardSize
+    );
+    return {
+      header: makeRect(0, content.top, viewport.width, headerHeight),
+      battle_lane: makeRect(
+        0,
+        content.top + headerHeight,
+        viewport.width,
+        battleLaneHeight
+      ),
+      board: boardRect,
+      skill_effect: skillEffectRect,
+      piece_tray: makeRect(12, pieceTrayTop, trayWidth, pieceTrayHeight),
+      item_bar: makeRect(
+        0,
+        content.bottom - itemBarHeight,
+        viewport.width,
+        itemBarHeight
+      ),
+      combo_gauge: makeRect(
+        (viewport.width - gauge.width) / 2,
+        boardTop + gauge.top,
+        gauge.width,
+        gauge.height
+      )
+    };
+  }
+  function buildEndlessLayout(viewport) {
+    const content = getContentBounds(viewport);
+    const headerHeight = getHeaderHeight("endless");
+    const statusBarHeight = getStatusBarHeight();
+    const nextPreviewHeight = getNextPreviewHeight();
+    const summonPanelHeight = getSummonPanelHeight();
+    const itemBarHeight = getItemBarHeight();
+    const pieceTrayHeight = getPieceTrayHeight(viewport, false);
+    const boardTop = content.top + headerHeight + statusBarHeight + nextPreviewHeight + summonPanelHeight;
+    const pieceTrayTop = content.bottom - itemBarHeight - pieceTrayHeight;
+    const boardHeight = Math.max(0, pieceTrayTop - boardTop);
+    const boardMetrics = getBoardMetrics(viewport);
+    const gauge = getComboGaugeMetrics(viewport, false);
+    const boardRect = makeRect(0, boardTop, viewport.width, boardHeight);
+    const skillEffectRect = getCenteredBoardRect(
+      boardRect,
+      boardMetrics.boardSize
+    );
+    return {
+      header: makeRect(0, content.top, viewport.width, headerHeight),
+      status_bar: makeRect(
+        0,
+        content.top + headerHeight,
+        viewport.width,
+        statusBarHeight
+      ),
+      next_preview: makeRect(
+        0,
+        content.top + headerHeight + statusBarHeight,
+        viewport.width,
+        nextPreviewHeight
+      ),
+      summon_panel: makeRect(
+        0,
+        content.top + headerHeight + statusBarHeight + nextPreviewHeight,
+        viewport.width,
+        summonPanelHeight
+      ),
+      board: boardRect,
+      skill_effect: skillEffectRect,
+      piece_tray: makeRect(0, pieceTrayTop, viewport.width, pieceTrayHeight),
+      item_bar: makeRect(
+        0,
+        content.bottom - itemBarHeight,
+        viewport.width,
+        itemBarHeight
+      ),
+      combo_gauge: makeRect(
+        (viewport.width - gauge.width) / 2,
+        boardTop + Math.max(0, (boardHeight - boardMetrics.boardSize) / 2) + gauge.top,
+        gauge.width,
+        gauge.height
+      )
+    };
+  }
+  function buildBattleLayout(viewport) {
+    const content = getContentBounds(viewport);
+    const backSize = 42;
+    const opponentPanelHeight = getBattleOpponentPanelHeight(viewport);
+    const attackBarHeight = getBattleAttackBarHeight();
+    const pieceTrayHeight = getPieceTrayHeight(viewport, true);
+    const boardTop = content.top + opponentPanelHeight + attackBarHeight;
+    const pieceTrayTop = content.bottom - pieceTrayHeight;
+    const boardRect = makeRect(
+      0,
+      boardTop,
+      viewport.width,
+      Math.max(0, pieceTrayTop - boardTop)
+    );
+    const boardMetrics = getBoardMetrics(viewport, { compact: true });
+    const skillEffectRect = getCenteredBoardRect(
+      boardRect,
+      boardMetrics.boardSize
+    );
+    return {
+      back_button: makeRect(12, content.top + 10, backSize, backSize),
+      opponent_panel: makeRect(
+        0,
+        content.top,
+        viewport.width,
+        opponentPanelHeight
+      ),
+      attack_bar: makeRect(
+        0,
+        content.top + opponentPanelHeight,
+        viewport.width,
+        attackBarHeight
+      ),
+      board: boardRect,
+      skill_effect: skillEffectRect,
+      piece_tray: makeRect(0, pieceTrayTop, viewport.width, pieceTrayHeight)
+    };
+  }
+  function buildRaidLayout(screenId, viewport) {
+    const content = getContentBounds(viewport);
+    const topPanelHeight = getRaidTopPanelHeight(screenId);
+    const skillBarHeight = getRaidSkillBarHeight();
+    const infoBarHeight = getRaidInfoBarHeight();
+    const pieceTrayHeight = getPieceTrayHeight(viewport, true);
+    const boardMetrics = getBoardMetrics(viewport, { compact: true });
+    const boardTop = content.top + topPanelHeight + skillBarHeight + infoBarHeight;
+    const pieceTrayTop = content.bottom - pieceTrayHeight;
+    const boardHeight = Math.max(
+      boardMetrics.boardSize + 18,
+      pieceTrayTop - boardTop
+    );
+    const gauge = getComboGaugeMetrics(viewport, true);
+    const boardRect = makeRect(0, boardTop, viewport.width, boardHeight);
+    const skillEffectRect = getCenteredBoardRect(
+      boardRect,
+      boardMetrics.boardSize
+    );
+    return {
+      top_panel: makeRect(0, content.top, viewport.width, topPanelHeight),
+      skill_bar: makeRect(
+        0,
+        content.top + topPanelHeight,
+        viewport.width,
+        skillBarHeight
+      ),
+      info_bar: makeRect(
+        0,
+        content.top + topPanelHeight + skillBarHeight,
+        viewport.width,
+        infoBarHeight
+      ),
+      board: boardRect,
+      skill_effect: skillEffectRect,
+      piece_tray: makeRect(0, pieceTrayTop, viewport.width, pieceTrayHeight),
+      combo_gauge: makeRect(
+        (viewport.width - gauge.width) / 2,
+        boardTop + gauge.top,
+        gauge.width,
+        gauge.height
+      )
+    };
+  }
+  function getVisualRuntimeLayout(screenId, viewport) {
+    switch (screenId) {
+      case "level":
+        return buildLevelLayout(viewport);
+      case "endless":
+        return buildEndlessLayout(viewport);
+      case "battle":
+        return buildBattleLayout(viewport);
+      case "raidNormal":
+      case "raidBoss":
+        return buildRaidLayout(screenId, viewport);
+      default:
+        return {};
+    }
+  }
+
+  // tools/blockhero-creator/visual-editor-core.js
+  var DEFAULT_REFERENCE_VIEWPORT = {
+    width: 412,
+    height: 915,
+    safeTop: 34,
+    safeBottom: 34
+  };
+  var DEVICE_PROFILES = [
+    {
+      id: "galaxy-s23-ultra",
+      label: "\uAC24\uB7ED\uC2DC S23 \uC6B8\uD2B8\uB77C",
+      viewport: { width: 412, height: 915, safeTop: 34, safeBottom: 34 }
+    },
+    {
+      id: "galaxy-a54",
+      label: "\uAC24\uB7ED\uC2DC A54",
+      viewport: { width: 411, height: 891, safeTop: 32, safeBottom: 24 }
+    },
+    {
+      id: "galaxy-fold-cover",
+      label: "\uAC24\uB7ED\uC2DC \uD3F4\uB4DC \uCEE4\uBC84",
+      viewport: { width: 360, height: 780, safeTop: 30, safeBottom: 24 }
+    },
+    {
+      id: "iphone-15-pro",
+      label: "\uC544\uC774\uD3F0 15 \uD504\uB85C",
+      viewport: { width: 393, height: 852, safeTop: 59, safeBottom: 34 }
+    },
+    {
+      id: "iphone-15-pro-max",
+      label: "\uC544\uC774\uD3F0 15 \uD504\uB85C \uB9E5\uC2A4",
+      viewport: { width: 430, height: 932, safeTop: 59, safeBottom: 34 }
+    },
+    {
+      id: "small-android",
+      label: "\uC18C\uD615 \uC548\uB4DC\uB85C\uC774\uB4DC",
+      viewport: { width: 360, height: 800, safeTop: 28, safeBottom: 24 }
+    },
+    {
+      id: "tablet-portrait",
+      label: "\uD0DC\uBE14\uB9BF \uC138\uB85C",
+      viewport: { width: 800, height: 1280, safeTop: 24, safeBottom: 20 }
+    }
+  ];
+  var SCREEN_LABELS = {
+    level: "\uB808\uBCA8 \uBAA8\uB4DC",
+    endless: "\uBB34\uD55C \uBAA8\uB4DC",
+    battle: "\uB300\uC804 \uBAA8\uB4DC",
+    raidNormal: "\uC77C\uBC18 \uB808\uC774\uB4DC",
+    raidBoss: "\uBCF4\uC2A4 \uB808\uC774\uB4DC"
+  };
+  var ELEMENT_DEFS = {
+    level: [
+      { id: "header", label: "\uC0C1\uB2E8 \uD5E4\uB354" },
+      { id: "battle_lane", label: "\uC804\uD22C HUD" },
+      { id: "board", label: "\uBE14\uB85D \uBCF4\uB4DC" },
+      { id: "skill_effect", label: "\uC2A4\uD0AC \uC774\uD399\uD2B8" },
+      { id: "piece_tray", label: "\uBE14\uB85D \uD2B8\uB808\uC774" },
+      { id: "item_bar", label: "\uC544\uC774\uD15C \uBC14" },
+      { id: "combo_gauge", label: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0" }
+    ],
+    endless: [
+      { id: "header", label: "\uC0C1\uB2E8 \uD5E4\uB354" },
+      { id: "status_bar", label: "\uC0C1\uD0DC \uBC14" },
+      { id: "summon_panel", label: "\uC18C\uD658 \uD328\uB110" },
+      { id: "next_preview", label: "\uB2E4\uC74C \uBE14\uB85D" },
+      { id: "board", label: "\uBE14\uB85D \uBCF4\uB4DC" },
+      { id: "skill_effect", label: "\uC2A4\uD0AC \uC774\uD399\uD2B8" },
+      { id: "piece_tray", label: "\uBE14\uB85D \uD2B8\uB808\uC774" },
+      { id: "item_bar", label: "\uC544\uC774\uD15C \uBC14" },
+      { id: "combo_gauge", label: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0" }
+    ],
+    battle: [
+      { id: "back_button", label: "\uB4A4\uB85C \uBC84\uD2BC" },
+      { id: "opponent_panel", label: "\uC0C1\uB300 \uD328\uB110" },
+      { id: "attack_bar", label: "\uACF5\uACA9 \uBC14" },
+      { id: "board", label: "\uBE14\uB85D \uBCF4\uB4DC" },
+      { id: "skill_effect", label: "\uC2A4\uD0AC \uC774\uD399\uD2B8" },
+      { id: "piece_tray", label: "\uBE14\uB85D \uD2B8\uB808\uC774" }
+    ],
+    raidNormal: [
+      { id: "top_panel", label: "\uC0C1\uB2E8 \uD328\uB110" },
+      { id: "skill_bar", label: "\uC2A4\uD0AC \uBC14" },
+      { id: "info_bar", label: "\uC815\uBCF4 \uBC14" },
+      { id: "board", label: "\uBE14\uB85D \uBCF4\uB4DC" },
+      { id: "skill_effect", label: "\uC2A4\uD0AC \uC774\uD399\uD2B8" },
+      { id: "piece_tray", label: "\uBE14\uB85D \uD2B8\uB808\uC774" },
+      { id: "combo_gauge", label: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0" }
+    ],
+    raidBoss: [
+      { id: "top_panel", label: "\uC0C1\uB2E8 \uD328\uB110" },
+      { id: "skill_bar", label: "\uC2A4\uD0AC \uBC14" },
+      { id: "info_bar", label: "\uC815\uBCF4 \uBC14" },
+      { id: "board", label: "\uBE14\uB85D \uBCF4\uB4DC" },
+      { id: "skill_effect", label: "\uC2A4\uD0AC \uC774\uD399\uD2B8" },
+      { id: "piece_tray", label: "\uBE14\uB85D \uD2B8\uB808\uC774" },
+      { id: "combo_gauge", label: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0" }
+    ]
+  };
+  var ELEMENT_HELP = {
+    level: {
+      header: "\uC0C1\uB2E8 \uD5E4\uB354\uB294 \uD55C \uC190\uC73C\uB85C \uB204\uB974\uAE30 \uC26C\uC6B4 \uC704\uCE58\uC778\uC9C0 \uD655\uC778\uD558\uC138\uC694.",
+      battle_lane: "\uC804\uD22C HUD\uB294 \uBCF4\uB4DC\uC640 \uCDA9\uB3CC\uD558\uC9C0 \uC54A\uAC8C \uC5EC\uBC31\uC744 \uB450\uB294 \uD3B8\uC774 \uC548\uC804\uD569\uB2C8\uB2E4.",
+      board: "\uBCF4\uB4DC\uB294 \uAE30\uC900 \uC694\uC18C\uC785\uB2C8\uB2E4. \uB2E4\uB978 UI\uB294 \uBCF4\uB4DC\uC5D0 \uB9DE\uCDB0 \uC815\uB82C\uD558\uC138\uC694.",
+      skill_effect: "\uC2A4\uD0AC \uC774\uD399\uD2B8\uB294 \uBCF4\uB4DC \uC704\uC5D0 \uBD99\uB294 \uBC1C\uB3D9 \uB808\uC774\uC5B4\uC785\uB2C8\uB2E4. \uBCF4\uB4DC \uAE30\uC900 \uC704\uCE58\uB97C \uD06C\uAC8C \uBC97\uC5B4\uB098\uC9C0 \uC54A\uAC8C \uB9DE\uCD94\uC138\uC694.",
+      piece_tray: "\uBE14\uB85D \uD2B8\uB808\uC774\uB294 \uD558\uB2E8 \uC870\uC791 \uC601\uC5ED\uACFC \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uB9DE\uCD94\uC138\uC694.",
+      item_bar: "\uC544\uC774\uD15C \uBC14\uB294 \uD2B8\uB808\uC774\uC640 \uB108\uBB34 \uAC00\uAE4C\uC6B0\uBA74 \uD130\uCE58\uAC00 \uACB9\uCE69\uB2C8\uB2E4.",
+      combo_gauge: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0\uB294 \uBCF4\uB4DC \uC704\uB97C \uAC00\uB9AC\uC9C0 \uC54A\uAC8C \uB450\uB294 \uD3B8\uC774 \uC548\uC815\uC801\uC785\uB2C8\uB2E4."
+    },
+    endless: {
+      header: "\uC0C1\uB2E8 \uD5E4\uB354\uB294 \uC810\uC218\uC640 \uC9C4\uD589 \uC815\uBCF4\uAC00 \uC798 \uBCF4\uC774\uB294\uC9C0 \uD655\uC778\uD558\uC138\uC694.",
+      status_bar: "\uC0C1\uD0DC \uBC14\uB294 \uBCF4\uB4DC\uC640 \uCDA9\uB3CC\uD558\uC9C0 \uC54A\uB3C4\uB85D \uC5EC\uBC31\uC744 \uC720\uC9C0\uD558\uC138\uC694.",
+      summon_panel: "\uC18C\uD658 \uD328\uB110\uC740 \uC0C1\uB2E8 \uC815\uBCF4\uBCF4\uB2E4 \uC544\uB798\uC5D0 \uB450\uB294 \uD3B8\uC774 \uC77D\uAE30 \uC27D\uC2B5\uB2C8\uB2E4.",
+      next_preview: "\uB2E4\uC74C \uBE14\uB85D \uC601\uC5ED\uC740 \uBCF4\uB4DC\uC640 \uB108\uBB34 \uAC00\uAE4C\uC6B0\uBA74 \uB2F5\uB2F5\uD558\uAC8C \uBCF4\uC785\uB2C8\uB2E4.",
+      board: "\uBB34\uD55C \uBAA8\uB4DC\uC758 \uC911\uC2EC \uC870\uC791 \uC601\uC5ED\uC785\uB2C8\uB2E4.",
+      skill_effect: "\uC2A4\uD0AC \uC774\uD399\uD2B8\uB294 \uBCF4\uB4DC \uC911\uC2EC \uC5F0\uCD9C \uB808\uC774\uC5B4\uC785\uB2C8\uB2E4. \uCF64\uBCF4 \uAC8C\uC774\uC9C0\uC640 \uC2DC\uC120 \uCDA9\uB3CC\uC774 \uC5C6\uB294\uC9C0 \uD655\uC778\uD558\uC138\uC694.",
+      piece_tray: "\uD558\uB2E8 \uC870\uC791 \uC601\uC5ED\uACFC \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uC5EC\uC720\uB97C \uB450\uC138\uC694.",
+      item_bar: "\uC544\uC774\uD15C \uBC14\uB294 \uD2B8\uB808\uC774\uC640 \uCDA9\uB3CC\uD558\uC9C0 \uC54A\uAC8C \uB9DE\uCD94\uC138\uC694.",
+      combo_gauge: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0\uB294 \uBCF4\uB4DC\uB97C \uAC00\uB9AC\uC9C0 \uC54A\uAC8C \uBC30\uCE58\uD558\uC138\uC694."
+    },
+    battle: {
+      back_button: "\uB4A4\uB85C \uBC84\uD2BC\uC740 \uD55C \uC190\uC73C\uB85C\uB3C4 \uB204\uB974\uAE30 \uC26C\uC6B4\uC9C0 \uD655\uC778\uD558\uC138\uC694.",
+      opponent_panel: "\uC0C1\uB300 \uD328\uB110\uC740 \uC0C1\uB2E8 \uC815\uBCF4\uB97C \uB108\uBB34 \uAC00\uB9AC\uC9C0 \uC54A\uAC8C \uB450\uC138\uC694.",
+      attack_bar: "\uACF5\uACA9 \uBC14\uB294 \uBCF4\uB4DC\uC640 \uC801\uB2F9\uD55C \uAC04\uACA9\uC744 \uC720\uC9C0\uD558\uC138\uC694.",
+      board: "\uB300\uC804 \uBAA8\uB4DC\uC758 \uC911\uC2EC \uC870\uC791 \uC601\uC5ED\uC785\uB2C8\uB2E4.",
+      skill_effect: "\uC2A4\uD0AC \uC774\uD399\uD2B8\uB294 \uB300\uC804 \uBCF4\uB4DC \uC704\uC5D0\uC11C \uBC1C\uB3D9\uD569\uB2C8\uB2E4. \uACF5\uACA9 \uBC14\uBCF4\uB2E4 \uC544\uB798, \uBCF4\uB4DC \uC911\uC2EC\uC5D0 \uB9DE\uCD94\uB294 \uD3B8\uC774 \uC548\uC815\uC801\uC785\uB2C8\uB2E4.",
+      piece_tray: "\uD558\uB2E8 \uC870\uC791 \uC601\uC5ED\uACFC \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uC870\uC815\uD558\uC138\uC694."
+    },
+    raidNormal: {
+      top_panel: "\uC0C1\uB2E8 \uD328\uB110\uC740 \uBCF4\uC2A4 \uC815\uBCF4\uAC00 \uC77D\uAE30 \uC26C\uC6B4\uC9C0 \uD655\uC778\uD558\uC138\uC694.",
+      skill_bar: "\uC2A4\uD0AC \uBC14\uB294 \uBCF4\uB4DC \uC0C1\uB2E8 \uC5EC\uBC31\uC744 \uB108\uBB34 \uBA39\uC9C0 \uC54A\uAC8C \uBC30\uCE58\uD558\uC138\uC694.",
+      info_bar: "\uC815\uBCF4 \uBC14\uB294 \uC911\uC694\uD55C \uC9C4\uD589 \uC815\uBCF4\uAC00 \uC798 \uBCF4\uC774\uB3C4\uB85D \uB450\uC138\uC694.",
+      board: "\uB808\uC774\uB4DC \uC870\uC791\uC758 \uC911\uC2EC \uC601\uC5ED\uC785\uB2C8\uB2E4.",
+      skill_effect: "\uC2A4\uD0AC \uC774\uD399\uD2B8\uB294 \uB808\uC774\uB4DC \uBCF4\uB4DC \uC704 \uBC1C\uB3D9 \uB808\uC774\uC5B4\uC785\uB2C8\uB2E4. \uC0C1\uD0DC \uCE74\uB4DC\uC640 \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uBCF4\uB4DC \uC911\uC2EC\uC5D0 \uB450\uC138\uC694.",
+      piece_tray: "\uBE14\uB85D \uD2B8\uB808\uC774\uAC00 \uCF64\uBCF4 \uAC8C\uC774\uC9C0\uC640 \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uC870\uC815\uD558\uC138\uC694.",
+      combo_gauge: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0\uB294 \uBCF4\uB4DC \uC0C1\uB2E8\uC758 \uC2DC\uC57C\uB97C \uAC00\uB9AC\uC9C0 \uC54A\uAC8C \uB450\uC138\uC694."
+    },
+    raidBoss: {
+      top_panel: "\uC0C1\uB2E8 \uD328\uB110\uC740 \uBCF4\uC2A4 \uC815\uBCF4\uAC00 \uC77D\uAE30 \uC26C\uC6B4\uC9C0 \uD655\uC778\uD558\uC138\uC694.",
+      skill_bar: "\uC2A4\uD0AC \uBC14\uB294 \uBCF4\uB4DC \uC0C1\uB2E8 \uC5EC\uBC31\uC744 \uB108\uBB34 \uBA39\uC9C0 \uC54A\uAC8C \uBC30\uCE58\uD558\uC138\uC694.",
+      info_bar: "\uC815\uBCF4 \uBC14\uB294 \uC911\uC694\uD55C \uC9C4\uD589 \uC815\uBCF4\uAC00 \uC798 \uBCF4\uC774\uB3C4\uB85D \uB450\uC138\uC694.",
+      board: "\uB808\uC774\uB4DC \uC870\uC791\uC758 \uC911\uC2EC \uC601\uC5ED\uC785\uB2C8\uB2E4.",
+      skill_effect: "\uC2A4\uD0AC \uC774\uD399\uD2B8\uB294 \uB808\uC774\uB4DC \uBCF4\uB4DC \uC704 \uBC1C\uB3D9 \uB808\uC774\uC5B4\uC785\uB2C8\uB2E4. \uC0C1\uD0DC \uCE74\uB4DC\uC640 \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uBCF4\uB4DC \uC911\uC2EC\uC5D0 \uB450\uC138\uC694.",
+      piece_tray: "\uBE14\uB85D \uD2B8\uB808\uC774\uAC00 \uCF64\uBCF4 \uAC8C\uC774\uC9C0\uC640 \uACB9\uCE58\uC9C0 \uC54A\uAC8C \uC870\uC815\uD558\uC138\uC694.",
+      combo_gauge: "\uCF64\uBCF4 \uAC8C\uC774\uC9C0\uB294 \uBCF4\uB4DC \uC0C1\uB2E8\uC758 \uC2DC\uC57C\uB97C \uAC00\uB9AC\uC9C0 \uC54A\uAC8C \uB450\uC138\uC694."
+    }
+  };
+  var DEFAULT_RULE = {
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1,
+    widthScale: 1,
+    heightScale: 1,
+    opacity: 1,
+    visible: true,
+    zIndex: 0,
+    safeAreaAware: false
+  };
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+  function numberOr(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  function sanitizeRule(rule) {
+    const merged = { ...DEFAULT_RULE, ...rule ?? {} };
+    return {
+      offsetX: Math.round(clamp(numberOr(merged.offsetX, 0), -800, 800)),
+      offsetY: Math.round(clamp(numberOr(merged.offsetY, 0), -1200, 1200)),
+      scale: clamp(numberOr(merged.scale, 1), 0.3, 3),
+      widthScale: clamp(numberOr(merged.widthScale, 1), 0.3, 3),
+      heightScale: clamp(numberOr(merged.heightScale, 1), 0.3, 3),
+      opacity: clamp(numberOr(merged.opacity, 1), 0, 1),
+      visible: merged.visible !== false,
+      zIndex: Math.round(clamp(numberOr(merged.zIndex, 0), -50, 100)),
+      safeAreaAware: merged.safeAreaAware === true
+    };
+  }
+  function sanitizeViewport(viewport) {
+    const merged = { ...DEFAULT_REFERENCE_VIEWPORT, ...viewport ?? {} };
+    return {
+      width: Math.round(
+        clamp(
+          numberOr(merged.width, DEFAULT_REFERENCE_VIEWPORT.width),
+          280,
+          1600
+        )
+      ),
+      height: Math.round(
+        clamp(
+          numberOr(merged.height, DEFAULT_REFERENCE_VIEWPORT.height),
+          480,
+          3200
+        )
+      ),
+      safeTop: Math.round(clamp(numberOr(merged.safeTop, 0), 0, 240)),
+      safeBottom: Math.round(clamp(numberOr(merged.safeBottom, 0), 0, 240))
+    };
+  }
+  function createDefaultVisualManifest() {
+    return {
+      version: 0,
+      referenceViewport: clone(DEFAULT_REFERENCE_VIEWPORT),
+      studioSnapshots: {},
+      screens: {
+        level: {
+          elements: Object.fromEntries(
+            ELEMENT_DEFS.level.map(({ id }) => [id, clone(DEFAULT_RULE)])
+          ),
+          backgrounds: { byWorld: {}, byLevel: {} }
+        },
+        endless: {
+          elements: Object.fromEntries(
+            ELEMENT_DEFS.endless.map(({ id }) => [id, clone(DEFAULT_RULE)])
+          )
+        },
+        battle: {
+          elements: Object.fromEntries(
+            ELEMENT_DEFS.battle.map(({ id }) => [id, clone(DEFAULT_RULE)])
+          )
+        },
+        raidNormal: {
+          elements: Object.fromEntries(
+            ELEMENT_DEFS.raidNormal.map(({ id }) => [id, clone(DEFAULT_RULE)])
+          ),
+          backgrounds: { byBossStage: {} }
+        },
+        raidBoss: {
+          elements: Object.fromEntries(
+            ELEMENT_DEFS.raidBoss.map(({ id }) => [id, clone(DEFAULT_RULE)])
+          ),
+          backgrounds: { byBossStage: {} }
+        }
+      }
+    };
+  }
+  function sanitizeElementFrame(frame) {
+    const merged = {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      ...frame ?? {}
+    };
+    return {
+      x: Math.round(clamp(numberOr(merged.x, 0), -2e3, 4e3)),
+      y: Math.round(clamp(numberOr(merged.y, 0), -2e3, 4e3)),
+      width: Math.round(clamp(numberOr(merged.width, 0), 0, 4e3)),
+      height: Math.round(clamp(numberOr(merged.height, 0), 0, 4e3))
+    };
+  }
+  function sanitizeBackgroundOverride(value) {
+    const merged = {
+      assetKey: null,
+      tintColor: "#000000",
+      tintOpacity: 0,
+      removeImage: false,
+      ...value ?? {}
+    };
+    return {
+      assetKey: typeof merged.assetKey === "string" && merged.assetKey.trim().length > 0 ? merged.assetKey.trim() : null,
+      tintColor: typeof merged.tintColor === "string" && merged.tintColor.trim().length > 0 ? merged.tintColor.trim() : "#000000",
+      tintOpacity: clamp(numberOr(merged.tintOpacity, 0), 0, 1),
+      removeImage: merged.removeImage === true
+    };
+  }
+  function sanitizeBackgroundMap(values) {
+    const result = {};
+    Object.entries(values ?? {}).forEach(([key, value]) => {
+      if (!key) {
+        return;
+      }
+      result[key] = sanitizeBackgroundOverride(value);
+    });
+    return result;
+  }
+  function sanitizeStudioSnapshot(snapshot) {
+    if (!snapshot) {
+      return null;
+    }
+    const elementFrames = {};
+    Object.entries(snapshot.elementFrames ?? {}).forEach(([elementId, frame]) => {
+      elementFrames[elementId] = sanitizeElementFrame(frame);
+    });
+    const elementRules = {};
+    Object.entries(snapshot.elementRules ?? {}).forEach(([elementId, rule]) => {
+      elementRules[elementId] = sanitizeRule(rule);
+    });
+    return {
+      assetKey: typeof snapshot.assetKey === "string" && snapshot.assetKey.trim().length > 0 ? snapshot.assetKey.trim() : null,
+      capturedAt: typeof snapshot.capturedAt === "string" && snapshot.capturedAt.trim().length > 0 ? snapshot.capturedAt.trim() : "",
+      viewport: sanitizeViewport(snapshot.viewport),
+      referenceViewport: sanitizeViewport(snapshot.referenceViewport),
+      elementFrames,
+      elementRules
+    };
+  }
+  function sanitizeStudioSnapshots(raw) {
+    const result = {};
+    const legacyRaidSnapshot = raw?.raid;
+    Object.keys(SCREEN_LABELS).forEach((screenId) => {
+      const snapshot = sanitizeStudioSnapshot(raw?.[screenId]);
+      if (snapshot) {
+        result[screenId] = snapshot;
+      }
+    });
+    const raidSnapshot = sanitizeStudioSnapshot(legacyRaidSnapshot);
+    if (raidSnapshot) {
+      result.raidNormal = result.raidNormal ?? raidSnapshot;
+      result.raidBoss = result.raidBoss ?? raidSnapshot;
+    }
+    return result;
+  }
+  function ensureVisualManifest(raw) {
+    const next = createDefaultVisualManifest();
+    const value = raw ?? {};
+    const legacyRaidScreen = value?.screens?.raid;
+    next.version = Math.max(0, Math.round(numberOr(value.version, 0)));
+    next.referenceViewport = sanitizeViewport(value.referenceViewport);
+    next.studioSnapshots = sanitizeStudioSnapshots(value.studioSnapshots);
+    Object.keys(ELEMENT_DEFS).forEach((screenId) => {
+      const sourceElements = screenId === "raidNormal" || screenId === "raidBoss" ? value?.screens?.[screenId]?.elements ?? legacyRaidScreen?.elements : value?.screens?.[screenId]?.elements;
+      ELEMENT_DEFS[screenId].forEach(({ id }) => {
+        next.screens[screenId].elements[id] = sanitizeRule(sourceElements?.[id]);
+      });
+    });
+    next.screens.level.backgrounds.byWorld = sanitizeBackgroundMap(
+      value?.screens?.level?.backgrounds?.byWorld
+    );
+    next.screens.level.backgrounds.byLevel = sanitizeBackgroundMap(
+      value?.screens?.level?.backgrounds?.byLevel
+    );
+    const legacyRaidBackgrounds = legacyRaidScreen?.backgrounds?.byBossStage;
+    next.screens.raidNormal.backgrounds.byBossStage = sanitizeBackgroundMap(
+      value?.screens?.raidNormal?.backgrounds?.byBossStage ?? legacyRaidBackgrounds
+    );
+    next.screens.raidBoss.backgrounds.byBossStage = sanitizeBackgroundMap(
+      value?.screens?.raidBoss?.backgrounds?.byBossStage ?? legacyRaidBackgrounds
+    );
+    return next;
+  }
+  function scaleRectBetweenViewports(rect, sourceViewport, targetViewport) {
+    const widthRatio = targetViewport.width / Math.max(1, sourceViewport.width);
+    const heightRatio = targetViewport.height / Math.max(1, sourceViewport.height);
+    return {
+      left: rect.left * widthRatio,
+      top: rect.top * heightRatio,
+      width: rect.width * widthRatio,
+      height: rect.height * heightRatio
+    };
+  }
+  function resolveVisualOffset(offsetX, offsetY, currentViewport, referenceViewport, safeAreaAware) {
+    const safeWidthCurrent = Math.max(1, currentViewport.width);
+    const safeWidthReference = Math.max(1, referenceViewport.width);
+    const safeHeightCurrent = Math.max(
+      1,
+      currentViewport.height - (safeAreaAware ? currentViewport.safeTop + currentViewport.safeBottom : 0)
+    );
+    const safeHeightReference = Math.max(
+      1,
+      referenceViewport.height - (safeAreaAware ? referenceViewport.safeTop + referenceViewport.safeBottom : 0)
+    );
+    return {
+      x: Math.round(offsetX * (safeWidthCurrent / safeWidthReference)),
+      y: Math.round(offsetY * (safeHeightCurrent / safeHeightReference))
+    };
+  }
+  function convertViewportDeltaToReference(dx, dy, currentViewport, referenceViewport, safeAreaAware) {
+    const currentWidth = Math.max(1, currentViewport.width);
+    const referenceWidth = Math.max(1, referenceViewport.width);
+    const currentHeight = Math.max(
+      1,
+      currentViewport.height - (safeAreaAware ? currentViewport.safeTop + currentViewport.safeBottom : 0)
+    );
+    const referenceHeight = Math.max(
+      1,
+      referenceViewport.height - (safeAreaAware ? referenceViewport.safeTop + referenceViewport.safeBottom : 0)
+    );
+    return {
+      x: dx * (referenceWidth / currentWidth),
+      y: dy * (referenceHeight / currentHeight)
+    };
+  }
+  function getRule(manifest, screenId, elementId) {
+    return manifest?.screens?.[screenId]?.elements?.[elementId] ?? DEFAULT_RULE;
+  }
+  function getStudioSnapshot(manifest, screenId) {
+    return manifest?.studioSnapshots?.[screenId] ?? null;
+  }
+  function deriveBaseRectFromMeasuredFrame(frame, rule, currentViewport, referenceViewport) {
+    const safeRule = sanitizeRule(rule);
+    const offset = resolveVisualOffset(
+      safeRule.offsetX,
+      safeRule.offsetY,
+      currentViewport,
+      referenceViewport,
+      safeRule.safeAreaAware
+    );
+    const scaleX = Math.max(1e-3, safeRule.scale * safeRule.widthScale);
+    const scaleY = Math.max(1e-3, safeRule.scale * safeRule.heightScale);
+    const width = frame.width / scaleX;
+    const height = frame.height / scaleY;
+    return {
+      left: frame.x - offset.x + (frame.width - width) / 2,
+      top: frame.y - offset.y + (frame.height - height) / 2,
+      width,
+      height
+    };
+  }
+  function getMeasuredBaseRect(manifest, screenId, elementId, targetViewport) {
+    const snapshot = getStudioSnapshot(manifest, screenId);
+    const frame = snapshot?.elementFrames?.[elementId];
+    if (!snapshot || !frame) {
+      return null;
+    }
+    const snapshotViewport = sanitizeViewport(snapshot.viewport);
+    const snapshotReferenceViewport = sanitizeViewport(
+      snapshot.referenceViewport ?? manifest?.referenceViewport
+    );
+    const snapshotRule = snapshot.elementRules?.[elementId] ?? DEFAULT_RULE;
+    const baseRect = deriveBaseRectFromMeasuredFrame(
+      sanitizeElementFrame(frame),
+      snapshotRule,
+      snapshotViewport,
+      snapshotReferenceViewport
+    );
+    return scaleRectBetweenViewports(baseRect, snapshotViewport, targetViewport);
+  }
+  function applyRuleToRect(rect, rule, currentViewport, referenceViewport) {
+    const safeRule = sanitizeRule(rule);
+    const offset = resolveVisualOffset(
+      safeRule.offsetX,
+      safeRule.offsetY,
+      currentViewport,
+      referenceViewport,
+      safeRule.safeAreaAware
+    );
+    const width = rect.width * safeRule.scale * safeRule.widthScale;
+    const height = rect.height * safeRule.scale * safeRule.heightScale;
+    return {
+      left: rect.left + offset.x - (width - rect.width) / 2,
+      top: rect.top + offset.y - (height - rect.height) / 2,
+      width,
+      height
+    };
+  }
+  function getPreviewLayout(screenId, viewport = DEFAULT_REFERENCE_VIEWPORT) {
+    return getVisualRuntimeLayout(screenId, sanitizeViewport(viewport));
+  }
+  function formatElementLabel(screenId, elementId) {
+    const meta = ELEMENT_DEFS[screenId]?.find((item) => item.id === elementId);
+    return meta ? meta.label : elementId;
+  }
+
   // tools/blockhero-creator/creator.js
   var DEFAULT_SUPABASE_URL = "https://alhlmdhixmlmsdvgzhdu.supabase.co";
-  var DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6ImFsaGxtZGhpeG1sbXNkdmd6aGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNTY4NTQsImV4cCI6MjA4ODYzMjg1NH0.lkTNn1jeXzkQdCRnmtNAjejezJN_RfC1n5HEhCbV_n8";
+  var DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsaGxtZGhpeG1sbXNkdmd6aGR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNTY4NTQsImV4cCI6MjA4ODYzMjg1NH0.lkTNn1jeXzkQdCRnmtNAjejezJN_RfC1n5HEhCbV_n8";
   var STORAGE_KEY2 = "blockhero-creator-auth-v1";
   var DEFAULT_DRAFT_ID = 1;
-  var PATTERN_OPTIONS = ["basic_auto", "burst_every_n", "phase_hp_threshold", "rage_after_time"];
+  var PATTERN_OPTIONS = [
+    "basic_auto",
+    "burst_every_n",
+    "phase_hp_threshold",
+    "rage_after_time"
+  ];
   var HELP_TEXT = {
     level: {
       title: "\uB808\uBCA8 \uC2A4\uD14C\uC774\uC9C0",
       description: "\uB808\uBCA8 \uBAA8\uB4DC\uC758 \uBAA9\uD45C, \uC801 \uC5F0\uACB0, \uACE8\uB4DC/\uACBD\uD5D8\uCE58 \uBCF4\uC0C1, \uBC30\uACBD\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.",
       tips: [
-        "enemyTemplateId\uB294 \uC801 \uD15C\uD50C\uB9BF id\uC640 \uC5F0\uACB0\uB429\uB2C8\uB2E4.",
-        "firstClearBonusGold\uC640 repeatGold\uB97C \uBD84\uB9AC\uD574\uC11C \uCCAB \uD074\uB9AC\uC5B4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uB098\uB215\uB2C8\uB2E4.",
-        "\uBC30\uACBD assetKey\uB294 \uC6B0\uCE21 \uC790\uC0B0 \uB77C\uC774\uBE0C\uB7EC\uB9AC\uC5D0\uC11C \uC5C5\uB85C\uB4DC\uD55C \uD0A4\uB97C \uADF8\uB300\uB85C \uC0AC\uC6A9\uD569\uB2C8\uB2E4."
+        "\uC801 \uD15C\uD50C\uB9BF\uC740 \uC544\uB798 \uD654\uBA74\uC5D0 \uB098\uC624\uB294 \uC801 \uC6D0\uBCF8 \uBAA9\uB85D\uACFC \uC5F0\uACB0\uB429\uB2C8\uB2E4.",
+        "\uCCAB \uD074\uB9AC\uC5B4 \uBCF4\uC0C1\uACFC \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uBD84\uB9AC\uD574\uC11C \uC6B4\uC601\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+        "\uBC30\uACBD \uC790\uC0B0\uC740 \uC6B0\uCE21 \uC790\uC0B0 \uB77C\uC774\uBE0C\uB7EC\uB9AC\uC5D0 \uC62C\uB9B0 \uC774\uBBF8\uC9C0\uB97C \uADF8\uB300\uB85C \uC5F0\uACB0\uD558\uBA74 \uB429\uB2C8\uB2E4."
       ]
     },
     raidNormal: {
       title: "\uC77C\uBC18 \uB808\uC774\uB4DC",
       description: "\uC0C1\uC2DC \uB3C4\uC804 \uAC00\uB2A5\uD55C \uC77C\uBC18 \uB808\uC774\uB4DC\uC758 \uC774\uB984, \uBCF4\uC0C1, \uC2DC\uAC04 \uC81C\uD55C, \uBC30\uACBD\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.",
       tips: [
-        "timeLimitMs\uB294 \uC2E4\uC81C \uC2DC\uC791 \uC2DC \uC11C\uBC84 \uB9CC\uB8CC \uC2DC\uAC04 \uACC4\uC0B0\uC5D0 \uC0AC\uC6A9\uB429\uB2C8\uB2E4.",
-        "repeatDiamondReward\uB294 \uC77C\uBC18 \uB808\uC774\uB4DC \uBC18\uBCF5 \uCC98\uCE58 \uBCF4\uC0C1\uC785\uB2C8\uB2E4.",
-        "encounterOverrides\uB85C \uD2B9\uC815 \uB2E8\uACC4\uB9CC \uCCB4\uB825, \uACF5\uACA9\uB825, \uACF5\uACA9 \uAC04\uACA9\uC744 \uB530\uB85C \uBC14\uAFC0 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        "\uC81C\uD55C \uC2DC\uAC04\uC740 \uC2E4\uC81C \uB808\uC774\uB4DC \uC2DC\uC791 \uD6C4 \uC885\uB8CC \uC2DC\uC810 \uACC4\uC0B0\uC5D0 \uC0AC\uC6A9\uB429\uB2C8\uB2E4.",
+        "\uBC18\uBCF5 \uBCF4\uC0C1\uC740 \uCCAB \uD074\uB9AC\uC5B4 \uBCF4\uC0C1\uACFC \uBCC4\uB3C4\uB85C \uC6B4\uC601\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+        "\uC2A4\uD14C\uC774\uC9C0\uBCC4 \uC624\uBC84\uB77C\uC774\uB4DC\uB85C \uD2B9\uC815 \uB2E8\uACC4\uB9CC \uCCB4\uB825, \uACF5\uACA9\uB825, \uACF5\uACA9 \uAC04\uACA9\uC744 \uB530\uB85C \uBC14\uAFC0 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
       ]
     },
     raidBoss: {
       title: "\uBCF4\uC2A4 \uB808\uC774\uB4DC",
       description: "\uBCF4\uC2A4 \uB808\uC774\uB4DC \uB2E8\uACC4\uBCC4 \uBCF4\uC2A4 \uC774\uB984, \uCC38\uAC00 \uC778\uC6D0, \uC785\uC7A5 \uCC3D, \uC2DC\uAC04 \uC81C\uD55C\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.",
       tips: [
-        "joinWindowMinutes\uB294 \uBCF4\uC2A4 \uB808\uC774\uB4DC\uAC00 \uC5F4\uB9B0 \uB4A4 \uC785\uC7A5 \uAC00\uB2A5\uD55C \uC2DC\uAC04\uC785\uB2C8\uB2E4.",
-        "maxParticipants\uB294 \uC2E4\uC81C \uBCF4\uC2A4 \uB808\uC774\uB4DC \uCC38\uAC00 \uC81C\uD55C\uC5D0 \uC5F0\uACB0\uB429\uB2C8\uB2E4.",
-        "raidWindowHours\uB294 UI \uC548\uB0B4\uC640 \uC6B4\uC601 \uAE30\uC900\uC73C\uB85C \uAC19\uC774 \uC0AC\uC6A9\uB429\uB2C8\uB2E4."
+        "\uC785\uC7A5 \uAC00\uB2A5 \uC2DC\uAC04\uC740 \uBCF4\uC2A4 \uB808\uC774\uB4DC\uAC00 \uC5F4\uB9B0 \uB4A4 \uCC38\uAC00\uD560 \uC218 \uC788\uB294 \uC2DC\uAC04\uC785\uB2C8\uB2E4.",
+        "\uCD5C\uB300 \uCC38\uAC00 \uC778\uC6D0\uC740 \uC2E4\uC81C \uBCF4\uC2A4 \uB808\uC774\uB4DC \uC778\uC6D0 \uC81C\uD55C\uC5D0 \uC5F0\uACB0\uB429\uB2C8\uB2E4.",
+        "\uAC1C\uBC29 \uC2DC\uAC04\uC740 \uD654\uBA74 \uC548\uB0B4\uC640 \uC6B4\uC601 \uAE30\uC900\uC5D0 \uD568\uAED8 \uC0AC\uC6A9\uB429\uB2C8\uB2E4."
       ]
     },
     encounter: {
@@ -23496,13 +24699,29 @@ ${suffix}`;
       description: "\uB808\uBCA8\uACFC \uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uB294 \uC801 \uC6D0\uBCF8 \uB370\uC774\uD130\uC785\uB2C8\uB2E4.",
       tips: [
         "\uC2A4\uD14C\uC774\uC9C0\uBCC4 override\uBCF4\uB2E4 \uBA3C\uC800 \uC801\uC6A9\uB418\uB294 \uAE30\uBCF8\uAC12\uC785\uB2C8\uB2E4.",
-        "attackPattern\uC740 \uD604\uC7AC \uC81C\uD55C\uB41C enum\uB9CC \uD5C8\uC6A9\uD569\uB2C8\uB2E4.",
+        "\uACF5\uACA9 \uD328\uD134\uC740 \uD604\uC7AC \uC900\uBE44\uB41C \uD328\uD134\uB9CC \uC120\uD0DD\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
         "id\uB97C \uB36E\uC5B4\uC4F0\uAE30\uBCF4\uB2E4 \uC0C8 \uD15C\uD50C\uB9BF\uC744 \uB9CC\uB4E4\uACE0 \uC5F0\uACB0\uB9CC \uBC14\uAFB8\uB294 \uD3B8\uC774 \uC548\uC804\uD569\uB2C8\uB2E4."
       ]
     }
   };
+  var ATTACK_PATTERN_LABELS = {
+    basic_auto: "\uAE30\uBCF8 \uC790\uB3D9",
+    burst_every_n: "\uC8FC\uAE30 \uD3ED\uBC1C",
+    phase_hp_threshold: "\uCCB4\uB825 \uAD6C\uAC04 \uC804\uD658",
+    rage_after_time: "\uC2DC\uAC04 \uACBD\uACFC \uBD84\uB178"
+  };
+  var ENCOUNTER_TIER_LABELS = {
+    normal: "\uC77C\uBC18",
+    elite: "\uC815\uC608",
+    boss: "\uBCF4\uC2A4"
+  };
+  var ENCOUNTER_KIND_LABELS = {
+    level: "\uB808\uBCA8",
+    raid: "\uB808\uC774\uB4DC"
+  };
   var $ = (selector) => document.querySelector(selector);
   var elements = {
+    activeViewStatus: $("#activeViewStatus"),
     loginCard: $("#loginCard"),
     workspace: $("#workspace"),
     supabaseUrl: $("#supabaseUrl"),
@@ -23517,11 +24736,87 @@ ${suffix}`;
     publishButton: $("#publishButton"),
     publishNotes: $("#publishNotes"),
     connectionStatus: $("#connectionStatus"),
+    deviceConnectionStatus: $("#deviceConnectionStatus"),
     manifestStatus: $("#manifestStatus"),
+    globalStatusLine: $("#globalStatusLine"),
+    uiEditorStatusLine: $("#uiEditorStatusLine"),
+    viewUiButton: $("#viewUiButton"),
+    viewAdminButton: $("#viewAdminButton"),
+    viewHistoryButton: $("#viewHistoryButton"),
+    viewSettingsButton: $("#viewSettingsButton"),
+    uiEditorView: $("#uiEditorView"),
+    adminDataView: $("#adminDataView"),
+    historyView: $("#historyView"),
+    settingsView: $("#settingsView"),
     userEmail: $("#userEmail"),
+    visualDraftVersion: $("#visualDraftVersion"),
+    visualPublishedVersion: $("#visualPublishedVersion"),
     draftVersion: $("#draftVersion"),
     publishedVersion: $("#publishedVersion"),
     assetCount: $("#assetCount"),
+    settingsSupabaseUrl: $("#settingsSupabaseUrl"),
+    settingsAdminEmail: $("#settingsAdminEmail"),
+    settingsDeviceList: $("#settingsDeviceList"),
+    settingsDeviceMeta: $("#settingsDeviceMeta"),
+    settingsRefreshDevicesButton: $("#settingsRefreshDevicesButton"),
+    settingsRefreshFrameButton: $("#settingsRefreshFrameButton"),
+    visualScreenId: $("#visualScreenId"),
+    visualDeviceSource: $("#visualDeviceSource"),
+    visualDeviceSelect: $("#visualDeviceSelect"),
+    visualDeviceProfile: $("#visualDeviceProfile"),
+    visualViewportWidth: $("#visualViewportWidth"),
+    visualViewportHeight: $("#visualViewportHeight"),
+    visualSafeTop: $("#visualSafeTop"),
+    visualSafeBottom: $("#visualSafeBottom"),
+    visualRefreshDeviceButton: $("#visualRefreshDeviceButton"),
+    visualRefreshFrameButton: $("#visualRefreshFrameButton"),
+    visualDeviceMeta: $("#visualDeviceMeta"),
+    visualShowGrid: $("#visualShowGrid"),
+    visualSnapGrid: $("#visualSnapGrid"),
+    visualGridSize: $("#visualGridSize"),
+    visualElementList: $("#visualElementList"),
+    visualCurrentScreen: $("#visualCurrentScreen"),
+    visualCurrentElement: $("#visualCurrentElement"),
+    visualCurrentViewport: $("#visualCurrentViewport"),
+    visualFitButton: $("#visualFitButton"),
+    visualActualButton: $("#visualActualButton"),
+    visualStageHost: $("#visualStageHost"),
+    visualPhoneFrame: $("#visualPhoneFrame"),
+    visualLiveImage: $("#visualLiveImage"),
+    visualFrameFallback: $("#visualFrameFallback"),
+    visualSafeTopOverlay: $("#visualSafeTopOverlay"),
+    visualSafeBottomOverlay: $("#visualSafeBottomOverlay"),
+    visualGridOverlay: $("#visualGridOverlay"),
+    visualOverlay: $("#visualOverlay"),
+    visualStageStatus: $("#visualStageStatus"),
+    visualInspectorTitle: $("#visualInspectorTitle"),
+    visualInspectorHelp: $("#visualInspectorHelp"),
+    visualOffsetX: $("#visualOffsetX"),
+    visualOffsetY: $("#visualOffsetY"),
+    visualScale: $("#visualScale"),
+    visualWidthScale: $("#visualWidthScale"),
+    visualHeightScale: $("#visualHeightScale"),
+    visualOpacity: $("#visualOpacity"),
+    visualZIndex: $("#visualZIndex"),
+    visualVisible: $("#visualVisible"),
+    visualSafeAware: $("#visualSafeAware"),
+    visualNudgeUp: $("#visualNudgeUp"),
+    visualNudgeDown: $("#visualNudgeDown"),
+    visualNudgeLeft: $("#visualNudgeLeft"),
+    visualNudgeRight: $("#visualNudgeRight"),
+    visualNudgeUpLarge: $("#visualNudgeUpLarge"),
+    visualNudgeDownLarge: $("#visualNudgeDownLarge"),
+    visualNudgeLeftLarge: $("#visualNudgeLeftLarge"),
+    visualNudgeRightLarge: $("#visualNudgeRightLarge"),
+    visualUndoButton: $("#visualUndoButton"),
+    visualRedoButton: $("#visualRedoButton"),
+    visualResetButton: $("#visualResetButton"),
+    visualPublishNotes: $("#visualPublishNotes"),
+    visualSaveDraftButton: $("#visualSaveDraftButton"),
+    visualPublishButton: $("#visualPublishButton"),
+    visualReleaseHistory: $("#visualReleaseHistory"),
+    visualHistoryViewList: $("#visualHistoryViewList"),
+    adminHistoryViewList: $("#adminHistoryViewList"),
     contentTree: $("#contentTree"),
     editorTitle: $("#editorTitle"),
     editorSubtitle: $("#editorSubtitle"),
@@ -23544,11 +24839,39 @@ ${suffix}`;
     deleteButton: $("#deleteButton")
   };
   var state = {
+    activeView: "ui",
     supabase: null,
     supabaseUrl: "",
     supabaseKey: "",
     session: null,
     profile: null,
+    visualManifest: null,
+    visualPublishedVersion: null,
+    visualReleaseHistory: [],
+    visualSelectedScreenId: "level",
+    visualSelectedElementId: "header",
+    visualDeviceSource: "phone",
+    visualDeviceProfileId: "galaxy-s23-ultra",
+    visualCustomViewport: clone(DEFAULT_REFERENCE_VIEWPORT),
+    visualConnectedDevices: [],
+    visualActiveDeviceSerial: "",
+    visualDeviceViewport: null,
+    visualFrameDataUrl: "",
+    visualFrameBusy: false,
+    visualFrameTimer: null,
+    visualZoomMode: "fit",
+    visualZoomValue: 1,
+    visualFitScale: 1,
+    visualDisplayScale: 1,
+    visualShowGrid: false,
+    visualSnapGrid: false,
+    visualGridSize: 16,
+    visualDirty: false,
+    visualHistoryPast: [],
+    visualHistoryFuture: [],
+    visualDrag: null,
+    visualWorkspaceLoaded: false,
+    adminWorkspaceLoaded: false,
     manifest: null,
     publishedVersion: null,
     releaseHistory: [],
@@ -23556,14 +24879,79 @@ ${suffix}`;
     selected: null
   };
   var localDesktopConfig = typeof window !== "undefined" ? window.__BLOCKHERO_CREATOR_LOCAL_CONFIG__ ?? null : null;
+  var desktopBridge = typeof window !== "undefined" ? window.__BLOCKHERO_CREATOR_DESKTOP__ ?? null : null;
   function deepClone2(value) {
     return JSON.parse(JSON.stringify(value));
   }
   function showToast(message) {
     window.alert(message);
   }
+  function getErrorMessage(error, fallback = "\uC694\uCCAD \uCC98\uB9AC \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4.") {
+    const rawMessage = typeof error === "string" ? error : error && typeof error.message === "string" ? error.message : "";
+    if (!rawMessage) {
+      return fallback;
+    }
+    const message = rawMessage.trim();
+    const tableMatch = message.match(
+      /Could not find the table 'public\.([a-zA-Z0-9_]+)' in the schema cache/i
+    );
+    if (tableMatch) {
+      return `DB \uD14C\uC774\uBE14 public.${tableMatch[1]}\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. Supabase SQL \uC124\uC815\uC744 \uBA3C\uC800 \uC801\uC6A9\uD558\uC138\uC694.`;
+    }
+    if (/Invalid login credentials/i.test(message)) {
+      return "\uC774\uBA54\uC77C \uB610\uB294 \uBE44\uBC00\uBC88\uD638\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.";
+    }
+    if (/Invalid API key/i.test(message)) {
+      return "Supabase \uC775\uBA85 \uD0A4\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uC124\uC815 \uD30C\uC77C\uC758 \uD0A4\uB97C \uD655\uC778\uD558\uC138\uC694.";
+    }
+    if (/Failed to fetch/i.test(message) || /NetworkError/i.test(message)) {
+      return "\uB124\uD2B8\uC6CC\uD06C \uC5F0\uACB0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4. \uC778\uD130\uB137 \uC5F0\uACB0\uACFC Supabase URL\uC744 \uD655\uC778\uD558\uC138\uC694.";
+    }
+    if (/new row violates row-level security policy/i.test(message)) {
+      return "\uAD8C\uD55C\uC774 \uC5C6\uC5B4 \uC694\uCCAD\uC744 \uCC98\uB9AC\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uAD00\uB9AC\uC790 \uAD8C\uD55C \uACC4\uC815\uC778\uC9C0 \uD655\uC778\uD558\uC138\uC694.";
+    }
+    if (/permission denied/i.test(message)) {
+      return "\uAD8C\uD55C\uC774 \uC5C6\uC5B4 \uC694\uCCAD\uC744 \uCC98\uB9AC\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.";
+    }
+    if (/relation .* does not exist/i.test(message)) {
+      return "\uD544\uC694\uD55C DB \uD14C\uC774\uBE14\uC774 \uC544\uC9C1 \uC0DD\uC131\uB418\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. SQL \uC124\uC815\uC744 \uBA3C\uC800 \uC2E4\uD589\uD558\uC138\uC694.";
+    }
+    if (/duplicate key value violates unique constraint/i.test(message)) {
+      return "\uC911\uBCF5\uB41C \uAC12\uC774 \uC788\uC5B4 \uC800\uC7A5\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.";
+    }
+    if (/[가-힣]/.test(message)) {
+      return message;
+    }
+    return fallback;
+  }
   function setStatus(target, message) {
     target.textContent = message;
+  }
+  function setInlineStatus(target, message, tone = "muted") {
+    if (!target) {
+      return;
+    }
+    target.textContent = message;
+    target.className = `inline-note${tone === "muted" ? "" : ` ${tone}`}`;
+  }
+  function canUseDeviceBridge() {
+    return !!desktopBridge && typeof desktopBridge.listDevices === "function" && typeof desktopBridge.getDeviceViewport === "function" && typeof desktopBridge.getDeviceFrame === "function";
+  }
+  function canUseDeviceLayoutBridge() {
+    return !!desktopBridge && typeof desktopBridge.getDeviceLayout === "function";
+  }
+  function setGlobalStatus(message, tone = "muted") {
+    setInlineStatus(elements.globalStatusLine, message, tone);
+  }
+  function isAdminAuthenticated() {
+    return Boolean(state.session?.user && state.profile?.is_admin);
+  }
+  function requireAdminAccess(featureLabel = "\uC774 \uAE30\uB2A5") {
+    if (isAdminAuthenticated()) {
+      return true;
+    }
+    showToast(`${featureLabel}\uC740 \uAD00\uB9AC\uC790 \uB85C\uADF8\uC778 \uD6C4 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
+    return false;
   }
   function slugify(value) {
     return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -23593,6 +24981,13 @@ ${suffix}`;
     }
     return null;
   }
+  function formatEncounterReference(encounterId) {
+    const encounter = state.manifest?.encounters?.[encounterId];
+    if (!encounter) {
+      return encounterId || "-";
+    }
+    return `${encounter.displayName} (${encounter.id})`;
+  }
   function writePath(target, path, value) {
     const segments = path.split(".");
     let cursor = target;
@@ -23608,9 +25003,36 @@ ${suffix}`;
   function getAssetOptions(selectedKey = "") {
     const items = ['<option value="">\uC5C6\uC74C</option>'];
     state.assets.slice().sort((a, b) => a.asset_key.localeCompare(b.asset_key)).forEach((asset) => {
-      items.push(`<option value="${asset.asset_key}" ${selectedKey === asset.asset_key ? "selected" : ""}>${asset.asset_key}</option>`);
+      items.push(
+        `<option value="${asset.asset_key}" ${selectedKey === asset.asset_key ? "selected" : ""}>${asset.asset_key}</option>`
+      );
     });
     return items.join("");
+  }
+  function renderPatternOptions(selectedValue = "", allowDefault = false) {
+    const options = [];
+    if (allowDefault) {
+      options.push(
+        `<option value="" ${selectedValue === "" ? "selected" : ""}>\uAE30\uBCF8\uAC12 \uC0AC\uC6A9</option>`
+      );
+    }
+    PATTERN_OPTIONS.forEach((option) => {
+      const label = ATTACK_PATTERN_LABELS[option] || "\uAE30\uBCF8 \uD328\uD134";
+      options.push(
+        `<option value="${option}" ${selectedValue === option ? "selected" : ""}>${label}</option>`
+      );
+    });
+    return options.join("");
+  }
+  function renderTierOptions(selectedValue = "normal") {
+    return Object.entries(ENCOUNTER_TIER_LABELS).map(
+      ([value, label]) => `<option value="${value}" ${selectedValue === value ? "selected" : ""}>${label}</option>`
+    ).join("");
+  }
+  function renderEncounterKindOptions(selectedValue = "level") {
+    return Object.entries(ENCOUNTER_KIND_LABELS).map(
+      ([value, label]) => `<option value="${value}" ${selectedValue === value ? "selected" : ""}>${label}</option>`
+    ).join("");
   }
   function renderHelpPanel() {
     const help = state.selected ? HELP_TEXT[state.selected.kind] ?? null : null;
@@ -23629,7 +25051,9 @@ ${suffix}`;
       elements.selectionSummary.innerHTML = `
       <div class="summary-card"><span>\uB808\uBCA8 ID</span><strong>${record.levelId}</strong></div>
       <div class="summary-card"><span>\uC6D4\uB4DC / \uC2A4\uD14C\uC774\uC9C0</span><strong>${record.worldId}-${record.stageNumberInWorld}</strong></div>
-      <div class="summary-card"><span>\uC801 \uD15C\uD50C\uB9BF</span><strong>${record.enemyTemplateId}</strong></div>
+      <div class="summary-card"><span>\uC801 \uD15C\uD50C\uB9BF</span><strong>${formatEncounterReference(
+        record.enemyTemplateId
+      )}</strong></div>
       <div class="summary-card"><span>\uC0AC\uC6A9 \uC0C1\uD0DC</span><strong>${record.enabled ? "\uD65C\uC131" : "\uBE44\uD65C\uC131"}</strong></div>`;
       return;
     }
@@ -23637,24 +25061,30 @@ ${suffix}`;
       elements.selectionSummary.innerHTML = `
       <div class="summary-card"><span>\uB808\uC774\uB4DC \uC885\uB958</span><strong>${state.selected.kind === "raidNormal" ? "\uC77C\uBC18" : "\uBCF4\uC2A4"}</strong></div>
       <div class="summary-card"><span>\uB2E8\uACC4</span><strong>${record.stage}</strong></div>
-      <div class="summary-card"><span>\uD15C\uD50C\uB9BF</span><strong>${record.encounterTemplateId}</strong></div>
-      <div class="summary-card"><span>\uC2DC\uAC04 \uC81C\uD55C</span><strong>${Math.round(record.timeLimitMs / 1e3)}\uCD08</strong></div>`;
+      <div class="summary-card"><span>\uD15C\uD50C\uB9BF</span><strong>${formatEncounterReference(
+        record.encounterTemplateId
+      )}</strong></div>
+      <div class="summary-card"><span>\uC2DC\uAC04 \uC81C\uD55C</span><strong>${Math.round(
+        record.timeLimitMs / 1e3
+      )}\uCD08</strong></div>`;
       return;
     }
     elements.selectionSummary.innerHTML = `
     <div class="summary-card"><span>\uD15C\uD50C\uB9BF ID</span><strong>${record.id}</strong></div>
     <div class="summary-card"><span>\uC885\uB958</span><strong>${record.kind === "level" ? "\uB808\uBCA8 \uC801" : "\uB808\uC774\uB4DC \uC801"}</strong></div>
-    <div class="summary-card"><span>\uACF5\uACA9 \uC8FC\uAE30</span><strong>${record.attackIntervalMs}ms</strong></div>
+    <div class="summary-card"><span>\uACF5\uACA9 \uC8FC\uAE30</span><strong>${record.attackIntervalMs}\uBC00\uB9AC\uCD08</strong></div>
     <div class="summary-card"><span>\uC0AC\uC6A9 \uC0C1\uD0DC</span><strong>${record.enabled ? "\uD65C\uC131" : "\uBE44\uD65C\uC131"}</strong></div>`;
   }
   function backgroundFields(path, value = {}) {
     return `
     <div class="section-card">
-      <div><h3>\uBC30\uACBD</h3><p>\uBC30\uACBD \uC774\uBBF8\uC9C0\uB294 ui_assets\uC758 assetKey\uB97C \uC5F0\uACB0\uD569\uB2C8\uB2E4. removeImage\uB97C \uCF1C\uBA74 tint\uB9CC \uB0A8\uAE38 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p></div>
+      <div><h3>\uBC30\uACBD</h3><p>\uC5C5\uB85C\uB4DC\uD55C \uBC30\uACBD \uC790\uC0B0\uC744 \uC5F0\uACB0\uD558\uACE0, \uC0C9\uC0C1 \uB36E\uAC1C\uC640 \uC774\uBBF8\uC9C0 \uC81C\uAC70 \uC5EC\uBD80\uB97C \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
       <div class="field-grid">
-        <label><span>assetKey</span><select data-path="${path}.background.assetKey">${getAssetOptions(value.assetKey ?? "")}</select></label>
-        <label><span>tintColor</span><input data-path="${path}.background.tintColor" type="text" value="${value.tintColor ?? "#000000"}" /></label>
-        <label><span>tintOpacity</span><input data-path="${path}.background.tintOpacity" type="number" step="0.05" min="0" max="1" value="${value.tintOpacity ?? 0}" /></label>
+        <label><span>\uBC30\uACBD \uC790\uC0B0</span><select data-path="${path}.background.assetKey">${getAssetOptions(
+      value.assetKey ?? ""
+    )}</select></label>
+        <label><span>\uB36E\uAC1C \uC0C9\uC0C1</span><input data-path="${path}.background.tintColor" type="text" value="${value.tintColor ?? "#000000"}" /></label>
+        <label><span>\uB36E\uAC1C \uD22C\uBA85\uB3C4</span><input data-path="${path}.background.tintOpacity" type="number" step="0.05" min="0" max="1" value="${value.tintOpacity ?? 0}" /></label>
         <label><span>\uC774\uBBF8\uC9C0 \uC81C\uAC70</span><select data-path="${path}.background.removeImage"><option value="false" ${value.removeImage ? "" : "selected"}>\uC544\uB2C8\uC624</option><option value="true" ${value.removeImage ? "selected" : ""}>\uC608</option></select></label>
       </div>
     </div>`;
@@ -23671,7 +25101,10 @@ ${suffix}`;
         <label><span>HP</span><input data-path="${path}.encounterOverrides.baseHp" type="number" value="${value.baseHp ?? ""}" /></label>
         <label><span>\uACF5\uACA9\uB825</span><input data-path="${path}.encounterOverrides.baseAttack" type="number" value="${value.baseAttack ?? ""}" /></label>
         <label><span>\uACF5\uACA9 \uC8FC\uAE30(ms)</span><input data-path="${path}.encounterOverrides.attackIntervalMs" type="number" value="${value.attackIntervalMs ?? ""}" /></label>
-        <label><span>\uD328\uD134</span><select data-path="${path}.encounterOverrides.attackPattern"><option value="" ${(value.attackPattern ?? "") === "" ? "selected" : ""}>\uAE30\uBCF8\uAC12 \uC0AC\uC6A9</option>${PATTERN_OPTIONS.map((option) => `<option value="${option}" ${value.attackPattern === option ? "selected" : ""}>${option}</option>`).join("")}</select></label>
+        <label><span>\uACF5\uACA9 \uD328\uD134</span><select data-path="${path}.encounterOverrides.attackPattern">${renderPatternOptions(
+      value.attackPattern ?? "",
+      true
+    )}</select></label>
       </div>
     </div>`;
   }
@@ -23681,21 +25114,25 @@ ${suffix}`;
     <div class="section-card">
       <div><h3>\uAE30\uBCF8 \uC815\uBCF4</h3><p>\uB808\uBCA8 \uC774\uB984, \uC6D4\uB4DC, \uC2A4\uD14C\uC774\uC9C0 \uBC88\uD638, \uBAA9\uD45C \uC218\uCE58, \uC5F0\uACB0\uB41C \uC801 \uD15C\uD50C\uB9BF\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
-        <label><span>id</span><input type="text" value="${level.id}" disabled /></label>
-        <label><span>levelId</span><input data-path="${path}.levelId" type="number" value="${level.levelId}" /></label>
+        <label><span>\uB0B4\uBD80 ID</span><input type="text" value="${level.id}" disabled /></label>
+        <label><span>\uB808\uBCA8 \uBC88\uD638</span><input data-path="${path}.levelId" type="number" value="${level.levelId}" /></label>
         <label><span>\uC774\uB984</span><input data-path="${path}.name" type="text" value="${level.name}" /></label>
-        <label><span>worldId</span><input data-path="${path}.worldId" type="number" value="${level.worldId}" /></label>
+        <label><span>\uC6D4\uB4DC \uBC88\uD638</span><input data-path="${path}.worldId" type="number" value="${level.worldId}" /></label>
         <label><span>\uC6D4\uB4DC \uB0B4 \uBC88\uD638</span><input data-path="${path}.stageNumberInWorld" type="number" value="${level.stageNumberInWorld}" /></label>
-        <label><span>goalValue</span><input data-path="${path}.goalValue" type="number" value="${level.goalValue}" /></label>
-        <label><span>enemyTemplateId</span><select data-path="${path}.enemyTemplateId">${Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)).map((encounter) => `<option value="${encounter.id}" ${encounter.id === level.enemyTemplateId ? "selected" : ""}>${encounter.id}</option>`).join("")}</select></label>
+        <label><span>\uBAA9\uD45C \uC218\uCE58</span><input data-path="${path}.goalValue" type="number" value="${level.goalValue}" /></label>
+        <label><span>\uC801 \uD15C\uD50C\uB9BF</span><select data-path="${path}.enemyTemplateId">${Object.values(
+      state.manifest.encounters
+    ).sort((a, b) => a.id.localeCompare(b.id)).map(
+      (encounter) => `<option value="${encounter.id}" ${encounter.id === level.enemyTemplateId ? "selected" : ""}>${encounter.displayName} (${encounter.id})</option>`
+    ).join("")}</select></label>
         <label><span>\uBCF4\uC2A4 \uB808\uC774\uB4DC \uD574\uAE08 \uB2E8\uACC4</span><input data-path="${path}.unlocksBossRaidStage" type="number" value="${level.unlocksBossRaidStage ?? ""}" /></label>
         <label><span>\uD65C\uC131\uD654</span><select data-path="${path}.enabled"><option value="true" ${level.enabled ? "selected" : ""}>\uD65C\uC131</option><option value="false" ${level.enabled ? "" : "selected"}>\uBE44\uD65C\uC131</option></select></label>
       </div>
     </div>
-    <div class="section-card"><div><h3>\uBCF4\uC0C1</h3><p>\uCCAB \uD074\uB9AC\uC5B4 \uBCF4\uB108\uC2A4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uB098\uB220\uC11C \uC870\uC815\uD569\uB2C8\uB2E4.</p></div><div class="field-grid three"><label><span>repeatGold</span><input data-path="${path}.reward.repeatGold" type="number" value="${level.reward.repeatGold}" /></label><label><span>firstClearBonusGold</span><input data-path="${path}.reward.firstClearBonusGold" type="number" value="${level.reward.firstClearBonusGold}" /></label><label><span>characterExp</span><input data-path="${path}.reward.characterExp" type="number" value="${level.reward.characterExp}" /></label></div></div>
+    <div class="section-card"><div><h3>\uBCF4\uC0C1</h3><p>\uCCAB \uD074\uB9AC\uC5B4 \uBCF4\uB108\uC2A4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uB098\uB220\uC11C \uC870\uC815\uD569\uB2C8\uB2E4.</p></div><div class="field-grid three"><label><span>\uBC18\uBCF5 \uACE8\uB4DC</span><input data-path="${path}.reward.repeatGold" type="number" value="${level.reward.repeatGold}" /></label><label><span>\uCCAB \uD074\uB9AC\uC5B4 \uBCF4\uB108\uC2A4 \uACE8\uB4DC</span><input data-path="${path}.reward.firstClearBonusGold" type="number" value="${level.reward.firstClearBonusGold}" /></label><label><span>\uCE90\uB9AD\uD130 \uACBD\uD5D8\uCE58</span><input data-path="${path}.reward.characterExp" type="number" value="${level.reward.characterExp}" /></label></div></div>
     ${overrideFields(path, level.enemyOverrides)}
     ${backgroundFields(path, level.background)}
-    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC774 \uB808\uBCA8\uC5D0 \uB300\uD55C \uB0B4\uBD80 \uBA54\uBAA8\uB97C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${level.notes ?? ""}</textarea></label></div>`;
+    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC774 \uB808\uBCA8\uC5D0 \uB300\uD55C \uB0B4\uBD80 \uBA54\uBAA8\uB97C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>\uBA54\uBAA8</span><textarea data-path="${path}.notes" rows="4">${level.notes ?? ""}</textarea></label></div>`;
   }
   function renderRaidEditor(raid, scope) {
     const path = `raids.${scope}.${raid.id}`;
@@ -23703,22 +25140,26 @@ ${suffix}`;
     <div class="section-card">
       <div><h3>\uAE30\uBCF8 \uC815\uBCF4</h3><p>\uB808\uC774\uB4DC \uC774\uB984, \uB2E8\uACC4, \uC5F0\uACB0 \uD15C\uD50C\uB9BF, \uC2DC\uAC04 \uC81C\uD55C\uACFC \uCC38\uAC00 \uADDC\uCE59\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
-        <label><span>id</span><input type="text" value="${raid.id}" disabled /></label>
+        <label><span>\uB0B4\uBD80 ID</span><input type="text" value="${raid.id}" disabled /></label>
         <label><span>\uC774\uB984</span><input data-path="${path}.name" type="text" value="${raid.name}" /></label>
-        <label><span>stage</span><input data-path="${path}.stage" type="number" value="${raid.stage}" /></label>
-        <label><span>worldId</span><input data-path="${path}.worldId" type="number" value="${raid.worldId ?? ""}" /></label>
-        <label><span>timeLimitMs</span><input data-path="${path}.timeLimitMs" type="number" value="${raid.timeLimitMs}" /></label>
-        <label><span>raidWindowHours</span><input data-path="${path}.raidWindowHours" type="number" value="${raid.raidWindowHours}" /></label>
-        <label><span>joinWindowMinutes</span><input data-path="${path}.joinWindowMinutes" type="number" value="${raid.joinWindowMinutes}" /></label>
-        <label><span>maxParticipants</span><input data-path="${path}.maxParticipants" type="number" value="${raid.maxParticipants}" /></label>
-        <label><span>encounterTemplateId</span><select data-path="${path}.encounterTemplateId">${Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)).map((encounter) => `<option value="${encounter.id}" ${encounter.id === raid.encounterTemplateId ? "selected" : ""}>${encounter.id}</option>`).join("")}</select></label>
+        <label><span>\uB2E8\uACC4</span><input data-path="${path}.stage" type="number" value="${raid.stage}" /></label>
+        <label><span>\uC6D4\uB4DC \uBC88\uD638</span><input data-path="${path}.worldId" type="number" value="${raid.worldId ?? ""}" /></label>
+        <label><span>\uC81C\uD55C \uC2DC\uAC04(\uBC00\uB9AC\uCD08)</span><input data-path="${path}.timeLimitMs" type="number" value="${raid.timeLimitMs}" /></label>
+        <label><span>\uAC1C\uBC29 \uC2DC\uAC04(\uC2DC\uAC04)</span><input data-path="${path}.raidWindowHours" type="number" value="${raid.raidWindowHours}" /></label>
+        <label><span>\uC785\uC7A5 \uAC00\uB2A5 \uC2DC\uAC04(\uBD84)</span><input data-path="${path}.joinWindowMinutes" type="number" value="${raid.joinWindowMinutes}" /></label>
+        <label><span>\uCD5C\uB300 \uCC38\uAC00 \uC778\uC6D0</span><input data-path="${path}.maxParticipants" type="number" value="${raid.maxParticipants}" /></label>
+        <label><span>\uC801 \uD15C\uD50C\uB9BF</span><select data-path="${path}.encounterTemplateId">${Object.values(
+      state.manifest.encounters
+    ).sort((a, b) => a.id.localeCompare(b.id)).map(
+      (encounter) => `<option value="${encounter.id}" ${encounter.id === raid.encounterTemplateId ? "selected" : ""}>${encounter.displayName} (${encounter.id})</option>`
+    ).join("")}</select></label>
         <label><span>\uD65C\uC131\uD654</span><select data-path="${path}.enabled"><option value="true" ${raid.enabled ? "selected" : ""}>\uD65C\uC131</option><option value="false" ${raid.enabled ? "" : "selected"}>\uBE44\uD65C\uC131</option></select></label>
       </div>
     </div>
-    <div class="section-card"><div><h3>\uBCF4\uC0C1</h3><p>\uCCAB \uD074\uB9AC\uC5B4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uBD84\uB9AC\uD574 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div><div class="field-grid"><label><span>firstClearDiamondReward</span><input data-path="${path}.reward.firstClearDiamondReward" type="number" value="${raid.reward.firstClearDiamondReward}" /></label><label><span>repeatDiamondReward</span><input data-path="${path}.reward.repeatDiamondReward" type="number" value="${raid.reward.repeatDiamondReward}" /></label></div></div>
+    <div class="section-card"><div><h3>\uBCF4\uC0C1</h3><p>\uCCAB \uD074\uB9AC\uC5B4\uC640 \uBC18\uBCF5 \uBCF4\uC0C1\uC744 \uBD84\uB9AC\uD574 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div><div class="field-grid"><label><span>\uCCAB \uD074\uB9AC\uC5B4 \uB2E4\uC774\uC544</span><input data-path="${path}.reward.firstClearDiamondReward" type="number" value="${raid.reward.firstClearDiamondReward}" /></label><label><span>\uBC18\uBCF5 \uB2E4\uC774\uC544</span><input data-path="${path}.reward.repeatDiamondReward" type="number" value="${raid.reward.repeatDiamondReward}" /></label></div></div>
     ${overrideFields(path, raid.encounterOverrides)}
     ${backgroundFields(path, raid.background)}
-    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uB808\uC774\uB4DC \uAE30\uD68D \uBA54\uBAA8\uB97C \uC815\uB9AC\uD569\uB2C8\uB2E4.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${raid.notes ?? ""}</textarea></label></div>`;
+    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uB808\uC774\uB4DC \uAE30\uD68D \uBA54\uBAA8\uB97C \uC815\uB9AC\uD569\uB2C8\uB2E4.</p></div><label><span>\uBA54\uBAA8</span><textarea data-path="${path}.notes" rows="4">${raid.notes ?? ""}</textarea></label></div>`;
   }
   function renderEncounterEditor(encounter) {
     const path = `encounters.${encounter.id}`;
@@ -23726,21 +25167,27 @@ ${suffix}`;
     <div class="section-card">
       <div><h3>\uD15C\uD50C\uB9BF \uC815\uBCF4</h3><p>\uB808\uBCA8\uACFC \uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uB294 \uC801 \uAE30\uBCF8 \uD15C\uD50C\uB9BF\uC785\uB2C8\uB2E4.</p></div>
       <div class="field-grid three">
-        <label><span>id</span><input type="text" value="${encounter.id}" disabled /></label>
+        <label><span>\uB0B4\uBD80 ID</span><input type="text" value="${encounter.id}" disabled /></label>
         <label><span>\uD45C\uC2DC \uC774\uB984</span><input data-path="${path}.displayName" type="text" value="${encounter.displayName}" /></label>
         <label><span>\uBAAC\uC2A4\uD130 \uC774\uB984</span><input data-path="${path}.monsterName" type="text" value="${encounter.monsterName}" /></label>
         <label><span>\uC774\uBAA8\uC9C0</span><input data-path="${path}.monsterEmoji" type="text" value="${encounter.monsterEmoji}" /></label>
         <label><span>\uC0C9\uC0C1</span><input data-path="${path}.monsterColor" type="text" value="${encounter.monsterColor}" /></label>
-        <label><span>tier</span><select data-path="${path}.tier">${["normal", "elite", "boss"].map((value) => `<option value="${value}" ${encounter.tier === value ? "selected" : ""}>${value}</option>`).join("")}</select></label>
-        <label><span>baseHp</span><input data-path="${path}.baseHp" type="number" value="${encounter.baseHp}" /></label>
-        <label><span>baseAttack</span><input data-path="${path}.baseAttack" type="number" value="${encounter.baseAttack}" /></label>
-        <label><span>attackIntervalMs</span><input data-path="${path}.attackIntervalMs" type="number" value="${encounter.attackIntervalMs}" /></label>
-        <label><span>attackPattern</span><select data-path="${path}.attackPattern">${PATTERN_OPTIONS.map((option) => `<option value="${option}" ${encounter.attackPattern === option ? "selected" : ""}>${option}</option>`).join("")}</select></label>
-        <label><span>kind</span><select data-path="${path}.kind"><option value="level" ${encounter.kind === "level" ? "selected" : ""}>level</option><option value="raid" ${encounter.kind === "raid" ? "selected" : ""}>raid</option></select></label>
+        <label><span>\uB4F1\uAE09</span><select data-path="${path}.tier">${renderTierOptions(
+      encounter.tier
+    )}</select></label>
+        <label><span>\uAE30\uBCF8 \uCCB4\uB825</span><input data-path="${path}.baseHp" type="number" value="${encounter.baseHp}" /></label>
+        <label><span>\uAE30\uBCF8 \uACF5\uACA9\uB825</span><input data-path="${path}.baseAttack" type="number" value="${encounter.baseAttack}" /></label>
+        <label><span>\uACF5\uACA9 \uC8FC\uAE30(\uBC00\uB9AC\uCD08)</span><input data-path="${path}.attackIntervalMs" type="number" value="${encounter.attackIntervalMs}" /></label>
+        <label><span>\uACF5\uACA9 \uD328\uD134</span><select data-path="${path}.attackPattern">${renderPatternOptions(
+      encounter.attackPattern
+    )}</select></label>
+        <label><span>\uC0AC\uC6A9 \uBC94\uC704</span><select data-path="${path}.kind">${renderEncounterKindOptions(
+      encounter.kind
+    )}</select></label>
         <label><span>\uD65C\uC131\uD654</span><select data-path="${path}.enabled"><option value="true" ${encounter.enabled ? "selected" : ""}>\uD65C\uC131</option><option value="false" ${encounter.enabled ? "" : "selected"}>\uBE44\uD65C\uC131</option></select></label>
       </div>
     </div>
-    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC801 \uBC38\uB7F0\uC2A4\uB098 \uAE30\uD68D \uC758\uB3C4\uB97C \uB0B4\uBD80 \uBA54\uBAA8\uB85C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>notes</span><textarea data-path="${path}.notes" rows="4">${encounter.notes ?? ""}</textarea></label></div>`;
+    <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC801 \uBC38\uB7F0\uC2A4\uB098 \uAE30\uD68D \uC758\uB3C4\uB97C \uB0B4\uBD80 \uBA54\uBAA8\uB85C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>\uBA54\uBAA8</span><textarea data-path="${path}.notes" rows="4">${encounter.notes ?? ""}</textarea></label></div>`;
   }
   function renderTree() {
     if (!state.manifest) {
@@ -23759,36 +25206,68 @@ ${suffix}`;
       </div>
     </section>`;
     elements.contentTree.innerHTML = [
-      buildGroup("\uB808\uBCA8 \uC2A4\uD14C\uC774\uC9C0", Object.values(state.manifest.levels).sort((a, b) => a.levelId - b.levelId), "level"),
-      buildGroup("\uC77C\uBC18 \uB808\uC774\uB4DC", Object.values(state.manifest.raids.normal).sort((a, b) => a.stage - b.stage), "raidNormal"),
-      buildGroup("\uBCF4\uC2A4 \uB808\uC774\uB4DC", Object.values(state.manifest.raids.boss).sort((a, b) => a.stage - b.stage), "raidBoss"),
-      buildGroup("\uC801 \uD15C\uD50C\uB9BF", Object.values(state.manifest.encounters).sort((a, b) => a.id.localeCompare(b.id)), "encounter")
+      buildGroup(
+        "\uB808\uBCA8 \uC2A4\uD14C\uC774\uC9C0",
+        Object.values(state.manifest.levels).sort(
+          (a, b) => a.levelId - b.levelId
+        ),
+        "level"
+      ),
+      buildGroup(
+        "\uC77C\uBC18 \uB808\uC774\uB4DC",
+        Object.values(state.manifest.raids.normal).sort(
+          (a, b) => a.stage - b.stage
+        ),
+        "raidNormal"
+      ),
+      buildGroup(
+        "\uBCF4\uC2A4 \uB808\uC774\uB4DC",
+        Object.values(state.manifest.raids.boss).sort(
+          (a, b) => a.stage - b.stage
+        ),
+        "raidBoss"
+      ),
+      buildGroup(
+        "\uC801 \uD15C\uD50C\uB9BF",
+        Object.values(state.manifest.encounters).sort(
+          (a, b) => a.id.localeCompare(b.id)
+        ),
+        "encounter"
+      )
     ].join("");
   }
   function renderAssets() {
     elements.assetCount.textContent = String(state.assets.length);
     if (!state.assets.length) {
-      elements.assetLibrary.innerHTML = `<div class="asset-card"><strong>\uB4F1\uB85D\uB41C \uC790\uC0B0\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uBC30\uACBD \uC774\uBBF8\uC9C0\uB97C \uC5C5\uB85C\uB4DC\uD558\uBA74 \uC5EC\uAE30\uC11C assetKey\uB97C \uD655\uC778\uD558\uACE0 \uB808\uBCA8/\uB808\uC774\uB4DC \uBC30\uACBD\uC5D0 \uC5F0\uACB0\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p></div>`;
+      elements.assetLibrary.innerHTML = `<div class="asset-card"><strong>\uB4F1\uB85D\uB41C \uC790\uC0B0\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uBC30\uACBD \uC774\uBBF8\uC9C0\uB97C \uC62C\uB9AC\uBA74 \uC5EC\uAE30\uC11C \uC790\uC0B0 \uD0A4\uB97C \uD655\uC778\uD558\uACE0 \uB808\uBCA8\uC774\uB098 \uB808\uC774\uB4DC \uBC30\uACBD\uC5D0 \uC5F0\uACB0\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.</p></div>`;
       return;
     }
-    elements.assetLibrary.innerHTML = state.assets.slice().sort((a, b) => a.asset_key.localeCompare(b.asset_key)).map((asset) => `
+    elements.assetLibrary.innerHTML = state.assets.slice().sort((a, b) => a.asset_key.localeCompare(b.asset_key)).map(
+      (asset) => `
     <div class="asset-card">
       <strong class="mono">${asset.asset_key}</strong>
       <img class="asset-preview" src="${asset.data_url}" alt="${asset.asset_key}" />
-      <div class="asset-meta"><span>${asset.mime_type || "image/*"}</span><span>${asset.content_hash || "-"}</span></div>
-    </div>`).join("");
+      <div class="asset-meta"><span>${asset.mime_type || "\uC774\uBBF8\uC9C0"}</span><span>${asset.content_hash || "-"}</span></div>
+    </div>`
+    ).join("");
   }
   function renderReleaseHistory() {
     if (!state.releaseHistory.length) {
-      elements.releaseHistory.innerHTML = `<div class="release-card"><strong>\uBC30\uD3EC \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uC544\uC9C1 creator publish\uB97C \uD55C \uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</p></div>`;
+      elements.releaseHistory.innerHTML = `<div class="release-card"><strong>\uBC30\uD3EC \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uC544\uC9C1 \uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uBC30\uD3EC\uB97C \uD55C \uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</p></div>`;
       return;
     }
-    elements.releaseHistory.innerHTML = state.releaseHistory.map((release) => `
+    elements.releaseHistory.innerHTML = state.releaseHistory.map(
+      (release) => `
     <div class="release-card">
       <strong>v${release.version}</strong>
       <p>${release.notes || "\uBA54\uBAA8 \uC5C6\uC74C"}</p>
-      <div class="release-meta"><span>${new Date(release.created_at).toLocaleString("ko-KR")}</span><button class="ghost small rollback-button" data-version="${release.version}">\uC774 \uBC84\uC804\uC73C\uB85C \uB864\uBC31</button></div>
-    </div>`).join("");
+      <div class="release-meta"><span>${new Date(
+        release.created_at
+      ).toLocaleString(
+        "ko-KR"
+      )}</span><button class="ghost small rollback-button" data-version="${release.version}">\uC774 \uBC84\uC804\uC73C\uB85C \uB864\uBC31</button></div>
+    </div>`
+    ).join("");
   }
   function updateManifestTextarea() {
     elements.manifestJson.value = state.manifest ? JSON.stringify(state.manifest, null, 2) : "";
@@ -23812,15 +25291,17 @@ ${suffix}`;
     } else if (state.selected.kind === "raidNormal" || state.selected.kind === "raidBoss") {
       elements.editorTitle.textContent = `${state.selected.kind === "raidNormal" ? "\uC77C\uBC18" : "\uBCF4\uC2A4"} \uB808\uC774\uB4DC ${record.stage}\uB2E8\uACC4 \uD3B8\uC9D1`;
       elements.editorSubtitle.textContent = "\uB808\uC774\uB4DC \uC885\uB958\uBCC4 \uB2E8\uACC4 \uC815\uBCF4\uC640 \uBCF4\uC0C1, \uC2DC\uAC04 \uC81C\uD55C, \uCC38\uAC00 \uADDC\uCE59\uC744 \uC218\uC815\uD569\uB2C8\uB2E4.";
-      elements.editorForm.innerHTML = renderRaidEditor(record, state.selected.kind === "raidNormal" ? "normal" : "boss");
+      elements.editorForm.innerHTML = renderRaidEditor(
+        record,
+        state.selected.kind === "raidNormal" ? "normal" : "boss"
+      );
     } else {
       elements.editorTitle.textContent = `\uC801 \uD15C\uD50C\uB9BF ${record.id}`;
       elements.editorSubtitle.textContent = "\uC5EC\uAE30\uC11C \uBC14\uAFBC \uAC12\uC740 \uB808\uBCA8/\uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uBA70, \uC2A4\uD14C\uC774\uC9C0\uBCC4 override\uBCF4\uB2E4 \uBA3C\uC800 \uC801\uC6A9\uB429\uB2C8\uB2E4.";
       elements.editorForm.innerHTML = renderEncounterEditor(record);
     }
   }
-  function renderAll() {
-    setStatus(elements.manifestStatus, state.manifest ? `draft v${getManifestVersion(state.manifest)}` : "manifest \uC5C6\uC74C");
+  function renderAdminWorkspace() {
     elements.userEmail.textContent = state.profile?.email || state.session?.user?.email || "-";
     elements.draftVersion.textContent = state.manifest ? `v${getManifestVersion(state.manifest)}` : "-";
     elements.publishedVersion.textContent = state.publishedVersion ? `v${state.publishedVersion}` : "-";
@@ -23829,6 +25310,25 @@ ${suffix}`;
     renderAssets();
     renderReleaseHistory();
     updateManifestTextarea();
+  }
+  function renderAll() {
+    if (state.visualManifest) {
+      renderVisualEditor();
+    } else {
+      elements.visualDraftVersion.textContent = "-";
+      elements.visualPublishedVersion.textContent = "-";
+    }
+    if (state.adminWorkspaceLoaded && state.manifest) {
+      renderAdminWorkspace();
+    } else {
+      elements.draftVersion.textContent = "-";
+      elements.publishedVersion.textContent = "-";
+    }
+    renderHistoryViews();
+    renderSettingsView();
+    updateAccessControls();
+    updateViewVisibility();
+    updateChromeSummary();
   }
   function parseInputValue(input) {
     if (input.tagName === "SELECT") {
@@ -23858,16 +25358,928 @@ ${suffix}`;
     elements.releaseHistory.querySelectorAll(".rollback-button").forEach((button) => {
       button.addEventListener("click", async () => {
         const version5 = Number(button.dataset.version);
-        if (!window.confirm(`v${version5} \uB9B4\uB9AC\uC988\uB97C \uAE30\uC900\uC73C\uB85C \uC0C8 \uB864\uBC31 \uB9B4\uB9AC\uC988\uB97C \uB9CC\uB4E4\uAE4C\uC694?`)) {
+        if (!window.confirm(
+          `v${version5} \uB9B4\uB9AC\uC988\uB97C \uAE30\uC900\uC73C\uB85C \uC0C8 \uB864\uBC31 \uB9B4\uB9AC\uC988\uB97C \uB9CC\uB4E4\uAE4C\uC694?`
+        )) {
           return;
         }
         try {
           await rollbackRelease(version5);
         } catch (error) {
-          showToast(error.message || "\uB864\uBC31\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+          showToast(getErrorMessage(error, "\uB864\uBC31\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
         }
       });
     });
+  }
+  function getViewLabel(view) {
+    if (view === "admin") {
+      return "\uAD00\uB9AC\uC790 \uB370\uC774\uD130";
+    }
+    if (view === "history") {
+      return "\uBC30\uD3EC \uC774\uB825";
+    }
+    if (view === "settings") {
+      return "\uD658\uACBD \uC124\uC815";
+    }
+    return "\uD654\uBA74 \uD3B8\uC9D1\uAE30";
+  }
+  function updateViewVisibility() {
+    const viewMap = {
+      ui: elements.uiEditorView,
+      admin: elements.adminDataView,
+      history: elements.historyView,
+      settings: elements.settingsView
+    };
+    Object.entries(viewMap).forEach(([key, node]) => {
+      if (!node) {
+        return;
+      }
+      node.classList.toggle("active", key === state.activeView);
+    });
+    [
+      elements.viewUiButton,
+      elements.viewAdminButton,
+      elements.viewHistoryButton,
+      elements.viewSettingsButton
+    ].filter(Boolean).forEach((button) => {
+      button.classList.toggle(
+        "active",
+        button.dataset.view === state.activeView
+      );
+    });
+  }
+  function updateChromeSummary() {
+    if (elements.activeViewStatus) {
+      elements.activeViewStatus.textContent = getViewLabel(state.activeView);
+    }
+    if (elements.userEmail) {
+      elements.userEmail.textContent = state.profile?.email || state.session?.user?.email || elements.adminEmail.value.trim() || "-";
+    }
+    const connectedPhone = state.visualConnectedDevices.find(
+      (device) => device.serial === state.visualActiveDeviceSerial
+    );
+    const deviceLabel = connectedPhone?.rawState === "device" ? "\uAE30\uAE30 \uC5F0\uACB0\uB428" : "\uAE30\uAE30 \uBBF8\uC5F0\uACB0";
+    setStatus(elements.deviceConnectionStatus, deviceLabel);
+    const uiVersion = state.visualManifest ? `\uD654\uBA74 \uCD08\uC548 v${state.visualManifest.version || 0}` : "\uD654\uBA74 \uCD08\uC548 \uB300\uAE30";
+    const adminVersion = state.manifest ? `\uAD00\uB9AC\uC790 \uCD08\uC548 v${getManifestVersion(state.manifest)}` : "\uAD00\uB9AC\uC790 \uCD08\uC548 \uB300\uAE30";
+    setStatus(
+      elements.manifestStatus,
+      state.activeView === "admin" ? adminVersion : uiVersion
+    );
+    if (elements.logoutButton) {
+      elements.logoutButton.textContent = isAdminAuthenticated() ? "\uB85C\uADF8\uC544\uC6C3" : "\uAD00\uB9AC\uC790 \uB85C\uADF8\uC778";
+    }
+    if (elements.settingsSupabaseUrl) {
+      elements.settingsSupabaseUrl.textContent = state.supabaseUrl || elements.supabaseUrl.value.trim() || "-";
+    }
+    if (elements.settingsAdminEmail) {
+      elements.settingsAdminEmail.textContent = state.profile?.email || state.session?.user?.email || elements.adminEmail.value.trim() || "-";
+    }
+  }
+  function updateAccessControls() {
+    const loggedIn = isAdminAuthenticated();
+    [
+      elements.visualSaveDraftButton,
+      elements.visualPublishButton,
+      elements.refreshButton,
+      elements.saveDraftButton,
+      elements.publishButton,
+      elements.copyJsonButton,
+      elements.applyJsonButton,
+      elements.uploadAssetButton,
+      elements.addLevelButton,
+      elements.addNormalRaidButton,
+      elements.addBossRaidButton,
+      elements.addEncounterButton,
+      elements.cloneButton,
+      elements.deleteButton
+    ].filter(Boolean).forEach((button) => {
+      button.disabled = !loggedIn;
+    });
+    if (elements.viewAdminButton) {
+      elements.viewAdminButton.disabled = !loggedIn;
+    }
+  }
+  function toggleLoginCard(forceVisible) {
+    if (!elements.loginCard) {
+      return;
+    }
+    const nextVisible = typeof forceVisible === "boolean" ? forceVisible : elements.loginCard.classList.contains("hidden");
+    elements.loginCard.classList.toggle("hidden", !nextVisible);
+  }
+  function getVisualSelectedRule() {
+    return getRule(
+      state.visualManifest,
+      state.visualSelectedScreenId,
+      state.visualSelectedElementId
+    );
+  }
+  function getVisualDeviceProfile() {
+    return DEVICE_PROFILES.find(
+      (profile) => profile.id === state.visualDeviceProfileId
+    ) || DEVICE_PROFILES[0];
+  }
+  function getVisualViewport() {
+    if (state.visualDeviceSource === "phone" && state.visualDeviceViewport) {
+      return sanitizeViewport({
+        width: state.visualDeviceViewport.widthDp,
+        height: state.visualDeviceViewport.heightDp,
+        safeTop: state.visualDeviceViewport.safeTopDp,
+        safeBottom: state.visualDeviceViewport.safeBottomDp
+      });
+    }
+    if (state.visualDeviceSource === "preset") {
+      return clone(getVisualDeviceProfile().viewport);
+    }
+    return sanitizeViewport(state.visualCustomViewport);
+  }
+  function syncVisualViewportInputs() {
+    const viewport = getVisualViewport();
+    elements.visualViewportWidth.value = String(viewport.width);
+    elements.visualViewportHeight.value = String(viewport.height);
+    elements.visualSafeTop.value = String(viewport.safeTop);
+    elements.visualSafeBottom.value = String(viewport.safeBottom);
+    elements.visualCurrentViewport.textContent = `${viewport.width} x ${viewport.height} \xB7 \uC548\uC804\uC601\uC5ED ${viewport.safeTop} / ${viewport.safeBottom}`;
+  }
+  function pushVisualHistory() {
+    if (!state.visualManifest) {
+      return;
+    }
+    state.visualHistoryPast.push(JSON.stringify(state.visualManifest));
+    if (state.visualHistoryPast.length > 80) {
+      state.visualHistoryPast.shift();
+    }
+    state.visualHistoryFuture = [];
+  }
+  function applyVisualHistorySnapshot(raw) {
+    state.visualManifest = ensureVisualManifest(JSON.parse(raw));
+    state.visualDirty = true;
+  }
+  function markVisualDirty() {
+    state.visualDirty = true;
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      "\uD654\uBA74 \uCD08\uC548\uC774 \uC218\uC815\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
+      "success"
+    );
+  }
+  function getVisualSnapshot(screenId = state.visualSelectedScreenId) {
+    if (!state.visualManifest) {
+      return null;
+    }
+    return getStudioSnapshot(state.visualManifest, screenId);
+  }
+  function getVisualSnapshotAsset(screenId = state.visualSelectedScreenId) {
+    const assetKey = getVisualSnapshot(screenId)?.assetKey;
+    if (!assetKey) {
+      return null;
+    }
+    return state.assets.find((asset) => asset.asset_key === assetKey) ?? null;
+  }
+  function getVisualLayoutCoverage(screenId = state.visualSelectedScreenId) {
+    const snapshot = getVisualSnapshot(screenId);
+    const items = ELEMENT_DEFS[screenId] ?? [];
+    const measuredCount = items.filter(
+      (item) => snapshot?.elementFrames?.[item.id]
+    ).length;
+    return {
+      snapshot,
+      totalCount: items.length,
+      measuredCount,
+      hasMeasuredLayout: measuredCount > 0,
+      isFullLayout: items.length > 0 && measuredCount === items.length
+    };
+  }
+  function getVisualStageBaseRects(screenId = state.visualSelectedScreenId, viewport = getVisualViewport()) {
+    const items = ELEMENT_DEFS[screenId] ?? [];
+    const coverage = getVisualLayoutCoverage(screenId);
+    const runtimeLayout = getPreviewLayout(screenId, viewport) ?? {};
+    const measuredRects = {};
+    const requiredItems = items.filter(({ id }) => id !== "skill_effect");
+    const canUseMeasuredLayout = requiredItems.length > 0 && requiredItems.every(({ id }) => {
+      const rect = getMeasuredBaseRect(
+        state.visualManifest,
+        screenId,
+        id,
+        viewport
+      );
+      if (!rect) {
+        return false;
+      }
+      measuredRects[id] = rect;
+      return true;
+    });
+    if (canUseMeasuredLayout && !measuredRects.skill_effect && measuredRects.board) {
+      measuredRects.skill_effect = measuredRects.board;
+    }
+    return {
+      coverage,
+      source: canUseMeasuredLayout ? "measured" : coverage.hasMeasuredLayout ? "partial" : "runtime",
+      rects: canUseMeasuredLayout ? measuredRects : runtimeLayout
+    };
+  }
+  function getVisualStageBackgroundSource(screenId = state.visualSelectedScreenId) {
+    if (state.visualDeviceSource === "phone" && state.visualFrameDataUrl) {
+      return {
+        kind: "phone",
+        src: state.visualFrameDataUrl
+      };
+    }
+    const snapshotAsset = getVisualSnapshotAsset(screenId);
+    if (snapshotAsset?.data_url) {
+      return {
+        kind: "snapshot",
+        src: snapshotAsset.data_url
+      };
+    }
+    return null;
+  }
+  function getVisualStatusMessage() {
+    const { measuredCount, totalCount, hasMeasuredLayout } = getVisualLayoutCoverage();
+    const baseLayout = getVisualStageBaseRects();
+    const background = getVisualStageBackgroundSource();
+    const layoutSuffix = baseLayout.source === "measured" ? ` \uC2E4\uAE30 \uAE30\uC900 ${measuredCount}/${totalCount}\uAC1C \uC694\uC18C\uB97C \uADF8\uB300\uB85C \uC0AC\uC6A9 \uC911\uC785\uB2C8\uB2E4.` : hasMeasuredLayout ? ` \uC2E4\uAE30 \uD0DC\uADF8\uB294 ${measuredCount}/${totalCount}\uAC1C\uB9CC \uAC10\uC9C0\uB418\uC5B4, \uD63C\uD569 \uC624\uCC28\uB97C \uB9C9\uAE30 \uC704\uD574 \uD654\uBA74 \uC804\uCCB4\uB97C \uB7F0\uD0C0\uC784 \uACC4\uC0B0\uC2DD\uC73C\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4.` : " \uC800\uC7A5\uB41C \uC2E4\uCE21\uC774 \uC5C6\uC5B4 \uD654\uBA74 \uC804\uCCB4\uB97C \uB7F0\uD0C0\uC784 \uACC4\uC0B0\uC2DD\uC73C\uB85C \uD45C\uC2DC\uD569\uB2C8\uB2E4.";
+    if (background?.kind === "phone") {
+      return `\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uAE30\uC900\uC73C\uB85C \uD3B8\uC9D1 \uC911\uC785\uB2C8\uB2E4.${layoutSuffix}`;
+    }
+    if (background?.kind === "snapshot") {
+      return `\uC800\uC7A5\uB41C \uB7F0\uD0C0\uC784 \uC2A4\uB0C5\uC0F7\uC744 \uAE30\uC900\uC73C\uB85C \uD3B8\uC9D1 \uC911\uC785\uB2C8\uB2E4.${layoutSuffix}`;
+    }
+    if (state.visualDeviceSource === "phone") {
+      return `\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uC544\uC9C1 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC5F0\uACB0 \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uC138\uC694.${layoutSuffix}`;
+    }
+    return `\uC2E4\uC81C \uD3F0 \uBBF8\uC5F0\uACB0 \uC0C1\uD0DC\uC785\uB2C8\uB2E4. \uD604\uC7AC\uB294 \uAE30\uAE30 \uD06C\uAE30 \uAE30\uC900 \uBBF8\uB9AC\uBCF4\uAE30\uB85C \uD3B8\uC9D1\uD569\uB2C8\uB2E4.${layoutSuffix}`;
+  }
+  async function fetchVisualDraft() {
+    const { data, error } = await state.supabase.from("ui_config_draft").select("id, config_json, updated_at").eq("id", DEFAULT_DRAFT_ID).maybeSingle();
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+  async function fetchLatestVisualRelease() {
+    const { data, error } = await state.supabase.from("ui_config_releases").select("version, config_json, notes, created_at").order("version", { ascending: false }).limit(1).maybeSingle();
+    if (error) {
+      throw error;
+    }
+    return data;
+  }
+  async function fetchVisualReleaseHistory() {
+    const { data, error } = await state.supabase.from("ui_config_releases").select("version, config_json, notes, created_at").order("version", { ascending: false }).limit(12);
+    if (error) {
+      throw error;
+    }
+    return data ?? [];
+  }
+  async function saveVisualDraft() {
+    if (!state.visualManifest) {
+      return;
+    }
+    state.visualManifest.referenceViewport = getVisualViewport();
+    const { error } = await state.supabase.from("ui_config_draft").upsert(
+      {
+        id: DEFAULT_DRAFT_ID,
+        config_json: clone(state.visualManifest),
+        updated_by: state.session.user.id
+      },
+      { onConflict: "id" }
+    );
+    if (error) {
+      throw error;
+    }
+    state.visualDirty = false;
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      "\uD654\uBA74 \uCD08\uC548\uC744 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.",
+      "success"
+    );
+  }
+  async function publishVisualDraft() {
+    if (!state.visualManifest) {
+      return;
+    }
+    const latest = await fetchLatestVisualRelease();
+    const nextVersion = Number(latest?.version || 0) + 1;
+    const nextDraft = clone(state.visualManifest);
+    nextDraft.version = nextVersion;
+    nextDraft.referenceViewport = getVisualViewport();
+    const payload = clone(nextDraft);
+    payload.studioSnapshots = {};
+    const notes = elements.visualPublishNotes.value.trim();
+    const { error } = await state.supabase.from("ui_config_releases").insert({
+      version: nextVersion,
+      config_json: payload,
+      notes: notes || null,
+      created_by: state.session.user.id
+    });
+    if (error) {
+      throw error;
+    }
+    state.visualManifest = nextDraft;
+    state.visualPublishedVersion = nextVersion;
+    await saveVisualDraft();
+    state.visualReleaseHistory = await fetchVisualReleaseHistory();
+    elements.visualPublishNotes.value = "";
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      `\uD654\uBA74 \uBC30\uD3EC\uBCF8 v${nextVersion}\uC744 \uBC30\uD3EC\uD588\uC2B5\uB2C8\uB2E4.`,
+      "success"
+    );
+  }
+  async function loadVisualReleaseIntoEditor(version5) {
+    const release = state.visualReleaseHistory.find(
+      (item) => item.version === version5
+    );
+    if (!release?.config_json) {
+      throw new Error(`\uD654\uBA74 \uBC30\uD3EC\uBCF8 v${version5}\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.`);
+    }
+    pushVisualHistory();
+    state.visualManifest = ensureVisualManifest(release.config_json);
+    state.visualDirty = true;
+    renderAll();
+  }
+  async function loadVisualWorkspace() {
+    const [draft, latestRelease, releaseHistory, assets] = await Promise.all([
+      fetchVisualDraft(),
+      fetchLatestVisualRelease(),
+      fetchVisualReleaseHistory(),
+      fetchAssets().catch((error) => {
+        console.error(error);
+        return [];
+      })
+    ]);
+    state.assets = assets ?? [];
+    state.visualReleaseHistory = releaseHistory;
+    state.visualPublishedVersion = latestRelease?.version ?? null;
+    if (draft?.config_json) {
+      state.visualManifest = ensureVisualManifest(draft.config_json);
+    } else if (latestRelease?.config_json) {
+      state.visualManifest = ensureVisualManifest(latestRelease.config_json);
+    } else {
+      state.visualManifest = createDefaultVisualManifest();
+      await saveVisualDraft();
+    }
+    state.visualWorkspaceLoaded = true;
+    state.visualDirty = false;
+    state.visualHistoryPast = [];
+    state.visualHistoryFuture = [];
+    state.visualSelectedScreenId = SCREEN_LABELS[state.visualSelectedScreenId] ? state.visualSelectedScreenId : "level";
+    if (!ELEMENT_DEFS[state.visualSelectedScreenId].some(
+      (item) => item.id === state.visualSelectedElementId
+    )) {
+      state.visualSelectedElementId = ELEMENT_DEFS[state.visualSelectedScreenId][0].id;
+    }
+    await refreshConnectedDevices(false);
+    renderAll();
+  }
+  async function refreshConnectedDevices(showFeedback = true) {
+    if (!canUseDeviceBridge()) {
+      state.visualConnectedDevices = [];
+      state.visualDeviceViewport = null;
+      setInlineStatus(
+        elements.visualDeviceMeta,
+        "\uB370\uC2A4\uD06C\uD1B1 \uAE30\uAE30 \uC5F0\uACB0 \uAE30\uB2A5\uC744 \uC0AC\uC6A9\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+        "error"
+      );
+      renderVisualEditor();
+      return;
+    }
+    const result = await desktopBridge.listDevices();
+    if (!result?.ok) {
+      throw new Error(result?.message || "\uAE30\uAE30 \uBAA9\uB85D\uC744 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+    }
+    state.visualConnectedDevices = result.devices ?? [];
+    const activeDevices = state.visualConnectedDevices.filter(
+      (device) => device.rawState === "device"
+    );
+    if (!activeDevices.length) {
+      state.visualActiveDeviceSerial = "";
+      state.visualDeviceViewport = null;
+      state.visualFrameDataUrl = "";
+      if (showFeedback) {
+        setInlineStatus(
+          elements.visualDeviceMeta,
+          "\uC5F0\uACB0\uB41C \uC548\uB4DC\uB85C\uC774\uB4DC \uAE30\uAE30\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
+          "error"
+        );
+      }
+      stopVisualFrameLoop();
+      renderVisualEditor();
+      return;
+    }
+    if (!activeDevices.some(
+      (device) => device.serial === state.visualActiveDeviceSerial
+    )) {
+      state.visualActiveDeviceSerial = activeDevices[0].serial;
+    }
+    await refreshDeviceViewport(false);
+    await refreshVisualLiveLayout(false);
+    if (showFeedback) {
+      setInlineStatus(
+        elements.visualDeviceMeta,
+        "\uAE30\uAE30 \uBAA9\uB85D\uC744 \uC0C8\uB85C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.",
+        "success"
+      );
+    }
+    if (state.activeView === "ui" && state.visualDeviceSource === "phone") {
+      startVisualFrameLoop();
+    }
+    renderVisualEditor();
+  }
+  async function refreshDeviceViewport(showFeedback = true) {
+    if (!canUseDeviceBridge() || !state.visualActiveDeviceSerial) {
+      return;
+    }
+    const result = await desktopBridge.getDeviceViewport(
+      state.visualActiveDeviceSerial
+    );
+    if (!result?.ok) {
+      throw new Error(result?.message || "\uAE30\uAE30 \uD654\uBA74 \uC815\uBCF4\uB97C \uC77D\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+    }
+    state.visualDeviceViewport = result.viewport ?? null;
+    if (showFeedback) {
+      setInlineStatus(
+        elements.visualDeviceMeta,
+        "\uAE30\uAE30 \uD654\uBA74 \uC815\uBCF4\uB97C \uC5C5\uB370\uC774\uD2B8\uD588\uC2B5\uB2C8\uB2E4.",
+        "success"
+      );
+    }
+  }
+  function syncSelectedVisualScreen(screenId) {
+    if (!SCREEN_LABELS[screenId]) {
+      return;
+    }
+    state.visualSelectedScreenId = screenId;
+    if (!ELEMENT_DEFS[screenId]?.some(
+      (item) => item.id === state.visualSelectedElementId
+    )) {
+      state.visualSelectedElementId = ELEMENT_DEFS[screenId]?.[0]?.id || "header";
+    }
+  }
+  function applyMeasuredDeviceLayout(layout) {
+    if (!state.visualManifest || !layout?.screens) {
+      return { matchedCount: 0, syncedScreenIds: [] };
+    }
+    const nextManifest = clone(state.visualManifest);
+    nextManifest.studioSnapshots = { ...nextManifest.studioSnapshots ?? {} };
+    let matchedCount = 0;
+    const syncedScreenIds = [];
+    Object.entries(layout.screens).forEach(([screenId, snapshot]) => {
+      if (!SCREEN_LABELS[screenId]) {
+        return;
+      }
+      const elementFrames = snapshot?.elementFrames ?? {};
+      const elementIds = Object.keys(elementFrames);
+      if (!elementIds.length) {
+        return;
+      }
+      matchedCount += elementIds.length;
+      syncedScreenIds.push(screenId);
+      const previousSnapshot = nextManifest.studioSnapshots[screenId] ?? {};
+      const measuredElementRules = Object.fromEntries(
+        elementIds.map((elementId) => [
+          elementId,
+          clone(getRule(nextManifest, screenId, elementId))
+        ])
+      );
+      nextManifest.studioSnapshots[screenId] = {
+        assetKey: previousSnapshot.assetKey ?? null,
+        capturedAt: layout.capturedAt || (/* @__PURE__ */ new Date()).toISOString(),
+        viewport: sanitizeViewport(layout.viewport),
+        referenceViewport: sanitizeViewport(
+          previousSnapshot.referenceViewport ?? nextManifest.referenceViewport
+        ),
+        elementFrames: clone(elementFrames),
+        elementRules: measuredElementRules
+      };
+    });
+    if (!matchedCount) {
+      return { matchedCount: 0, syncedScreenIds: [] };
+    }
+    state.visualManifest = ensureVisualManifest(nextManifest);
+    if (layout.detectedScreenId && syncedScreenIds.includes(layout.detectedScreenId)) {
+      syncSelectedVisualScreen(layout.detectedScreenId);
+    }
+    return { matchedCount, syncedScreenIds };
+  }
+  async function refreshVisualLiveLayout(showFeedback = true) {
+    if (!canUseDeviceLayoutBridge() || !state.visualActiveDeviceSerial || !state.visualManifest) {
+      return { matchedCount: 0, syncedScreenIds: [] };
+    }
+    const result = await desktopBridge.getDeviceLayout(
+      state.visualActiveDeviceSerial
+    );
+    if (!result?.ok) {
+      if (!showFeedback) {
+        return { matchedCount: 0, syncedScreenIds: [] };
+      }
+      throw new Error(
+        result?.message || "\uC2E4\uC81C \uAE30\uAE30 UI \uB808\uC774\uC544\uC6C3\uC744 \uC77D\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."
+      );
+    }
+    const layout = result.layout ?? null;
+    const applied = applyMeasuredDeviceLayout(layout);
+    if (showFeedback) {
+      if (applied.matchedCount > 0) {
+        const screenLabel = layout?.detectedScreenId ? SCREEN_LABELS[layout.detectedScreenId] : "";
+        const screenSuffix = screenLabel ? ` (${screenLabel})` : "";
+        setInlineStatus(
+          elements.visualDeviceMeta,
+          `\uC2E4\uC81C \uAE30\uAE30 \uB808\uC774\uC544\uC6C3 ${applied.matchedCount}\uAC1C\uB97C \uB3D9\uAE30\uD654\uD588\uC2B5\uB2C8\uB2E4.${screenSuffix}`,
+          "success"
+        );
+      } else {
+        setInlineStatus(
+          elements.visualDeviceMeta,
+          "\uD604\uC7AC \uD654\uBA74\uC5D0\uC11C \uD3B8\uC9D1\uC6A9 UI \uC88C\uD45C \uD0DC\uADF8\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC2E4\uC81C \uD50C\uB808\uC774 \uD654\uBA74\uC5D0\uC11C \uB2E4\uC2DC \uC2DC\uB3C4\uD558\uC138\uC694."
+        );
+      }
+    }
+    return applied;
+  }
+  async function refreshVisualFrame(showFeedback = true) {
+    if (!canUseDeviceBridge() || !state.visualActiveDeviceSerial) {
+      throw new Error("\uC5F0\uACB0\uB41C \uC548\uB4DC\uB85C\uC774\uB4DC \uAE30\uAE30\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.");
+    }
+    if (state.visualFrameBusy) {
+      return;
+    }
+    state.visualFrameBusy = true;
+    try {
+      const result = await desktopBridge.getDeviceFrame(
+        state.visualActiveDeviceSerial
+      );
+      if (!result?.ok) {
+        throw new Error(result?.message || "\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+      }
+      state.visualFrameDataUrl = result.frame?.dataUrl || "";
+      if (showFeedback) {
+        setInlineStatus(
+          elements.visualStageStatus,
+          "\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uC0C8\uB85C \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.",
+          "success"
+        );
+      }
+      renderVisualEditor();
+    } finally {
+      state.visualFrameBusy = false;
+    }
+  }
+  function stopVisualFrameLoop() {
+    if (state.visualFrameTimer) {
+      clearTimeout(state.visualFrameTimer);
+      state.visualFrameTimer = null;
+    }
+  }
+  function startVisualFrameLoop() {
+    stopVisualFrameLoop();
+    if (state.activeView !== "ui" || state.visualDeviceSource !== "phone" || !state.visualActiveDeviceSerial || !canUseDeviceBridge()) {
+      return;
+    }
+    const loop = async () => {
+      try {
+        await refreshVisualFrame(false);
+      } catch (error) {
+        setInlineStatus(
+          elements.visualStageStatus,
+          getErrorMessage(error, "\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."),
+          "error"
+        );
+        stopVisualFrameLoop();
+        return;
+      }
+      state.visualFrameTimer = setTimeout(loop, 450);
+    };
+    void loop();
+  }
+  function renderVisualDeviceOptions() {
+    elements.visualDeviceProfile.innerHTML = DEVICE_PROFILES.map(
+      (profile) => `<option value="${profile.id}" ${profile.id === state.visualDeviceProfileId ? "selected" : ""}>${profile.label}</option>`
+    ).join("");
+    const deviceOptions = ['<option value="">\uC5F0\uACB0\uB41C \uAE30\uAE30 \uC5C6\uC74C</option>'];
+    state.visualConnectedDevices.forEach((device) => {
+      const label = `${device.model || device.product || device.serial} \xB7 ${device.stateLabel}`;
+      deviceOptions.push(
+        `<option value="${device.serial}" ${device.serial === state.visualActiveDeviceSerial ? "selected" : ""}>${label}</option>`
+      );
+    });
+    elements.visualDeviceSelect.innerHTML = deviceOptions.join("");
+    elements.visualDeviceSource.value = state.visualDeviceSource;
+    elements.visualDeviceSelect.disabled = state.visualDeviceSource !== "phone";
+    elements.visualDeviceProfile.disabled = state.visualDeviceSource !== "preset";
+    [
+      elements.visualViewportWidth,
+      elements.visualViewportHeight,
+      elements.visualSafeTop,
+      elements.visualSafeBottom
+    ].filter(Boolean).forEach((input) => {
+      input.disabled = state.visualDeviceSource !== "custom";
+    });
+  }
+  function renderVisualInspector() {
+    const rule = getVisualSelectedRule();
+    elements.visualCurrentScreen.textContent = SCREEN_LABELS[state.visualSelectedScreenId];
+    elements.visualCurrentElement.textContent = formatElementLabel(
+      state.visualSelectedScreenId,
+      state.visualSelectedElementId
+    );
+    elements.visualInspectorTitle.textContent = formatElementLabel(
+      state.visualSelectedScreenId,
+      state.visualSelectedElementId
+    );
+    elements.visualInspectorHelp.textContent = ELEMENT_HELP[state.visualSelectedScreenId]?.[state.visualSelectedElementId] || "\uC88C\uC6B0 \uD328\uB110\uACFC \uB4DC\uB798\uADF8\uB97C \uD568\uAED8 \uC0AC\uC6A9\uD574 1\uD53D\uC140 \uB2E8\uC704\uB85C \uB9DE\uCD94\uC138\uC694.";
+    elements.visualOffsetX.value = String(rule.offsetX);
+    elements.visualOffsetY.value = String(rule.offsetY);
+    elements.visualScale.value = String(rule.scale);
+    elements.visualWidthScale.value = String(rule.widthScale ?? 1);
+    elements.visualHeightScale.value = String(rule.heightScale ?? 1);
+    elements.visualOpacity.value = String(rule.opacity);
+    elements.visualZIndex.value = String(rule.zIndex);
+    elements.visualVisible.value = rule.visible ? "true" : "false";
+    elements.visualSafeAware.checked = rule.safeAreaAware;
+    syncVisualViewportInputs();
+  }
+  function getVisualDisplayScale(viewport) {
+    const hostWidth = Math.max(260, elements.visualStageHost.clientWidth - 40);
+    const hostHeight = Math.max(480, elements.visualStageHost.clientHeight - 40);
+    state.visualFitScale = Math.min(
+      hostWidth / viewport.width,
+      hostHeight / viewport.height
+    );
+    state.visualDisplayScale = state.visualZoomMode === "actual" ? 1 : state.visualFitScale;
+    return state.visualDisplayScale;
+  }
+  function renderVisualStage() {
+    if (!state.visualManifest) {
+      return;
+    }
+    const viewport = getVisualViewport();
+    const displayScale = getVisualDisplayScale(viewport);
+    const referenceViewport = state.visualManifest.referenceViewport || viewport;
+    const stageBaseLayout = getVisualStageBaseRects(
+      state.visualSelectedScreenId,
+      viewport
+    );
+    const stageBackground = getVisualStageBackgroundSource();
+    const frameWidth = Math.round(viewport.width * displayScale);
+    const frameHeight = Math.round(viewport.height * displayScale);
+    elements.visualPhoneFrame.style.width = `${frameWidth}px`;
+    elements.visualPhoneFrame.style.height = `${frameHeight}px`;
+    elements.visualSafeTopOverlay.style.height = `${Math.round(
+      viewport.safeTop * displayScale
+    )}px`;
+    elements.visualSafeBottomOverlay.style.height = `${Math.round(
+      viewport.safeBottom * displayScale
+    )}px`;
+    elements.visualGridOverlay.style.display = state.visualShowGrid ? "block" : "none";
+    elements.visualGridOverlay.style.backgroundImage = state.visualShowGrid ? "linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px)" : "none";
+    elements.visualGridOverlay.style.backgroundSize = `${state.visualGridSize * displayScale}px ${state.visualGridSize * displayScale}px`;
+    if (stageBackground?.src) {
+      elements.visualLiveImage.src = stageBackground.src;
+      elements.visualLiveImage.classList.remove("hidden");
+      elements.visualFrameFallback.classList.add("hidden");
+    } else {
+      elements.visualLiveImage.removeAttribute("src");
+      elements.visualLiveImage.classList.add("hidden");
+      elements.visualFrameFallback.classList.remove("hidden");
+      elements.visualFrameFallback.textContent = getVisualStatusMessage();
+    }
+    elements.visualOverlay.innerHTML = "";
+    ELEMENT_DEFS[state.visualSelectedScreenId].forEach(({ id, label }) => {
+      const rule = getRule(
+        state.visualManifest,
+        state.visualSelectedScreenId,
+        id
+      );
+      if (!rule.visible) {
+        return;
+      }
+      let baseRect = stageBaseLayout.rects?.[id];
+      if (id === "skill_effect") {
+        const boardRect = stageBaseLayout.rects?.board;
+        if (boardRect) {
+          baseRect = applyRuleToRect(
+            boardRect,
+            getRule(
+              state.visualManifest,
+              state.visualSelectedScreenId,
+              "board"
+            ),
+            viewport,
+            referenceViewport
+          );
+        }
+      }
+      if (!baseRect) {
+        return;
+      }
+      const finalRect = applyRuleToRect(
+        baseRect,
+        rule,
+        viewport,
+        referenceViewport
+      );
+      const box = document.createElement("div");
+      box.className = `visual-box${state.visualSelectedElementId === id ? " active" : ""}${state.visualDrag?.elementId === id ? " dragging" : ""}`;
+      box.dataset.elementId = id;
+      box.style.left = `${Math.round(finalRect.left * displayScale)}px`;
+      box.style.top = `${Math.round(finalRect.top * displayScale)}px`;
+      box.style.width = `${Math.round(finalRect.width * displayScale)}px`;
+      box.style.height = `${Math.round(finalRect.height * displayScale)}px`;
+      box.style.opacity = String(rule.opacity);
+      box.style.zIndex = String(20 + rule.zIndex);
+      const header = document.createElement("div");
+      header.className = "visual-box-header";
+      header.innerHTML = `<span>${label}</span><span>${rule.offsetX}, ${rule.offsetY}</span>`;
+      box.appendChild(header);
+      box.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) {
+          return;
+        }
+        state.visualSelectedElementId = id;
+        const currentRule = getVisualSelectedRule();
+        pushVisualHistory();
+        state.visualDrag = {
+          elementId: id,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          originalOffsetX: currentRule.offsetX,
+          originalOffsetY: currentRule.offsetY
+        };
+        document.body.classList.add("dragging-visual");
+        box.setPointerCapture(event.pointerId);
+        renderVisualEditor();
+      });
+      elements.visualOverlay.appendChild(box);
+    });
+    setInlineStatus(
+      elements.visualStageStatus,
+      getVisualStatusMessage(),
+      stageBackground?.kind === "phone" || stageBaseLayout.source === "measured" ? "success" : "muted"
+    );
+  }
+  function renderVisualReleaseHistory(host = elements.visualReleaseHistory) {
+    if (!host) {
+      return;
+    }
+    if (!state.visualReleaseHistory.length) {
+      host.innerHTML = '<div class="release-card"><strong>\uD654\uBA74 \uBC30\uD3EC \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uC544\uC9C1 \uD654\uBA74 \uBC30\uD3EC\uB97C \uD55C \uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</p></div>';
+      return;
+    }
+    host.innerHTML = state.visualReleaseHistory.map(
+      (release) => `
+        <div class="release-card">
+          <strong>\uD654\uBA74 v${release.version}</strong>
+          <p>${release.notes || "\uBA54\uBAA8 \uC5C6\uC74C"}</p>
+          <div class="release-meta">
+            <span>${new Date(release.created_at).toLocaleString("ko-KR")}</span>
+            <button class="ghost small visual-release-load" data-version="${release.version}">\uC774 \uBC84\uC804 \uC5F4\uAE30</button>
+          </div>
+        </div>`
+    ).join("");
+    host.querySelectorAll(".visual-release-load").forEach((button) => {
+      button.addEventListener("click", async () => {
+        try {
+          await loadVisualReleaseIntoEditor(Number(button.dataset.version));
+        } catch (error) {
+          showToast(getErrorMessage(error, "\uD654\uBA74 \uBC30\uD3EC\uBCF8\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."));
+        }
+      });
+    });
+  }
+  function renderHistoryViews() {
+    renderVisualReleaseHistory(elements.visualHistoryViewList);
+    if (!state.adminWorkspaceLoaded) {
+      elements.adminHistoryViewList.innerHTML = '<div class="release-card"><strong>\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uB300\uAE30 \uC911</strong><p>\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uD0ED\uC744 \uC5F4\uBA74 \uBC30\uD3EC \uC774\uB825\uC744 \uD568\uAED8 \uBD88\uB7EC\uC635\uB2C8\uB2E4.</p></div>';
+    } else if (!state.releaseHistory.length) {
+      elements.adminHistoryViewList.innerHTML = '<div class="release-card"><strong>\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uBC30\uD3EC \uC774\uB825\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</strong><p>\uC544\uC9C1 \uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uBC30\uD3EC\uB97C \uD55C \uC801\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</p></div>';
+    } else {
+      elements.adminHistoryViewList.innerHTML = state.releaseHistory.map(
+        (release) => `
+          <div class="release-card">
+            <strong>\uAD00\uB9AC\uC790 v${release.version}</strong>
+            <p>${release.notes || "\uBA54\uBAA8 \uC5C6\uC74C"}</p>
+            <div class="release-meta"><span>${new Date(
+          release.created_at
+        ).toLocaleString("ko-KR")}</span></div>
+          </div>`
+      ).join("");
+    }
+  }
+  function renderSettingsView() {
+    if (!elements.settingsDeviceList) {
+      return;
+    }
+    if (!state.visualConnectedDevices.length) {
+      elements.settingsDeviceList.innerHTML = '<div class="device-card"><strong>\uC5F0\uACB0\uB41C \uAE30\uAE30 \uC5C6\uC74C</strong><p>USB \uB514\uBC84\uAE45\uC774 \uCF1C\uC9C4 \uC548\uB4DC\uB85C\uC774\uB4DC \uD3F0\uC744 \uC5F0\uACB0\uD558\uC138\uC694.</p></div>';
+    } else {
+      elements.settingsDeviceList.innerHTML = state.visualConnectedDevices.map((device) => {
+        const active = device.serial === state.visualActiveDeviceSerial ? "\uD604\uC7AC \uC0AC\uC6A9 \uC911" : device.stateLabel;
+        return `
+          <div class="device-card">
+            <strong>${device.model || device.product || "\uAE30\uAE30 \uC774\uB984 \uC5C6\uC74C"}</strong>
+            <p>${device.serial}</p>
+            <small class="inline-note">${active}</small>
+          </div>`;
+      }).join("");
+    }
+    if (state.visualDeviceViewport) {
+      elements.settingsDeviceMeta.textContent = `${state.visualDeviceViewport.model || "\uC5F0\uACB0 \uAE30\uAE30"} \xB7 ${state.visualDeviceViewport.widthDp} x ${state.visualDeviceViewport.heightDp} \xB7 \uC548\uC804\uC601\uC5ED ${state.visualDeviceViewport.safeTopDp} / ${state.visualDeviceViewport.safeBottomDp}`;
+      elements.settingsDeviceMeta.className = "inline-note success";
+    } else {
+      elements.settingsDeviceMeta.textContent = "\uAE30\uAE30 \uD654\uBA74 \uC815\uBCF4\uB97C \uC544\uC9C1 \uC77D\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.";
+      elements.settingsDeviceMeta.className = "inline-note";
+    }
+  }
+  function renderVisualEditor() {
+    elements.visualScreenId.value = state.visualSelectedScreenId;
+    elements.visualShowGrid.checked = state.visualShowGrid;
+    elements.visualSnapGrid.checked = state.visualSnapGrid;
+    elements.visualGridSize.value = String(state.visualGridSize);
+    renderVisualDeviceOptions();
+    renderVisualInspector();
+    renderVisualStage();
+    renderVisualReleaseHistory();
+    elements.visualDraftVersion.textContent = state.visualManifest ? `v${state.visualManifest.version || 0}` : "-";
+    elements.visualPublishedVersion.textContent = state.visualPublishedVersion ? `v${state.visualPublishedVersion}` : "-";
+    elements.visualUndoButton.disabled = state.visualHistoryPast.length === 0;
+    elements.visualRedoButton.disabled = state.visualHistoryFuture.length === 0;
+  }
+  function updateVisualRuleFromInputs() {
+    const rule = getVisualSelectedRule();
+    const next = sanitizeRule({
+      offsetX: elements.visualOffsetX.value,
+      offsetY: elements.visualOffsetY.value,
+      scale: elements.visualScale.value,
+      widthScale: elements.visualWidthScale.value,
+      heightScale: elements.visualHeightScale.value,
+      opacity: elements.visualOpacity.value,
+      zIndex: elements.visualZIndex.value,
+      visible: elements.visualVisible.value === "true",
+      safeAreaAware: elements.visualSafeAware.checked
+    });
+    Object.assign(rule, next);
+  }
+  function nudgeVisual(dx, dy) {
+    pushVisualHistory();
+    const rule = getVisualSelectedRule();
+    rule.offsetX += dx;
+    rule.offsetY += dy;
+    markVisualDirty();
+    renderVisualEditor();
+  }
+  function bindVisualPointerEvents() {
+    window.addEventListener("pointermove", (event) => {
+      if (!state.visualDrag || !state.visualManifest) {
+        return;
+      }
+      const viewport = getVisualViewport();
+      const displayScale = Math.max(state.visualDisplayScale, 0.01);
+      const delta = convertViewportDeltaToReference(
+        (event.clientX - state.visualDrag.startClientX) / displayScale,
+        (event.clientY - state.visualDrag.startClientY) / displayScale,
+        viewport,
+        state.visualManifest.referenceViewport || viewport,
+        getVisualSelectedRule().safeAreaAware
+      );
+      const rule = getVisualSelectedRule();
+      let nextX = Math.round(state.visualDrag.originalOffsetX + delta.x);
+      let nextY = Math.round(state.visualDrag.originalOffsetY + delta.y);
+      if (state.visualSnapGrid) {
+        nextX = Math.round(nextX / state.visualGridSize) * state.visualGridSize;
+        nextY = Math.round(nextY / state.visualGridSize) * state.visualGridSize;
+      }
+      rule.offsetX = nextX;
+      rule.offsetY = nextY;
+      markVisualDirty();
+      renderVisualEditor();
+    });
+    window.addEventListener("pointerup", () => {
+      if (!state.visualDrag) {
+        return;
+      }
+      state.visualDrag = null;
+      document.body.classList.remove("dragging-visual");
+      renderVisualEditor();
+    });
+  }
+  async function setActiveView(view) {
+    if (view === "admin" && !isAdminAuthenticated()) {
+      showToast("\uAD00\uB9AC\uC790 \uB370\uC774\uD130\uB294 \uB85C\uADF8\uC778 \uD6C4 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+      state.activeView = "ui";
+      renderAll();
+      return;
+    }
+    state.activeView = view;
+    if (view === "admin" && !state.adminWorkspaceLoaded) {
+      await loadWorkspace();
+    }
+    if (view === "ui" && state.visualDeviceSource === "phone") {
+      startVisualFrameLoop();
+    } else {
+      stopVisualFrameLoop();
+    }
+    renderAll();
   }
   async function ensureClient() {
     const url = elements.supabaseUrl.value.trim() || DEFAULT_SUPABASE_URL;
@@ -23875,7 +26287,9 @@ ${suffix}`;
     if (state.supabase && state.supabaseUrl === url && state.supabaseKey === key) {
       return state.supabase;
     }
-    state.supabase = createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
+    state.supabase = createClient(url, key, {
+      auth: { persistSession: true, autoRefreshToken: true }
+    });
     state.supabaseUrl = url;
     state.supabaseKey = key;
     return state.supabase;
@@ -23909,7 +26323,14 @@ ${suffix}`;
     return data ?? [];
   }
   async function saveDraft() {
-    const { error } = await state.supabase.from("creator_draft").upsert({ id: DEFAULT_DRAFT_ID, manifest_json: deepClone2(state.manifest), updated_by: state.session.user.id }, { onConflict: "id" });
+    const { error } = await state.supabase.from("creator_draft").upsert(
+      {
+        id: DEFAULT_DRAFT_ID,
+        manifest_json: deepClone2(state.manifest),
+        updated_by: state.session.user.id
+      },
+      { onConflict: "id" }
+    );
     if (error) throw error;
   }
   async function publishDraft() {
@@ -23917,8 +26338,18 @@ ${suffix}`;
     const nextVersion = Number(latest?.version || 0) + 1;
     const payload = deepClone2(state.manifest);
     payload.version = nextVersion;
-    payload.meta = { ...payload.meta || {}, generatedAt: (/* @__PURE__ */ new Date()).toISOString(), seededFromCode: false, notes: elements.publishNotes.value.trim() || "" };
-    const { error } = await state.supabase.from("creator_releases").insert({ version: nextVersion, manifest_json: payload, notes: elements.publishNotes.value.trim() || null, created_by: state.session.user.id });
+    payload.meta = {
+      ...payload.meta || {},
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      seededFromCode: false,
+      notes: elements.publishNotes.value.trim() || ""
+    };
+    const { error } = await state.supabase.from("creator_releases").insert({
+      version: nextVersion,
+      manifest_json: payload,
+      notes: elements.publishNotes.value.trim() || null,
+      created_by: state.session.user.id
+    });
     if (error) throw error;
     state.manifest = payload;
     await saveDraft();
@@ -23930,12 +26361,15 @@ ${suffix}`;
     if (!data) throw new Error(`v${version5} \uB9B4\uB9AC\uC988\uB97C \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.`);
     state.manifest = deepClone2(data.manifest_json);
     await saveDraft();
-    elements.publishNotes.value = `Rollback to v${version5}`;
+    elements.publishNotes.value = `v${version5} \uAE30\uC900 \uB864\uBC31`;
     await publishDraft();
     await loadWorkspace();
   }
   function createLevelEntry() {
-    const nextLevelId = Math.max(0, ...Object.values(state.manifest.levels).map((level) => level.levelId)) + 1;
+    const nextLevelId = Math.max(
+      0,
+      ...Object.values(state.manifest.levels).map((level) => level.levelId)
+    ) + 1;
     const id = `level_${nextLevelId}`;
     state.manifest.levels[id] = {
       id,
@@ -23949,7 +26383,12 @@ ${suffix}`;
       enemyOverrides: {},
       reward: { repeatGold: 100, firstClearBonusGold: 200, characterExp: 300 },
       enabled: true,
-      background: { assetKey: null, tintColor: "#000000", tintOpacity: 0, removeImage: false }
+      background: {
+        assetKey: null,
+        tintColor: "#000000",
+        tintOpacity: 0,
+        removeImage: false
+      }
     };
     state.selected = { kind: "level", id };
   }
@@ -23971,12 +26410,19 @@ ${suffix}`;
       joinWindowMinutes: 10,
       maxParticipants: 4,
       enabled: true,
-      background: { assetKey: null, tintColor: "#000000", tintOpacity: 0, removeImage: false }
+      background: {
+        assetKey: null,
+        tintColor: "#000000",
+        tintOpacity: 0,
+        removeImage: false
+      }
     };
     state.selected = { kind, id };
   }
   function createEncounterEntry() {
-    const nextId = slugify(window.prompt("\uC0C8 \uC801 \uD15C\uD50C\uB9BF id\uB97C \uC785\uB825\uD558\uC138\uC694.", "encounter_new") || "");
+    const nextId = slugify(
+      window.prompt("\uC0C8 \uC801 \uD15C\uD50C\uB9BF id\uB97C \uC785\uB825\uD558\uC138\uC694.", "encounter_new") || ""
+    );
     if (!nextId) return;
     if (state.manifest.encounters[nextId]) {
       showToast("\uC774\uBBF8 \uAC19\uC740 id\uC758 \uD15C\uD50C\uB9BF\uC774 \uC788\uC2B5\uB2C8\uB2E4.");
@@ -24002,9 +26448,17 @@ ${suffix}`;
     const record = getSelectedRecord();
     if (!record || !state.selected) return;
     if (state.selected.kind === "level") {
-      const nextLevelId = Math.max(0, ...Object.values(state.manifest.levels).map((level) => level.levelId)) + 1;
+      const nextLevelId = Math.max(
+        0,
+        ...Object.values(state.manifest.levels).map((level) => level.levelId)
+      ) + 1;
       const id = `level_${nextLevelId}`;
-      state.manifest.levels[id] = { ...deepClone2(record), id, levelId: nextLevelId, name: `${record.name} \uBCF5\uC0AC\uBCF8` };
+      state.manifest.levels[id] = {
+        ...deepClone2(record),
+        id,
+        levelId: nextLevelId,
+        name: `${record.name} \uBCF5\uC0AC\uBCF8`
+      };
       state.selected = { kind: "level", id };
       return;
     }
@@ -24012,19 +26466,31 @@ ${suffix}`;
       const scope = state.selected.kind === "raidNormal" ? state.manifest.raids.normal : state.manifest.raids.boss;
       const nextStage = Math.max(0, ...Object.values(scope).map((raid) => raid.stage)) + 1;
       const id = `${state.selected.kind === "raidNormal" ? "normal" : "boss"}_${nextStage}`;
-      scope[id] = { ...deepClone2(record), id, stage: nextStage, name: `${record.name} \uBCF5\uC0AC\uBCF8` };
+      scope[id] = {
+        ...deepClone2(record),
+        id,
+        stage: nextStage,
+        name: `${record.name} \uBCF5\uC0AC\uBCF8`
+      };
       state.selected = { kind: state.selected.kind, id };
       return;
     }
     const nextId = `${record.id}_copy`;
-    state.manifest.encounters[nextId] = { ...deepClone2(record), id: nextId, displayName: `${record.displayName} \uBCF5\uC0AC\uBCF8` };
+    state.manifest.encounters[nextId] = {
+      ...deepClone2(record),
+      id: nextId,
+      displayName: `${record.displayName} \uBCF5\uC0AC\uBCF8`
+    };
     state.selected = { kind: "encounter", id: nextId };
   }
   function deleteSelected() {
     if (!state.selected || !window.confirm("\uC120\uD0DD\uD55C \uD56D\uBAA9\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?")) return;
-    if (state.selected.kind === "level") delete state.manifest.levels[state.selected.id];
-    else if (state.selected.kind === "raidNormal") delete state.manifest.raids.normal[state.selected.id];
-    else if (state.selected.kind === "raidBoss") delete state.manifest.raids.boss[state.selected.id];
+    if (state.selected.kind === "level")
+      delete state.manifest.levels[state.selected.id];
+    else if (state.selected.kind === "raidNormal")
+      delete state.manifest.raids.normal[state.selected.id];
+    else if (state.selected.kind === "raidBoss")
+      delete state.manifest.raids.boss[state.selected.id];
     else delete state.manifest.encounters[state.selected.id];
     state.selected = null;
   }
@@ -24041,7 +26507,16 @@ ${suffix}`;
       reader.readAsDataURL(file);
     });
     const assetKey = elements.assetKeyInput.value.trim() || slugify(file.name.replace(/\.[^.]+$/, "")) || `asset_${Date.now()}`;
-    const { error } = await state.supabase.from("ui_assets").upsert({ asset_key: assetKey, data_url: dataUrl, mime_type: file.type || null, content_hash: String(file.lastModified), updated_by: state.session.user.id }, { onConflict: "asset_key" });
+    const { error } = await state.supabase.from("ui_assets").upsert(
+      {
+        asset_key: assetKey,
+        data_url: dataUrl,
+        mime_type: file.type || null,
+        content_hash: String(file.lastModified),
+        updated_by: state.session.user.id
+      },
+      { onConflict: "asset_key" }
+    );
     if (error) throw error;
     elements.assetKeyInput.value = assetKey;
     elements.assetFileInput.value = "";
@@ -24049,18 +26524,27 @@ ${suffix}`;
     renderAssets();
   }
   async function loadWorkspace() {
-    const [draft, latestRelease, releaseHistory, assets] = await Promise.all([fetchDraft(), fetchLatestRelease(), fetchReleaseHistory(), fetchAssets()]);
+    const [draft, latestRelease, releaseHistory, assets] = await Promise.all([
+      fetchDraft(),
+      fetchLatestRelease(),
+      fetchReleaseHistory(),
+      fetchAssets()
+    ]);
     state.assets = assets;
     state.releaseHistory = releaseHistory;
     state.publishedVersion = latestRelease?.version ?? null;
     if (draft?.manifest_json) state.manifest = deepClone2(draft.manifest_json);
-    else if (latestRelease?.manifest_json) state.manifest = deepClone2(latestRelease.manifest_json);
+    else if (latestRelease?.manifest_json)
+      state.manifest = deepClone2(latestRelease.manifest_json);
     else {
       state.manifest = await loadDefaultManifest();
       await saveDraft();
     }
-    if (!state.selected) {
-      const firstLevel = Object.values(state.manifest.levels).sort((a, b) => a.levelId - b.levelId)[0];
+    state.adminWorkspaceLoaded = true;
+    if (!state.selected || !getSelectedRecord()) {
+      const firstLevel = Object.values(state.manifest.levels).sort(
+        (a, b) => a.levelId - b.levelId
+      )[0];
       if (firstLevel) state.selected = { kind: "level", id: firstLevel.id };
     }
     renderAll();
@@ -24073,62 +26557,105 @@ ${suffix}`;
       if (!data.session) throw new Error("\uC800\uC7A5\uB41C \uC138\uC158\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
       state.session = data.session;
     } else {
-      const { data, error } = await state.supabase.auth.signInWithPassword({ email: elements.adminEmail.value.trim(), password: elements.adminPassword.value });
+      const { data, error } = await state.supabase.auth.signInWithPassword({
+        email: elements.adminEmail.value.trim(),
+        password: elements.adminPassword.value
+      });
       if (error) throw error;
       state.session = data.session;
     }
+    if (state.session?.user?.email) {
+      elements.adminEmail.value = state.session.user.email;
+    }
     state.profile = await fetchProfile(state.session.user.id);
-    if (!state.profile?.is_admin) throw new Error("\uAD00\uB9AC\uC790 \uAD8C\uD55C\uC774 \uC788\uB294 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD574\uC57C \uD569\uB2C8\uB2E4.");
-    localStorage.setItem(STORAGE_KEY2, JSON.stringify({ url: elements.supabaseUrl.value.trim(), key: elements.supabaseAnonKey.value.trim(), email: elements.adminEmail.value.trim() }));
+    if (!state.profile?.is_admin)
+      throw new Error("\uAD00\uB9AC\uC790 \uAD8C\uD55C\uC774 \uC788\uB294 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD574\uC57C \uD569\uB2C8\uB2E4.");
+    localStorage.setItem(
+      STORAGE_KEY2,
+      JSON.stringify({
+        url: elements.supabaseUrl.value.trim(),
+        key: elements.supabaseAnonKey.value.trim(),
+        email: state.session.user.email || elements.adminEmail.value.trim()
+      })
+    );
+  }
+  function resetWorkspaceState() {
+    stopVisualFrameLoop();
+    state.activeView = "ui";
+    state.visualManifest = null;
+    state.visualPublishedVersion = null;
+    state.visualReleaseHistory = [];
+    state.visualSelectedScreenId = "level";
+    state.visualSelectedElementId = "header";
+    state.visualConnectedDevices = [];
+    state.visualActiveDeviceSerial = "";
+    state.visualDeviceViewport = null;
+    state.visualFrameDataUrl = "";
+    state.visualHistoryPast = [];
+    state.visualHistoryFuture = [];
+    state.visualDirty = false;
+    state.visualWorkspaceLoaded = false;
+    state.adminWorkspaceLoaded = false;
+    state.manifest = null;
+    state.publishedVersion = null;
+    state.releaseHistory = [];
+    state.assets = [];
+    state.selected = null;
+  }
+  async function enterWorkspace() {
+    resetWorkspaceState();
+    toggleLoginCard(false);
+    elements.workspace.classList.remove("hidden");
+    updateViewVisibility();
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      "\uD654\uBA74 \uCD08\uC548\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4."
+    );
+    setGlobalStatus("\uD654\uBA74 \uD3B8\uC9D1\uAE30\uB97C \uC900\uBE44\uD558\uB294 \uC911\uC785\uB2C8\uB2E4.");
+    renderAll();
+    await loadVisualWorkspace();
+    await setActiveView("ui");
+    setStatus(elements.connectionStatus, "\uB85C\uADF8\uC778\uB428");
+    setGlobalStatus("\uD654\uBA74 \uD3B8\uC9D1\uAE30\uB97C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.", "success");
   }
   async function initializeWorkspace(mode) {
     try {
-      setStatus(elements.connectionStatus, "\uC5F0\uACB0 \uC911...");
+      setStatus(elements.connectionStatus, "\uB85C\uADF8\uC778 \uC911...");
       await login(mode);
-      elements.loginCard.classList.add("hidden");
-      elements.workspace.classList.remove("hidden");
-      setStatus(elements.connectionStatus, "\uC5F0\uACB0\uB428");
-      await loadWorkspace();
+      await enterWorkspace();
     } catch (error) {
       console.error(error);
-      setStatus(elements.connectionStatus, "\uC5F0\uACB0 \uC2E4\uD328");
-      showToast(error.message || "\uB85C\uADF8\uC778 \uB610\uB294 \uBD88\uB7EC\uC624\uAE30\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+      setStatus(
+        elements.connectionStatus,
+        state.session?.user && state.profile?.is_admin ? "\uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328" : "\uB85C\uADF8\uC778 \uC2E4\uD328"
+      );
+      showToast(
+        getErrorMessage(error, "\uB85C\uADF8\uC778 \uB610\uB294 \uCD08\uAE30 \uBD88\uB7EC\uC624\uAE30\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.")
+      );
     }
   }
   async function restoreWorkspaceIfPossible(showFeedback = false) {
     try {
-      await ensureClient();
-      const { data, error } = await state.supabase.auth.getSession();
-      if (error) throw error;
-      if (!data.session) {
-        setStatus(elements.connectionStatus, "\uB85C\uADF8\uC778 \uD544\uC694");
+      await login("restore");
+      await enterWorkspace();
+      setStatus(elements.connectionStatus, "\uC138\uC158 \uBCF5\uC6D0\uB428");
+      return true;
+    } catch (error) {
+      const message = getErrorMessage(error, "\uC138\uC158 \uBCF5\uC6D0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+      if (message === "\uC800\uC7A5\uB41C \uC138\uC158\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.") {
+        setStatus(elements.connectionStatus, "\uBBF8\uB9AC\uBCF4\uAE30 \uBAA8\uB4DC");
         if (showFeedback) {
           showToast("\uBCF5\uC6D0\uD560 \uB85C\uADF8\uC778 \uC138\uC158\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
         }
         return false;
       }
-      state.session = data.session;
-      state.profile = await fetchProfile(state.session.user.id);
-      if (!state.profile?.is_admin) {
-        await state.supabase.auth.signOut();
-        state.session = null;
-        state.profile = null;
-        setStatus(elements.connectionStatus, "\uAD00\uB9AC\uC790 \uB85C\uADF8\uC778 \uD544\uC694");
-        if (showFeedback) {
-          showToast("\uAD00\uB9AC\uC790 \uAD8C\uD55C\uC774 \uC788\uB294 \uACC4\uC815\uC73C\uB85C \uB85C\uADF8\uC778\uD574\uC57C \uD569\uB2C8\uB2E4.");
-        }
-        return false;
-      }
-      elements.loginCard.classList.add("hidden");
-      elements.workspace.classList.remove("hidden");
-      setStatus(elements.connectionStatus, "\uC138\uC158 \uBCF5\uC6D0\uB428");
-      await loadWorkspace();
-      return true;
-    } catch (error) {
       console.error(error);
-      setStatus(elements.connectionStatus, "\uC138\uC158 \uBCF5\uC6D0 \uC2E4\uD328");
+      setStatus(
+        elements.connectionStatus,
+        state.session?.user && state.profile?.is_admin ? "\uBD88\uB7EC\uC624\uAE30 \uC2E4\uD328" : "\uC138\uC158 \uBCF5\uC6D0 \uC2E4\uD328"
+      );
       if (showFeedback) {
-        showToast(error.message || "\uC138\uC158 \uBCF5\uC6D0\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
+        showToast(message);
       }
       return false;
     }
@@ -24136,11 +26663,491 @@ ${suffix}`;
   function applyManifestJson() {
     try {
       state.manifest = JSON.parse(elements.manifestJson.value);
+      state.adminWorkspaceLoaded = true;
       renderAll();
       bindDynamicEvents();
-    } catch (error) {
-      showToast(`JSON \uD30C\uC2F1 \uC2E4\uD328: ${error.message}`);
+    } catch (_error) {
+      showToast("JSON \uD615\uC2DD\uC774 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
     }
+  }
+  function syncCustomViewportFromInputs() {
+    state.visualCustomViewport = sanitizeViewport({
+      width: elements.visualViewportWidth.value,
+      height: elements.visualViewportHeight.value,
+      safeTop: elements.visualSafeTop.value,
+      safeBottom: elements.visualSafeBottom.value
+    });
+  }
+  function commitVisualInspectorChange() {
+    if (!state.visualManifest) {
+      return;
+    }
+    pushVisualHistory();
+    updateVisualRuleFromInputs();
+    markVisualDirty();
+    renderAll();
+  }
+  async function refreshPhoneFrameWithFeedback() {
+    if (state.visualDeviceSource !== "phone") {
+      setInlineStatus(
+        elements.visualStageStatus,
+        "\uC2E4\uC81C \uD3F0 \uD654\uBA74 \uBAA8\uB4DC\uC5D0\uC11C\uB9CC \uC0C8\uB85C \uAC00\uC838\uC62C \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+      );
+      return;
+    }
+    await refreshDeviceViewport(false);
+    await refreshVisualLiveLayout(false);
+    await refreshVisualFrame(true);
+    renderAll();
+  }
+  async function initializePreviewWorkspace() {
+    toggleLoginCard(false);
+    elements.workspace.classList.remove("hidden");
+    state.activeView = "ui";
+    state.visualManifest = createDefaultVisualManifest();
+    state.visualPublishedVersion = null;
+    state.visualReleaseHistory = [];
+    state.visualSelectedScreenId = "level";
+    state.visualSelectedElementId = "header";
+    state.visualHistoryPast = [];
+    state.visualHistoryFuture = [];
+    state.visualDirty = false;
+    state.visualWorkspaceLoaded = false;
+    state.adminWorkspaceLoaded = false;
+    state.manifest = null;
+    state.publishedVersion = null;
+    state.releaseHistory = [];
+    state.assets = [];
+    state.selected = null;
+    setStatus(elements.connectionStatus, "\uBBF8\uB9AC\uBCF4\uAE30 \uBAA8\uB4DC");
+    setGlobalStatus(
+      "\uB85C\uADF8\uC778 \uC5C6\uC774 \uD3F0 \uD654\uBA74 \uBBF8\uB9AC\uBCF4\uAE30\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC800\uC7A5\uACFC \uBC30\uD3EC\uB294 \uB85C\uADF8\uC778 \uD6C4 \uAC00\uB2A5\uD569\uB2C8\uB2E4."
+    );
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      "\uBBF8\uB9AC\uBCF4\uAE30 \uC804\uC6A9 \uBAA8\uB4DC\uC785\uB2C8\uB2E4. \uD654\uBA74 \uD655\uC778\uACFC \uC704\uCE58 \uC870\uC815\uB9CC \uAC00\uB2A5\uD569\uB2C8\uB2E4."
+    );
+    renderAll();
+    try {
+      await refreshConnectedDevices(false);
+      if (state.visualDeviceSource === "phone" && state.visualActiveDeviceSerial) {
+        await refreshVisualFrame(false);
+      }
+    } catch (error) {
+      setInlineStatus(
+        elements.visualDeviceMeta,
+        getErrorMessage(error, "\uAE30\uAE30 \uC5F0\uACB0 \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."),
+        "error"
+      );
+    }
+    renderAll();
+  }
+  function bindNavigationEvents() {
+    elements.viewUiButton.addEventListener(
+      "click",
+      () => void setActiveView("ui")
+    );
+    elements.viewAdminButton.addEventListener(
+      "click",
+      () => void setActiveView("admin")
+    );
+    elements.viewHistoryButton.addEventListener(
+      "click",
+      () => void setActiveView("history")
+    );
+    elements.viewSettingsButton.addEventListener(
+      "click",
+      () => void setActiveView("settings")
+    );
+  }
+  function bindVisualEvents() {
+    elements.visualScreenId.addEventListener("change", async () => {
+      state.visualSelectedScreenId = elements.visualScreenId.value;
+      const screenElements = ELEMENT_DEFS[state.visualSelectedScreenId] ?? [];
+      if (!screenElements.some((item) => item.id === state.visualSelectedElementId)) {
+        state.visualSelectedElementId = screenElements[0]?.id || "header";
+      }
+      if (state.visualDeviceSource === "phone" && state.visualActiveDeviceSerial) {
+        try {
+          await refreshDeviceViewport(false);
+          await refreshVisualLiveLayout(false);
+          await refreshVisualFrame(false);
+        } catch (error) {
+          setInlineStatus(
+            elements.visualDeviceMeta,
+            getErrorMessage(
+              error,
+              "\uC2E4\uC81C \uAE30\uAE30 \uD654\uBA74\uC744 \uB2E4\uC2DC \uB3D9\uAE30\uD654\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."
+            ),
+            "error"
+          );
+        }
+      }
+      renderAll();
+    });
+    elements.visualDeviceSource.addEventListener("change", async () => {
+      state.visualDeviceSource = elements.visualDeviceSource.value;
+      if (state.visualDeviceSource === "phone") {
+        try {
+          await refreshConnectedDevices(false);
+          if (state.visualActiveDeviceSerial) {
+            await refreshVisualFrame(false);
+          }
+        } catch (error) {
+          setInlineStatus(
+            elements.visualDeviceMeta,
+            getErrorMessage(error, "\uC2E4\uC81C \uD3F0 \uC5F0\uACB0\uC744 \uD655\uC778\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."),
+            "error"
+          );
+        }
+      } else {
+        stopVisualFrameLoop();
+      }
+      renderAll();
+    });
+    elements.visualDeviceSelect.addEventListener("change", async () => {
+      state.visualActiveDeviceSerial = elements.visualDeviceSelect.value;
+      state.visualFrameDataUrl = "";
+      try {
+        await refreshDeviceViewport(false);
+        await refreshVisualLiveLayout(false);
+        if (state.visualDeviceSource === "phone" && state.visualActiveDeviceSerial) {
+          await refreshVisualFrame(false);
+        }
+      } catch (error) {
+        setInlineStatus(
+          elements.visualDeviceMeta,
+          getErrorMessage(error, "\uAE30\uAE30 \uD654\uBA74 \uC815\uBCF4\uB97C \uC5C5\uB370\uC774\uD2B8\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."),
+          "error"
+        );
+      }
+      renderAll();
+    });
+    elements.visualDeviceProfile.addEventListener("change", () => {
+      state.visualDeviceProfileId = elements.visualDeviceProfile.value;
+      renderAll();
+    });
+    [
+      elements.visualViewportWidth,
+      elements.visualViewportHeight,
+      elements.visualSafeTop,
+      elements.visualSafeBottom
+    ].forEach((input) => {
+      input.addEventListener("change", () => {
+        syncCustomViewportFromInputs();
+        renderAll();
+      });
+    });
+    elements.visualRefreshDeviceButton.addEventListener("click", async () => {
+      try {
+        await refreshConnectedDevices(true);
+        renderAll();
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uAE30\uAE30 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.visualRefreshFrameButton.addEventListener("click", async () => {
+      try {
+        await refreshPhoneFrameWithFeedback();
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.visualShowGrid.addEventListener("change", () => {
+      state.visualShowGrid = elements.visualShowGrid.checked;
+      renderAll();
+    });
+    elements.visualSnapGrid.addEventListener("change", () => {
+      state.visualSnapGrid = elements.visualSnapGrid.checked;
+      renderAll();
+    });
+    elements.visualGridSize.addEventListener("change", () => {
+      state.visualGridSize = Math.max(
+        1,
+        Number(elements.visualGridSize.value) || 16
+      );
+      renderAll();
+    });
+    elements.visualFitButton.addEventListener("click", () => {
+      state.visualZoomMode = "fit";
+      renderAll();
+    });
+    elements.visualActualButton.addEventListener("click", () => {
+      state.visualZoomMode = "actual";
+      renderAll();
+    });
+    window.addEventListener("focus", async () => {
+      if (state.activeView !== "ui" || state.visualDeviceSource !== "phone" || !state.visualActiveDeviceSerial) {
+        return;
+      }
+      try {
+        await refreshDeviceViewport(false);
+        await refreshVisualLiveLayout(false);
+        await refreshVisualFrame(false);
+        renderVisualEditor();
+      } catch {
+      }
+    });
+    [
+      elements.visualOffsetX,
+      elements.visualOffsetY,
+      elements.visualScale,
+      elements.visualWidthScale,
+      elements.visualHeightScale,
+      elements.visualOpacity,
+      elements.visualZIndex,
+      elements.visualVisible
+    ].forEach((input) => {
+      input.addEventListener("change", commitVisualInspectorChange);
+    });
+    elements.visualSafeAware.addEventListener(
+      "change",
+      commitVisualInspectorChange
+    );
+    elements.visualNudgeUp.addEventListener("click", () => nudgeVisual(0, -1));
+    elements.visualNudgeDown.addEventListener("click", () => nudgeVisual(0, 1));
+    elements.visualNudgeLeft.addEventListener("click", () => nudgeVisual(-1, 0));
+    elements.visualNudgeRight.addEventListener("click", () => nudgeVisual(1, 0));
+    elements.visualNudgeUpLarge.addEventListener(
+      "click",
+      () => nudgeVisual(0, -10)
+    );
+    elements.visualNudgeDownLarge.addEventListener(
+      "click",
+      () => nudgeVisual(0, 10)
+    );
+    elements.visualNudgeLeftLarge.addEventListener(
+      "click",
+      () => nudgeVisual(-10, 0)
+    );
+    elements.visualNudgeRightLarge.addEventListener(
+      "click",
+      () => nudgeVisual(10, 0)
+    );
+    elements.visualUndoButton.addEventListener("click", () => {
+      const previous = state.visualHistoryPast.pop();
+      if (!previous || !state.visualManifest) {
+        return;
+      }
+      state.visualHistoryFuture.push(JSON.stringify(state.visualManifest));
+      applyVisualHistorySnapshot(previous);
+      renderAll();
+    });
+    elements.visualRedoButton.addEventListener("click", () => {
+      const next = state.visualHistoryFuture.pop();
+      if (!next || !state.visualManifest) {
+        return;
+      }
+      state.visualHistoryPast.push(JSON.stringify(state.visualManifest));
+      applyVisualHistorySnapshot(next);
+      renderAll();
+    });
+    elements.visualResetButton.addEventListener("click", () => {
+      if (!state.visualManifest) {
+        return;
+      }
+      pushVisualHistory();
+      const rule = getVisualSelectedRule();
+      Object.assign(rule, clone(DEFAULT_RULE));
+      markVisualDirty();
+      renderAll();
+    });
+    elements.visualSaveDraftButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uD654\uBA74 \uCD08\uC548 \uC800\uC7A5")) {
+        return;
+      }
+      try {
+        await saveVisualDraft();
+        renderAll();
+        showToast("\uD654\uBA74 \uCD08\uC548\uC744 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.");
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uD654\uBA74 \uCD08\uC548 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.visualPublishButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uD654\uBA74 \uBC30\uD3EC")) {
+        return;
+      }
+      try {
+        await publishVisualDraft();
+        renderAll();
+        showToast("\uD654\uBA74 \uBC30\uD3EC\uB97C \uC644\uB8CC\uD588\uC2B5\uB2C8\uB2E4.");
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uD654\uBA74 \uBC30\uD3EC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+  }
+  function bindAdminEvents() {
+    elements.refreshButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uC0C8\uB85C\uACE0\uCE68")) {
+        return;
+      }
+      try {
+        await loadWorkspace();
+        setGlobalStatus("\uAD00\uB9AC\uC790 \uB370\uC774\uD130\uB97C \uC0C8\uB85C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.", "success");
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uAD00\uB9AC\uC790 \uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.saveDraftButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uAD00\uB9AC\uC790 \uCD08\uC548 \uC800\uC7A5")) {
+        return;
+      }
+      try {
+        await saveDraft();
+        await loadWorkspace();
+        showToast("\uAD00\uB9AC\uC790 \uCD08\uC548\uC744 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.");
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uAD00\uB9AC\uC790 \uCD08\uC548 \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.publishButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uBC30\uD3EC")) {
+        return;
+      }
+      try {
+        await publishDraft();
+        await loadWorkspace();
+        showToast("\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uBC30\uD3EC\uB97C \uC644\uB8CC\uD588\uC2B5\uB2C8\uB2E4.");
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uBC30\uD3EC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.copyJsonButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uC124\uC815 JSON \uBCF5\uC0AC")) {
+        return;
+      }
+      await navigator.clipboard.writeText(elements.manifestJson.value);
+      showToast("\uC124\uC815 JSON\uC744 \uBCF5\uC0AC\uD588\uC2B5\uB2C8\uB2E4.");
+    });
+    elements.applyJsonButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uC124\uC815 JSON \uC801\uC6A9")) {
+        return;
+      }
+      applyManifestJson();
+    });
+    elements.uploadAssetButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("\uC774\uBBF8\uC9C0 \uC5C5\uB85C\uB4DC")) {
+        return;
+      }
+      try {
+        await uploadAsset();
+        renderAll();
+        bindDynamicEvents();
+        showToast("\uC774\uBBF8\uC9C0\uB97C \uC5C5\uB85C\uB4DC\uD588\uC2B5\uB2C8\uB2E4.");
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uC774\uBBF8\uC9C0 \uC5C5\uB85C\uB4DC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.addLevelButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uB808\uBCA8 \uCD94\uAC00")) {
+        return;
+      }
+      createLevelEntry();
+      renderAll();
+      bindDynamicEvents();
+    });
+    elements.addNormalRaidButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uC77C\uBC18 \uB808\uC774\uB4DC \uCD94\uAC00")) {
+        return;
+      }
+      createRaidEntry("raidNormal");
+      renderAll();
+      bindDynamicEvents();
+    });
+    elements.addBossRaidButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uBCF4\uC2A4 \uB808\uC774\uB4DC \uCD94\uAC00")) {
+        return;
+      }
+      createRaidEntry("raidBoss");
+      renderAll();
+      bindDynamicEvents();
+    });
+    elements.addEncounterButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uC801 \uD15C\uD50C\uB9BF \uCD94\uAC00")) {
+        return;
+      }
+      createEncounterEntry();
+      renderAll();
+      bindDynamicEvents();
+    });
+    elements.cloneButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uD56D\uBAA9 \uBCF5\uC81C")) {
+        return;
+      }
+      cloneSelected();
+      renderAll();
+      bindDynamicEvents();
+    });
+    elements.deleteButton.addEventListener("click", () => {
+      if (!requireAdminAccess("\uD56D\uBAA9 \uC0AD\uC81C")) {
+        return;
+      }
+      deleteSelected();
+      renderAll();
+      bindDynamicEvents();
+    });
+  }
+  function bindSharedEvents() {
+    elements.logoutButton.addEventListener("click", async () => {
+      if (!state.session?.user) {
+        toggleLoginCard();
+        return;
+      }
+      try {
+        if (state.supabase) {
+          await state.supabase.auth.signOut();
+        }
+      } finally {
+        state.session = null;
+        state.profile = null;
+        resetWorkspaceState();
+        void initializePreviewWorkspace();
+      }
+    });
+    elements.settingsRefreshDevicesButton.addEventListener("click", async () => {
+      try {
+        await refreshConnectedDevices(true);
+        renderAll();
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uAE30\uAE30 \uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.settingsRefreshFrameButton.addEventListener("click", async () => {
+      try {
+        await refreshPhoneFrameWithFeedback();
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (!state.visualManifest || state.activeView !== "ui") {
+        return;
+      }
+      const tagName = document.activeElement?.tagName || "";
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(tagName)) {
+        return;
+      }
+      const step = event.shiftKey ? 10 : 1;
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        nudgeVisual(0, -step);
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        nudgeVisual(0, step);
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        nudgeVisual(-step, 0);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        nudgeVisual(step, 0);
+      }
+    });
+    window.addEventListener("resize", () => {
+      if (state.visualManifest) {
+        renderAll();
+      }
+    });
   }
   async function bootstrap() {
     elements.supabaseUrl.value = DEFAULT_SUPABASE_URL;
@@ -24149,86 +27156,38 @@ ${suffix}`;
     if (saved?.url) elements.supabaseUrl.value = saved.url;
     if (saved?.key) elements.supabaseAnonKey.value = saved.key;
     if (saved?.email) elements.adminEmail.value = saved.email;
-    if (localDesktopConfig?.supabaseUrl) elements.supabaseUrl.value = localDesktopConfig.supabaseUrl;
-    if (localDesktopConfig?.supabaseAnonKey) elements.supabaseAnonKey.value = localDesktopConfig.supabaseAnonKey;
-    if (localDesktopConfig?.email) elements.adminEmail.value = localDesktopConfig.email;
-    if (localDesktopConfig?.password) elements.adminPassword.value = localDesktopConfig.password;
-    elements.loginButton.addEventListener("click", () => void initializeWorkspace("login"));
-    elements.restoreButton.addEventListener("click", () => void restoreWorkspaceIfPossible(true));
-    elements.refreshButton.addEventListener("click", () => void loadWorkspace());
-    elements.saveDraftButton.addEventListener("click", async () => {
-      try {
-        await saveDraft();
-        showToast("Draft\uB97C \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4.");
-        await loadWorkspace();
-      } catch (error) {
-        showToast(error.message || "Draft \uC800\uC7A5\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
-      }
-    });
-    elements.publishButton.addEventListener("click", async () => {
-      try {
-        await publishDraft();
-        showToast("\uC0C8 creator release\uB97C \uBC30\uD3EC\uD588\uC2B5\uB2C8\uB2E4.");
-        await loadWorkspace();
-      } catch (error) {
-        showToast(error.message || "Publish\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
-      }
-    });
-    elements.logoutButton.addEventListener("click", async () => {
-      if (state.supabase) await state.supabase.auth.signOut();
-      state.session = null;
-      state.profile = null;
-      state.manifest = null;
-      state.selected = null;
-      elements.workspace.classList.add("hidden");
-      elements.loginCard.classList.remove("hidden");
-      setStatus(elements.connectionStatus, "\uB85C\uADF8\uC778 \uD544\uC694");
-    });
-    elements.copyJsonButton.addEventListener("click", async () => {
-      await navigator.clipboard.writeText(elements.manifestJson.value);
-      showToast("Manifest JSON\uC744 \uBCF5\uC0AC\uD588\uC2B5\uB2C8\uB2E4.");
-    });
-    elements.applyJsonButton.addEventListener("click", applyManifestJson);
-    elements.uploadAssetButton.addEventListener("click", async () => {
-      try {
-        await uploadAsset();
-        showToast("\uC774\uBBF8\uC9C0\uB97C \uC5C5\uB85C\uB4DC\uD588\uC2B5\uB2C8\uB2E4.");
-        renderAll();
-        bindDynamicEvents();
-      } catch (error) {
-        showToast(error.message || "\uC774\uBBF8\uC9C0 \uC5C5\uB85C\uB4DC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4.");
-      }
-    });
-    elements.addLevelButton.addEventListener("click", () => {
-      createLevelEntry();
-      renderAll();
-      bindDynamicEvents();
-    });
-    elements.addNormalRaidButton.addEventListener("click", () => {
-      createRaidEntry("raidNormal");
-      renderAll();
-      bindDynamicEvents();
-    });
-    elements.addBossRaidButton.addEventListener("click", () => {
-      createRaidEntry("raidBoss");
-      renderAll();
-      bindDynamicEvents();
-    });
-    elements.addEncounterButton.addEventListener("click", () => {
-      createEncounterEntry();
-      renderAll();
-      bindDynamicEvents();
-    });
-    elements.cloneButton.addEventListener("click", () => {
-      cloneSelected();
-      renderAll();
-      bindDynamicEvents();
-    });
-    elements.deleteButton.addEventListener("click", () => {
-      deleteSelected();
-      renderAll();
-      bindDynamicEvents();
-    });
+    if (localDesktopConfig?.supabaseUrl)
+      elements.supabaseUrl.value = localDesktopConfig.supabaseUrl;
+    if (localDesktopConfig?.supabaseAnonKey)
+      elements.supabaseAnonKey.value = localDesktopConfig.supabaseAnonKey;
+    if (localDesktopConfig?.email)
+      elements.adminEmail.value = localDesktopConfig.email;
+    if (localDesktopConfig?.password)
+      elements.adminPassword.value = localDesktopConfig.password;
+    elements.visualScreenId.innerHTML = Object.entries(SCREEN_LABELS).map(
+      ([value, label]) => `<option value="${value}" ${value === state.visualSelectedScreenId ? "selected" : ""}>${label}</option>`
+    ).join("");
+    elements.visualGridSize.value = String(state.visualGridSize);
+    elements.visualShowGrid.checked = state.visualShowGrid;
+    elements.visualSnapGrid.checked = state.visualSnapGrid;
+    elements.visualDeviceSource.value = state.visualDeviceSource;
+    syncCustomViewportFromInputs();
+    updateViewVisibility();
+    renderAll();
+    bindVisualPointerEvents();
+    bindNavigationEvents();
+    bindVisualEvents();
+    bindAdminEvents();
+    bindSharedEvents();
+    await initializePreviewWorkspace();
+    elements.loginButton.addEventListener(
+      "click",
+      () => void initializeWorkspace("login")
+    );
+    elements.restoreButton.addEventListener(
+      "click",
+      () => void restoreWorkspaceIfPossible(true)
+    );
     const restored = await restoreWorkspaceIfPossible(false);
     if (!restored && localDesktopConfig?.autoLogin !== false && elements.adminEmail.value && elements.adminPassword.value) {
       await initializeWorkspace("login");

@@ -8,13 +8,25 @@ $portableExe = Get-ChildItem -Path $portablePattern -ErrorAction SilentlyContinu
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 1
 
+$candidates = @()
 if ($portableExe) {
-  Start-Process -FilePath $portableExe.FullName | Out-Null
-  exit 0
+  $candidates += [pscustomobject]@{
+    Path = $portableExe.FullName
+    LastWriteTime = $portableExe.LastWriteTime
+  }
 }
 
 if (Test-Path -LiteralPath $unpackedExe) {
-  Start-Process -FilePath $unpackedExe | Out-Null
+  $unpackedItem = Get-Item -LiteralPath $unpackedExe
+  $candidates += [pscustomobject]@{
+    Path = $unpackedItem.FullName
+    LastWriteTime = $unpackedItem.LastWriteTime
+  }
+}
+
+if ($candidates.Count -gt 0) {
+  $latest = $candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  Start-Process -FilePath $latest.Path | Out-Null
   exit 0
 }
 

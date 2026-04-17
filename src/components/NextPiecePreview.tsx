@@ -1,8 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { Piece } from '../game/engine';
+import {
+  type Piece,
+  getPieceRewardMarkerCell,
+} from '../game/engine';
 import { getGameplayLayoutScale } from '../game/layoutScale';
 import type { VisualViewport } from '../game/visualConfig';
+import SpecialBlockBadge from './SpecialBlockBadge';
 
 function MiniPiece({
   piece,
@@ -17,6 +21,8 @@ function MiniPiece({
   const boxSize = Math.max(34, Math.round((compact ? 44 : 46) * layoutScale));
   const boxPadding = Math.max(2, Math.round((compact ? 3 : 4) * layoutScale));
   const cellSize = Math.max(5, Math.round((compact ? 7 : 8) * layoutScale));
+  const rewardMarker =
+    piece.isGem || piece.isItem ? getPieceRewardMarkerCell(piece.shape) : null;
 
   return (
     <View
@@ -47,7 +53,29 @@ function MiniPiece({
                     }
                   : styles.emptyCell,
               ]}
-            />
+            >
+              {cell === 1 && rewardMarker !== null && (
+                <SpecialBlockBadge
+                  isGem={
+                    rewardMarker.row === rowIndex &&
+                    rewardMarker.col === cellIndex &&
+                    piece.isGem === true
+                  }
+                  isItem={
+                    rewardMarker.row === rowIndex &&
+                    rewardMarker.col === cellIndex &&
+                    piece.isItem === true
+                  }
+                  itemType={
+                    rewardMarker.row === rowIndex &&
+                    rewardMarker.col === cellIndex
+                      ? piece.itemType
+                      : undefined
+                  }
+                  size={cellSize}
+                />
+              )}
+            </View>
           ))}
         </View>
       ))}
@@ -169,6 +197,7 @@ const styles = StyleSheet.create({
     margin: 1,
     borderRadius: 2,
     borderWidth: 0.5,
+    position: 'relative',
   },
   emptyCell: {
     backgroundColor: 'transparent',
