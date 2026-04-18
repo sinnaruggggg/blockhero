@@ -95,7 +95,13 @@ import {
   dealRaidDamage,
   joinRaidInstance,
   getRaidChannel,
+  expireRaidInstance,
 } from '../services/raidService';
+import {
+  clearRaidScreenCache,
+  readRaidScreenCache,
+  writeRaidScreenCache,
+} from '../services/raidRuntimeCache';
 import { upsertCodexEntry } from '../services/codexService';
 import { calculateRewards, RewardResult } from '../constants/raidRewards';
 import { checkNewTitles } from '../constants/titles';
@@ -321,13 +327,14 @@ export default function RaidScreen({ route, navigation }: any) {
           getRaidBossAttackStats(bossStage).attackIntervalMs,
         tier: 'boss' as const,
       };
+  const cachedRaidSnapshot = useRef(readRaidScreenCache(instanceId)).current;
   const raidBoardMetrics = getBoardMetrics(visualViewport, {
     compact: true,
   });
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
-  const [bossHp, setBossHp] = useState(bossMaxHp);
+  const [bossHp, setBossHp] = useState(cachedRaidSnapshot?.bossHp ?? bossMaxHp);
   const [playerHp, setPlayerHp] = useState(200);
   const [maxPlayerHp, setMaxPlayerHp] = useState(200);
   const [combo, setCombo] = useState(0);
@@ -336,7 +343,9 @@ export default function RaidScreen({ route, navigation }: any) {
   const [feverGauge, setFeverGauge] = useState(0);
   const [feverActive, setFeverActive] = useState(false);
   const [feverRemainingMs, setFeverRemainingMs] = useState(0);
-  const [participants, setParticipants] = useState<RaidParticipant[]>([]);
+  const [participants, setParticipants] = useState<RaidParticipant[]>(
+    cachedRaidSnapshot?.participants ?? [],
+  );
   const [skillGauge, setSkillGauge] = useState(0);
   const [activeMultiplier, setActiveMultiplier] = useState(1);
   const [myTotalDamage, setMyTotalDamage] = useState(0);
@@ -358,8 +367,16 @@ export default function RaidScreen({ route, navigation }: any) {
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [bossPose, setBossPose] = useState<MonsterSpritePose>('idle');
   const [round, setRound] = useState(0);
-  const [attackTimerText, setAttackTimerText] = useState('10:00');
-  const [expiresAt, setExpiresAt] = useState(0);
+  const [attackTimerText, setAttackTimerText] = useState(
+    isNormalRaid
+      ? '?곸떆 ?꾩쟾'
+      : cachedRaidSnapshot
+        ? formatAttackTimer(
+            Math.max(0, cachedRaidSnapshot.expiresAt - Date.now()),
+          )
+        : '10:00',
+  );
+  const [expiresAt, setExpiresAt] = useState(cachedRaidSnapshot?.expiresAt ?? 0);
   const [rewardData, setRewardData] = useState<RewardResult | null>(null);
   const [rewardCollected, setRewardCollected] = useState(false);
   const [standingsExpanded, setStandingsExpanded] = useState(false);
@@ -379,13 +396,20 @@ export default function RaidScreen({ route, navigation }: any) {
   const [raidSkillLevels, setRaidSkillLevels] = useState<
     Record<number, number>
   >({});
+  const [localCoreReady, setLocalCoreReady] = useState(false);
+  const [instanceReady, setInstanceReady] = useState(Boolean(cachedRaidSnapshot));
+  const [participantsReady, setParticipantsReady] = useState(
+    Boolean(cachedRaidSnapshot),
+  );
   const [failureReason, setFailureReason] = useState<
     'board_full' | 'hp_zero' | 'time_up'
   >('board_full');
 
   // Spectator mode states
   const [spectatorMode, setSpectatorMode] = useState(false);
-  const [_alivePlayers, setAlivePlayers] = useState<string[]>([]);
+  const [alivePlayers, setAlivePlayers] = useState<string[]>(
+    cachedRaidSnapshot?.alivePlayerIds ?? [],
+  );
   const [_spectatingIdx, setSpectatingIdx] = useState(0);
   const [spectatorBoard, setSpectatorBoard] = useState<BoardType>(
     createBoard(),
@@ -414,7 +438,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const baseAttackPowerRef = useRef(10);
   const playerHpRef = useRef(200);
   const baseMaxPlayerHpRef = useRef(200);
-  const bossHpRef = useRef(bossMaxHp);
+  const bossHpRef = useRef(cachedRaidSnapshot?.bossHp ?? bossMaxHp);
   const selectedCharacterRef = useRef<string | null>(null);
   const selectedCharacterDataRef = useRef<any>(null);
   const activeSkinIdRef = useRef(0);
@@ -441,8 +465,10 @@ export default function RaidScreen({ route, navigation }: any) {
   const remoteBoardsRef = useRef<
     Map<string, { board: BoardType; nickname: string }>
   >(new Map());
-  const alivePlayersRef = useRef<string[]>([]);
-  const participantCountRef = useRef(0);
+  const alivePlayersRef = useRef<string[]>(
+    cachedRaidSnapshot?.alivePlayerIds ?? [],
+  );
+  const participantCountRef = useRef(cachedRaidSnapshot?.participants.length ?? 0);
   const chatScrollRef = useRef<ScrollView>(null);
   const gameDataRef = useRef<GameData | null>(null);
   const playerHpAnim = useRef(new Animated.Value(1)).current;
@@ -618,30 +644,57 @@ export default function RaidScreen({ route, navigation }: any) {
     setSkillGauge(0);
     setActiveMultiplier(1);
     setRaidSkillLevels({});
+    setLocalCoreReady(false);
+    setInstanceReady(Boolean(cachedRaidSnapshot));
+    setParticipantsReady(Boolean(cachedRaidSnapshot));
+    if (cachedRaidSnapshot) {
+      setBossHp(cachedRaidSnapshot.bossHp);
+      bossHpRef.current = cachedRaidSnapshot.bossHp;
+      setParticipants(cachedRaidSnapshot.participants);
+      participantCountRef.current = cachedRaidSnapshot.participants.length;
+      setAlivePlayers(cachedRaidSnapshot.alivePlayerIds);
+      alivePlayersRef.current = cachedRaidSnapshot.alivePlayerIds;
+      setExpiresAt(cachedRaidSnapshot.expiresAt);
+      if (!isNormalRaid) {
+        setAttackTimerText(
+          formatAttackTimer(
+            Math.max(0, cachedRaidSnapshot.expiresAt - Date.now()),
+          ),
+        );
+      }
+    }
     (async () => {
       try {
-        const [playerId, nickname, noticeMode] = await withTimeout(
+        const [
+          playerId,
+          nickname,
+          noticeMode,
+          nextGameData,
+          skinData,
+          selectedCharacter,
+          rawSettings,
+        ] = await withTimeout(
           Promise.all([
             getPlayerId(),
             getNickname(),
             loadSkillTriggerNoticeMode(),
+            loadGameData(),
+            loadSkinData(),
+            getSelectedCharacter(),
+            AsyncStorage.getItem('gameSettings'),
           ]),
-          'raid_player_profile',
+          'raid_local_bootstrap',
         );
         playerIdRef.current = playerId;
         nicknameRef.current = nickname;
         skillNoticeModeRef.current = noticeMode;
-        gameDataRef.current = await withTimeout(
-          loadGameData(),
-          'raid_game_data',
-        );
+        gameDataRef.current = nextGameData;
         if (mounted && gameDataRef.current) {
-          const levels = getRaidSkillLevels(gameDataRef.current.items);
+          const levels = getRaidSkillLevels(nextGameData.items);
           raidSkillLevelsRef.current = levels;
           setRaidSkillLevels(levels);
         }
 
-        const skinData = await withTimeout(loadSkinData(), 'raid_skin_data');
         setActiveSkin(skinData.activeSkinId);
         activeSkinIdRef.current = skinData.activeSkinId;
         const skinLoadout = getActiveSkinLoadout(skinData);
@@ -655,10 +708,19 @@ export default function RaidScreen({ route, navigation }: any) {
           setSummonRemainingMs(skinLoadout.summonDurationMs);
         }
 
-        const selectedCharacter = await withTimeout(
-          getSelectedCharacter(),
-          'raid_selected_character',
-        );
+        const instancePromise = withTimeout(
+          getRaidInstance(instanceId),
+          'raid_instance',
+        ).catch(error => ({ data: null, error }));
+        const joinPromise = withTimeout(
+          joinRaidInstance(
+            instanceId,
+            playerIdRef.current,
+            nicknameRef.current,
+          ),
+          'raid_join',
+        ).catch(error => ({ data: null, error }));
+
         if (selectedCharacter) {
           const characterData = await withTimeout(
             loadCharacterData(selectedCharacter),
@@ -691,19 +753,15 @@ export default function RaidScreen({ route, navigation }: any) {
           }
         }
 
-        // Load vibration setting
         try {
-          const settings = await withTimeout(
-            AsyncStorage.getItem('gameSettings'),
-            'raid_game_settings',
-          );
-          if (settings) {
-            const parsed = JSON.parse(settings);
-            if (parsed.vibration === false) vibrationRef.current = false;
+          if (rawSettings) {
+            const parsed = JSON.parse(rawSettings);
+            if (parsed.vibration === false) {
+              vibrationRef.current = false;
+            }
           }
         } catch {}
 
-        // Generate first set of pieces
         const skinColors = getSkinColors();
         const difficulty = getDifficulty(Math.min(bossStage, 10));
         const p = generatePlaceablePieces(
@@ -715,59 +773,46 @@ export default function RaidScreen({ route, navigation }: any) {
         if (mounted) {
           setPieces(p);
           setRound(1);
+          setLocalCoreReady(true);
         }
 
-        // Get initial instance state
-        const { data: instance } = await withTimeout(
-          getRaidInstance(instanceId),
-          'raid_instance',
-        );
+        const [instanceResult, joinResult] = await Promise.all([
+          instancePromise,
+          joinPromise,
+        ]);
+
+        if (instanceResult?.error) {
+          throw instanceResult.error;
+        }
+        if (joinResult?.error) {
+          throw joinResult.error;
+        }
+
+        const instance = instanceResult?.data;
+        if (!instance) {
+          throw new Error('raid_instance_missing');
+        }
+
         if (mounted && instance) {
           setBossHp(instance.boss_current_hp);
           bossHpRef.current = instance.boss_current_hp;
           startedAtRef.current = new Date(instance.started_at).getTime();
           const expTs = new Date(instance.expires_at).getTime();
-          setExpiresAt(expTs + getRaidEffects().raidTimeBonusMs);
+          setExpiresAt(expTs);
 
           if (!isNormalRaid && Date.now() >= expTs) {
+            void expireRaidInstance(instanceId);
             setTimeExpired(true);
             setFailureReason('time_up');
             setGameOver(true);
             gameOverRef.current = true;
           }
+
+          if (!isNormalRaid) {
+            setAttackTimerText(formatAttackTimer(Math.max(0, expTs - Date.now())));
+          }
         }
 
-        // Ensure we're a participant
-        await withTimeout(
-          joinRaidInstance(
-            instanceId,
-            playerIdRef.current,
-            nicknameRef.current,
-          ),
-          'raid_join',
-        );
-
-        // Get initial participants
-        const { data: parts } = await withTimeout(
-          getRaidParticipants(instanceId),
-          'raid_participants',
-        );
-        if (mounted && parts) {
-          const partList = parts.map((participant: any, index: number) => ({
-            playerId: participant.player_id,
-            nickname: participant.nickname,
-            totalDamage: participant.total_damage,
-            rank: index + 1,
-          }));
-          setParticipants(partList);
-          participantCountRef.current = partList.length;
-          // All participants start as alive
-          const aliveIds = partList.map(entry => entry.playerId);
-          setAlivePlayers(aliveIds);
-          alivePlayersRef.current = aliveIds;
-        }
-
-        // Set up realtime channel
         const channel = getRaidChannel(instanceId);
         channel
           .on('broadcast', { event: 'damage' }, ({ payload }: any) => {
@@ -864,11 +909,17 @@ export default function RaidScreen({ route, navigation }: any) {
 
         if (mounted) {
           channelRef.current = channel;
+          setInstanceReady(true);
+          writeRaidScreenCache(instanceId, {
+            bossHp: bossHpRef.current,
+            expiresAt: new Date(instance.expires_at).getTime(),
+            participants,
+            alivePlayerIds: alivePlayersRef.current,
+          });
         } else {
           supabase.removeChannel(channel);
         }
 
-        // Start heartbeat
         heartbeatTimer.current = setInterval(() => {
           channel.send({
             type: 'broadcast',
@@ -876,15 +927,57 @@ export default function RaidScreen({ route, navigation }: any) {
             payload: { playerId: playerIdRef.current },
           });
         }, HEARTBEAT_INTERVAL);
+
+        void (async () => {
+          const participantsResult = await withTimeout(
+            getRaidParticipants(instanceId),
+            'raid_participants',
+          ).catch(error => ({ data: null, error }));
+
+          if (!mounted) {
+            return;
+          }
+
+          if (participantsResult?.error) {
+            console.warn(
+              'RaidScreen participants bootstrap error:',
+              participantsResult.error,
+            );
+            setParticipantsReady(true);
+            return;
+          }
+
+          const parts = participantsResult?.data;
+          if (parts) {
+            const partList = parts.map((participant: any, index: number) => ({
+              playerId: participant.player_id,
+              nickname: participant.nickname,
+              totalDamage: participant.total_damage,
+              rank: index + 1,
+            }));
+            setParticipants(partList);
+            participantCountRef.current = partList.length;
+            const aliveIds = partList.map(entry => entry.playerId);
+            setAlivePlayers(aliveIds);
+            alivePlayersRef.current = aliveIds;
+            writeRaidScreenCache(instanceId, {
+              bossHp: bossHpRef.current,
+              expiresAt: new Date(instance.expires_at).getTime(),
+              participants: partList,
+              alivePlayerIds: aliveIds,
+            });
+          }
+          setParticipantsReady(true);
+        })();
       } catch (e) {
         console.warn('RaidScreen init error:', e);
         if (mounted) {
           Alert.alert(t('common.error'), t('raid.connectionFail'), [
             {
-              text: t('common.goHome'),
+              text: '레이드 로비',
               onPress: () => {
                 allowLeaveRef.current = true;
-                navigation.replace('Home');
+                navigation.replace('RaidLobby');
               },
             },
           ]);
@@ -931,6 +1024,7 @@ export default function RaidScreen({ route, navigation }: any) {
         gameOverRef.current = true;
         setSpectatorMode(false);
         spectatorRef.current = false;
+        void expireRaidInstance(instanceId);
         channelRef.current?.send({
           type: 'broadcast',
           event: 'raid_expired',
@@ -942,6 +1036,35 @@ export default function RaidScreen({ route, navigation }: any) {
       if (attackTimer.current) clearInterval(attackTimer.current);
     };
   }, [expiresAt, isNormalRaid]);
+
+  useEffect(() => {
+    if (!instanceReady && !participantsReady) {
+      return;
+    }
+
+    writeRaidScreenCache(instanceId, {
+      bossHp,
+      expiresAt,
+      participants,
+      alivePlayerIds: alivePlayers,
+    });
+  }, [
+    alivePlayers,
+    bossHp,
+    expiresAt,
+    instanceId,
+    instanceReady,
+    participants,
+    participantsReady,
+  ]);
+
+  useEffect(() => {
+    if (!bossDefeated && !timeExpired) {
+      return;
+    }
+
+    clearRaidScreenCache(instanceId);
+  }, [bossDefeated, instanceId, timeExpired]);
 
   useEffect(() => {
     if (!selectedCharacterRef.current || !selectedCharacterDataRef.current) {
@@ -1742,9 +1865,9 @@ export default function RaidScreen({ route, navigation }: any) {
     );
   }, [chatInput]);
 
-  const leaveRaidToHome = useCallback(() => {
+  const leaveRaidToLobby = useCallback(() => {
     allowLeaveRef.current = true;
-    navigation.replace('Home');
+    navigation.replace('RaidLobby');
   }, [navigation]);
 
   const requestRaidExit = useCallback(
@@ -1772,7 +1895,7 @@ export default function RaidScreen({ route, navigation }: any) {
               onConfirm();
               return;
             }
-            leaveRaidToHome();
+            leaveRaidToLobby();
           },
         },
       ]);
@@ -1780,7 +1903,7 @@ export default function RaidScreen({ route, navigation }: any) {
     [
       bossDefeated,
       gameOver,
-      leaveRaidToHome,
+      leaveRaidToLobby,
       rewardCollected,
       rewardData,
       spectatorMode,
@@ -1958,7 +2081,7 @@ export default function RaidScreen({ route, navigation }: any) {
       clearTimeMs: clearTimeMs ?? 0,
     });
     void flushPlayerStateNow('raid_rewards');
-    leaveRaidToHome();
+    leaveRaidToLobby();
   };
 
   const getResultText = () => {
@@ -2809,14 +2932,14 @@ export default function RaidScreen({ route, navigation }: any) {
             ))}
           </View>
 
-          <TouchableOpacity style={styles.exitBtn} onPress={leaveRaidToHome}>
-            <Text style={styles.exitBtnText}>{t('common.goHome')}</Text>
+          <TouchableOpacity style={styles.exitBtn} onPress={leaveRaidToLobby}>
+            <Text style={styles.exitBtnText}>레이드 로비</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Loading overlay */}
-      {pieces.length === 0 && !gameOver && !spectatorMode && (
+      {!localCoreReady && !gameOver && !spectatorMode && (
         <View style={styles.overlay}>
           <Text style={styles.waitingText}>{t('battle.preparing')}</Text>
         </View>

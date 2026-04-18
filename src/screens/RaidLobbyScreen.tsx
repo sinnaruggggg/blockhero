@@ -27,8 +27,6 @@ import {
   loadNormalRaidProgress,
   hasSkinFromRaid,
   loadLevelProgress,
-  getSelectedCharacter,
-  loadCharacterData,
 } from '../stores/gameStore';
 import { t } from '../i18n';
 import {
@@ -51,7 +49,6 @@ import {
 } from '../services/raidService';
 import { supabase } from '../services/supabase';
 import {
-  getFriendIds,
   getFriendList,
   searchOnlinePlayers,
 } from '../services/friendService';
@@ -82,9 +79,17 @@ import {
 } from '../game/creatorManifest';
 import { adjustEnemyHpValue } from '../game/battleBalance';
 import { getUnlockedBossRaidStages } from '../game/levelProgress';
-import { getCharacterSkillEffects } from '../game/characterSkillEffects';
 import { getAdminStatus } from '../services/adminSync';
 import { useLobbyChat } from '../hooks/useLobbyChat';
+import {
+  clearRaidLobbyPartyCache,
+  readRaidLobbyCoreCache,
+  readRaidLobbyPartyCache,
+  readRaidLobbySocialCache,
+  writeRaidLobbyCoreCache,
+  writeRaidLobbyPartyCache,
+  writeRaidLobbySocialCache,
+} from '../services/raidRuntimeCache';
 
 interface ActiveRaid {
   id: string;
@@ -334,30 +339,47 @@ function inferPartyRaidIsNormal(instance: {
 
 export default function RaidLobbyScreen({ navigation }: any) {
   const { manifest: creatorManifest } = useCreatorConfig();
+  const cachedCore = useMemo(() => readRaidLobbyCoreCache(), []);
+  const cachedSocial = useMemo(() => readRaidLobbySocialCache(), []);
+  const cachedParty = useMemo(() => readRaidLobbyPartyCache(), []);
   const [raidMode, setRaidMode] = useState<'normal' | 'boss'>('normal');
-  const [loading, setLoading] = useState(true);
+  const [coreLoading, setCoreLoading] = useState(!cachedCore);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [partyLoading, setPartyLoading] = useState(false);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const [, setTick] = useState(0);
-  const [activeRaids, setActiveRaids] = useState<ActiveRaid[]>([]);
-  const [normalRaidProgress, setNormalRaidProgress] = useState<any>({});
-  const [unlockedBossStages, setUnlockedBossStages] = useState<number[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [partyId, setPartyId] = useState<string | null>(null);
-  const [partyMembers, setPartyMembers] = useState<PartyMemberLocal[]>([]);
-  const [isLeader, setIsLeader] = useState(false);
+  const [activeRaids, setActiveRaids] = useState<ActiveRaid[]>(
+    cachedCore?.activeRaids ?? [],
+  );
+  const [normalRaidProgress, setNormalRaidProgress] = useState<any>(
+    cachedCore?.normalRaidProgress ?? {},
+  );
+  const [unlockedBossStages, setUnlockedBossStages] = useState<number[]>(
+    cachedCore?.unlockedBossStages ?? [],
+  );
+  const [isAdmin, setIsAdmin] = useState(cachedCore?.isAdmin ?? false);
+  const [partyId, setPartyId] = useState<string | null>(
+    cachedCore?.partyId ?? null,
+  );
+  const [partyMembers, setPartyMembers] = useState<PartyMemberLocal[]>(
+    cachedParty?.partyMembers ?? [],
+  );
+  const [isLeader, setIsLeader] = useState(cachedCore?.isLeader ?? false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [friendList, setFriendList] = useState<InviteCandidate[]>([]);
+  const [friendList, setFriendList] = useState<InviteCandidate[]>(
+    cachedSocial?.friendList ?? [],
+  );
   const [incomingInvites, setIncomingInvites] = useState<PartyInviteLocal[]>(
-    [],
+    cachedSocial?.incomingInvites ?? [],
   );
   const [inviteSearchQuery, setInviteSearchQuery] = useState('');
   const [inviteSearchResults, setInviteSearchResults] = useState<
     InviteCandidate[]
   >([]);
   const [inviteSearching, setInviteSearching] = useState(false);
-  const [chatPlayerId, setChatPlayerId] = useState('');
-  const [chatNickname, setChatNickname] = useState('');
-  const [chatSessionKey, setChatSessionKey] = useState(0);
+  const [chatPlayerId, setChatPlayerId] = useState(cachedCore?.playerId ?? '');
+  const [chatNickname, setChatNickname] = useState(cachedCore?.nickname ?? '');
+  const [chatSessionKey, setChatSessionKey] = useState(cachedCore ? 1 : 0);
 
   const creatorNormalRaids = useMemo(
     () =>
@@ -445,12 +467,18 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const socialChannelRef = useRef<any>(null);
   const mountedRef = useRef(true);
   const loadRequestRef = useRef(0);
-  const loadDataRef = useRef<() => Promise<void>>(async () => {});
+  const socialRequestRef = useRef(0);
+  const partyRequestRef = useRef(0);
+  const partyStateRequestRef = useRef(0);
+  const loadDataRef = useRef<
+    (options?: { showBlockingSpinner?: boolean }) => Promise<void>
+  >(async () => {});
+  const refreshPartyStateRef = useRef<() => Promise<void>>(async () => {});
   const lobbyChat = useLobbyChat({
     mode: 'raid',
     userId: chatPlayerId,
     nickname: chatNickname,
-    enabled: !loading && !!chatPlayerId && !!chatNickname,
+    enabled: !coreLoading && !!chatPlayerId && !!chatNickname,
     sessionKey: chatSessionKey,
   });
 
@@ -521,6 +549,15 @@ export default function RaidLobbyScreen({ navigation }: any) {
     cleanupSocialChannel();
   }, [cleanupInviteChannel, cleanupPartyChannel, cleanupSocialChannel]);
 
+  useEffect(() => {
+    if (!cachedCore) {
+      return;
+    }
+
+    playerIdRef.current = cachedCore.playerId;
+    nicknameRef.current = cachedCore.nickname;
+  }, [cachedCore]);
+
   const setupPartyChannel = useCallback(
     (nextPartyId: string) => {
       cleanupPartyChannel();
@@ -545,7 +582,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
             filter: `party_id=eq.${nextPartyId}`,
           },
           () => {
-            void loadDataRef.current();
+            void refreshPartyStateRef.current();
           },
         )
         .on(
@@ -557,7 +594,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
             filter: `id=eq.${nextPartyId}`,
           },
           () => {
-            void loadDataRef.current();
+            void refreshPartyStateRef.current();
           },
         )
         .subscribe(status => {
@@ -570,32 +607,123 @@ export default function RaidLobbyScreen({ navigation }: any) {
     [cleanup, cleanupPartyChannel, navigation],
   );
 
-  const loadData = useCallback(async () => {
-    const requestId = loadRequestRef.current + 1;
-    loadRequestRef.current = requestId;
-    const isCurrentRequest = () =>
-      mountedRef.current && loadRequestRef.current === requestId;
+  const hasVisibleCoreData = useCallback(
+    () =>
+      Boolean(
+        chatPlayerId ||
+          activeRaids.length > 0 ||
+          Object.keys(normalRaidProgress || {}).length > 0 ||
+          unlockedBossStages.length > 0 ||
+          partyId,
+      ),
+    [activeRaids.length, chatPlayerId, normalRaidProgress, partyId, unlockedBossStages.length],
+  );
 
-    if (!mountedRef.current) {
-      return;
-    }
-
-    setLoading(true);
-    setLoadSummary(null);
-
-    try {
-      const [playerId, nickname] = await withTimeout(
-        Promise.all([getPlayerId(), getNickname()]),
-        'playerProfile',
-      );
-      if (!isCurrentRequest()) {
-        return;
-      }
+  const applyPlayerProfile = useCallback(
+    (playerId: string, nickname: string, refreshChatSession: boolean) => {
       playerIdRef.current = playerId;
       nicknameRef.current = nickname;
       setChatPlayerId(playerId);
       setChatNickname(nickname);
-      setChatSessionKey(current => current + 1);
+      if (refreshChatSession) {
+        setChatSessionKey(current => current + 1);
+      }
+    },
+    [],
+  );
+
+  const loadSocialData = useCallback(async (playerId: string) => {
+    const requestId = socialRequestRef.current + 1;
+    socialRequestRef.current = requestId;
+    const isCurrentRequest = () =>
+      mountedRef.current && socialRequestRef.current === requestId;
+
+    if (!playerId) {
+      return;
+    }
+
+    setSocialLoading(true);
+    const loadIssues: LoadIssue[] = [];
+    const safeLoad = async <T,>(
+      label: string,
+      task: () => Promise<T>,
+      fallback: T,
+    ): Promise<T> => {
+      try {
+        const value = await withTimeout(task(), label);
+        const responseIssue = getResponseLoadIssue(label, value);
+        if (responseIssue) {
+          loadIssues.push(responseIssue);
+          logLoadIssue(responseIssue, (value as { error?: unknown }).error);
+          return fallback;
+        }
+        return value;
+      } catch (error) {
+        const issue = classifyLoadIssue(label, error);
+        loadIssues.push(issue);
+        logLoadIssue(issue, error);
+        return fallback;
+      }
+    };
+
+    try {
+      const [loadedFriendList, loadedInvites] = await Promise.all([
+        safeLoad('friends', () => getFriendList(playerId), { data: [] } as any),
+        safeLoad('incomingInvites', () => getIncomingPartyInvites(playerId), {
+          data: [],
+        } as any),
+      ]);
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      const nextFriendList = loadedFriendList.data || [];
+      const nextIncomingInvites = (loadedInvites.data || []).map(
+        (invite: any) => ({
+          id: invite.id,
+          partyId: invite.party_id,
+          inviterId: invite.inviter_id,
+          inviterNickname: invite.inviter_nickname,
+          expiresAt: invite.expires_at,
+          createdAt: invite.created_at,
+        }),
+      );
+
+      setFriendList(nextFriendList);
+      setIncomingInvites(nextIncomingInvites);
+      writeRaidLobbySocialCache({
+        friendList: nextFriendList,
+        incomingInvites: nextIncomingInvites,
+      });
+
+      if (loadIssues.length > 0) {
+        setLoadSummary(buildPartialLoadSummary(loadIssues));
+      }
+    } finally {
+      if (isCurrentRequest()) {
+        setSocialLoading(false);
+      }
+    }
+  }, []);
+
+  const loadPartyData = useCallback(
+    async (nextPartyId: string | null) => {
+      const requestId = partyRequestRef.current + 1;
+      partyRequestRef.current = requestId;
+      const isCurrentRequest = () =>
+        mountedRef.current && partyRequestRef.current === requestId;
+
+      if (!nextPartyId) {
+        cleanupPartyChannel();
+        clearRaidLobbyPartyCache();
+        setPartyMembers([]);
+        setPartyLoading(false);
+        return;
+      }
+
+      setPartyLoading(true);
+      setupPartyChannel(nextPartyId);
 
       const loadIssues: LoadIssue[] = [];
       const safeLoad = async <T,>(
@@ -620,103 +748,30 @@ export default function RaidLobbyScreen({ navigation }: any) {
         }
       };
 
-      const [
-        friendIds,
-        partyResult,
-        loadedFriendList,
-        loadedInvites,
-        raidProgress,
-        levelProgress,
-        adminStatus,
-      ] = await Promise.all([
-        safeLoad('friendIds', () => getFriendIds(playerId), [] as string[]),
-        safeLoad('party', () => getMyParty(playerId), {
-          data: null,
-          error: null,
-        } as any),
-        safeLoad('friends', () => getFriendList(playerId), { data: [] } as any),
-        safeLoad('incomingInvites', () => getIncomingPartyInvites(playerId), {
-          data: [],
-        } as any),
-        safeLoad(
-          'normalRaidProgress',
-          () => loadNormalRaidProgress(),
-          {} as any,
-        ),
-        safeLoad('levelProgress', () => loadLevelProgress(), {} as any),
-        getAdminStatus().catch(() => false),
-      ]);
+      try {
+        const [membersResult, partyActiveRaidResult] = await Promise.all([
+          safeLoad('partyMembers', () => getPartyMembers(nextPartyId), {
+            data: [],
+          } as any),
+          safeLoad('partyActiveRaid', () => getPartyActiveRaid(nextPartyId), {
+            data: null,
+            error: null,
+          } as any),
+        ]);
 
-      const raidFilterIds = Array.from(
-        new Set([...(friendIds || []), playerId]),
-      );
-
-      const activeRaidResult = await safeLoad(
-        'activeRaids',
-        () => getActiveInstances(raidFilterIds),
-        { data: [] } as any,
-      );
-      const raids = activeRaidResult?.data ?? [];
-      const now = Date.now();
-      const filteredRaids = (raids || []).filter((raid: any) => {
-        const remainingMs = new Date(raid.expires_at).getTime() - now;
-        return remainingMs > 0 && remainingMs <= BOSS_RAID_WINDOW_MS;
-      });
-
-      if (!isCurrentRequest()) {
-        return;
-      }
-
-      setActiveRaids(filteredRaids);
-      setNormalRaidProgress(raidProgress);
-      setIsAdmin(adminStatus);
-      setUnlockedBossStages(
-        adminStatus
-          ? RAID_BOSSES.map(boss => boss.stage)
-          : getUnlockedBossRaidStages(levelProgress),
-      );
-      setFriendList(loadedFriendList.data || []);
-      setIncomingInvites(
-        (loadedInvites.data || []).map((invite: any) => ({
-          id: invite.id,
-          partyId: invite.party_id,
-          inviterId: invite.inviter_id,
-          inviterNickname: invite.inviter_nickname,
-          expiresAt: invite.expires_at,
-          createdAt: invite.created_at,
-        })),
-      );
-
-      if (partyResult.data) {
-        const party = partyResult.data;
-        setPartyId(party.id);
-        setIsLeader(party.leader_id === playerId);
-        const { data: members } = await safeLoad(
-          'partyMembers',
-          () => getPartyMembers(party.id),
-          { data: [] } as any,
-        );
         if (!isCurrentRequest()) {
           return;
         }
-        if (members) {
-          setPartyMembers(
-            members.map((member: any) => ({
-              playerId: member.player_id,
-              nickname: member.nickname,
-            })),
-          );
-        }
-        setupPartyChannel(party.id);
 
-        const partyActiveRaidResult = await safeLoad(
-          'partyActiveRaid',
-          () => getPartyActiveRaid(party.id),
-          { data: null, error: null } as any,
-        );
-        if (!isCurrentRequest()) {
-          return;
-        }
+        const nextPartyMembers = (membersResult.data || []).map((member: any) => ({
+          playerId: member.player_id,
+          nickname: member.nickname,
+        }));
+
+        setPartyMembers(nextPartyMembers);
+        writeRaidLobbyPartyCache({
+          partyMembers: nextPartyMembers,
+        });
 
         const partyActiveRaid = partyActiveRaidResult?.data ?? null;
         if (partyActiveRaid) {
@@ -728,38 +783,277 @@ export default function RaidLobbyScreen({ navigation }: any) {
           });
           return;
         }
-      } else {
+
+        if (loadIssues.length > 0) {
+          setLoadSummary(buildPartialLoadSummary(loadIssues));
+        }
+      } finally {
+        if (isCurrentRequest()) {
+          setPartyLoading(false);
+        }
+      }
+    },
+    [cleanup, cleanupPartyChannel, navigation, setupPartyChannel],
+  );
+
+  const refreshPartyState = useCallback(async () => {
+    const playerId = playerIdRef.current;
+    if (!playerId) {
+      return;
+    }
+
+    const requestId = partyStateRequestRef.current + 1;
+    partyStateRequestRef.current = requestId;
+    const isCurrentRequest = () =>
+      mountedRef.current && partyStateRequestRef.current === requestId;
+
+    const loadIssues: LoadIssue[] = [];
+    const safeLoad = async <T,>(
+      label: string,
+      task: () => Promise<T>,
+      fallback: T,
+    ): Promise<T> => {
+      try {
+        const value = await withTimeout(task(), label);
+        const responseIssue = getResponseLoadIssue(label, value);
+        if (responseIssue) {
+          loadIssues.push(responseIssue);
+          logLoadIssue(responseIssue, (value as { error?: unknown }).error);
+          return fallback;
+        }
+        return value;
+      } catch (error) {
+        const issue = classifyLoadIssue(label, error);
+        loadIssues.push(issue);
+        logLoadIssue(issue, error);
+        return fallback;
+      }
+    };
+
+    const partyResult = await safeLoad('party', () => getMyParty(playerId), {
+      data: null,
+      error: null,
+    } as any);
+
+    if (!isCurrentRequest()) {
+      return;
+    }
+
+    if (partyResult.data) {
+      const nextPartyId = partyResult.data.id;
+      setPartyId(nextPartyId);
+      setIsLeader(partyResult.data.leader_id === playerId);
+      writeRaidLobbyCoreCache({
+        playerId,
+        nickname: nicknameRef.current,
+        activeRaids,
+        normalRaidProgress,
+        unlockedBossStages,
+        isAdmin,
+        partyId: nextPartyId,
+        isLeader: partyResult.data.leader_id === playerId,
+      });
+      await loadPartyData(nextPartyId);
+    } else {
+      cleanupPartyChannel();
+      clearRaidLobbyPartyCache();
+      setPartyId(null);
+      setPartyMembers([]);
+      setIsLeader(false);
+      writeRaidLobbyCoreCache({
+        playerId,
+        nickname: nicknameRef.current,
+        activeRaids,
+        normalRaidProgress,
+        unlockedBossStages,
+        isAdmin,
+        partyId: null,
+        isLeader: false,
+      });
+    }
+
+    if (loadIssues.length > 0) {
+      setLoadSummary(buildPartialLoadSummary(loadIssues));
+    }
+  }, [
+    activeRaids,
+    cleanupPartyChannel,
+    isAdmin,
+    loadPartyData,
+    normalRaidProgress,
+    unlockedBossStages,
+  ]);
+
+  const loadData = useCallback(
+    async (options?: { showBlockingSpinner?: boolean }) => {
+      const requestId = loadRequestRef.current + 1;
+      loadRequestRef.current = requestId;
+      const isCurrentRequest = () =>
+        mountedRef.current && loadRequestRef.current === requestId;
+      const showBlockingSpinner =
+        options?.showBlockingSpinner ?? !hasVisibleCoreData();
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      if (showBlockingSpinner) {
+        setCoreLoading(true);
+      }
+      setLoadSummary(null);
+
+      try {
+        const [playerId, nickname] = await withTimeout(
+          Promise.all([getPlayerId(), getNickname()]),
+          'playerProfile',
+        );
         if (!isCurrentRequest()) {
           return;
         }
-        cleanupPartyChannel();
-        setPartyId(null);
-        setPartyMembers([]);
-        setIsLeader(false);
-      }
 
-      setLoadSummary(buildPartialLoadSummary(loadIssues));
-    } catch (error) {
-      const issue = classifyLoadIssue('playerProfile', error);
-      logLoadIssue(issue, error);
-      if (isCurrentRequest()) {
-        setLoadSummary(buildBlockingLoadSummary(issue));
+        applyPlayerProfile(
+          playerId,
+          nickname,
+          playerId !== chatPlayerId || nickname !== chatNickname,
+        );
+
+        const loadIssues: LoadIssue[] = [];
+        const safeLoad = async <T,>(
+          label: string,
+          task: () => Promise<T>,
+          fallback: T,
+        ): Promise<T> => {
+          try {
+            const value = await withTimeout(task(), label);
+            const responseIssue = getResponseLoadIssue(label, value);
+            if (responseIssue) {
+              loadIssues.push(responseIssue);
+              logLoadIssue(responseIssue, (value as { error?: unknown }).error);
+              return fallback;
+            }
+            return value;
+          } catch (error) {
+            const issue = classifyLoadIssue(label, error);
+            loadIssues.push(issue);
+            logLoadIssue(issue, error);
+            return fallback;
+          }
+        };
+
+        const [
+          partyResult,
+          raidProgress,
+          levelProgress,
+          activeRaidResult,
+          adminStatus,
+        ] = await Promise.all([
+          safeLoad('party', () => getMyParty(playerId), {
+            data: null,
+            error: null,
+          } as any),
+          safeLoad(
+            'normalRaidProgress',
+            () => loadNormalRaidProgress(),
+            {} as any,
+          ),
+          safeLoad('levelProgress', () => loadLevelProgress(), {} as any),
+          safeLoad('activeRaids', () => getActiveInstances(), {
+            data: [],
+          } as any),
+          getAdminStatus().catch(() => false),
+        ]);
+
+        if (!isCurrentRequest()) {
+          return;
+        }
+
+        const now = Date.now();
+        const filteredRaids = (activeRaidResult?.data ?? []).filter(
+          (raid: any) => {
+            const remainingMs = new Date(raid.expires_at).getTime() - now;
+            return remainingMs > 0 && remainingMs <= BOSS_RAID_WINDOW_MS;
+          },
+        );
+        const nextUnlockedBossStages = adminStatus
+          ? RAID_BOSSES.map(boss => boss.stage)
+          : getUnlockedBossRaidStages(levelProgress);
+        const nextPartyId = partyResult.data?.id ?? null;
+        const nextIsLeader = Boolean(
+          partyResult.data && partyResult.data.leader_id === playerId,
+        );
+
+        setActiveRaids(filteredRaids);
+        setNormalRaidProgress(raidProgress);
+        setIsAdmin(adminStatus);
+        setUnlockedBossStages(nextUnlockedBossStages);
+        setPartyId(nextPartyId);
+        setIsLeader(nextIsLeader);
+        writeRaidLobbyCoreCache({
+          playerId,
+          nickname,
+          activeRaids: filteredRaids,
+          normalRaidProgress: raidProgress,
+          unlockedBossStages: nextUnlockedBossStages,
+          isAdmin: adminStatus,
+          partyId: nextPartyId,
+          isLeader: nextIsLeader,
+        });
+
+        if (!nextPartyId) {
+          cleanupPartyChannel();
+          clearRaidLobbyPartyCache();
+          setPartyMembers([]);
+        }
+
+        if (loadIssues.length > 0) {
+          setLoadSummary(buildPartialLoadSummary(loadIssues));
+        }
+
+        setCoreLoading(false);
+
+        void loadSocialData(playerId);
+        void loadPartyData(nextPartyId);
+      } catch (error) {
+        const issue = classifyLoadIssue('playerProfile', error);
+        logLoadIssue(issue, error);
+        if (isCurrentRequest()) {
+          setLoadSummary(buildBlockingLoadSummary(issue));
+        }
+      } finally {
+        if (isCurrentRequest()) {
+          setCoreLoading(false);
+        }
       }
-    } finally {
-      if (isCurrentRequest()) {
-        setLoading(false);
-      }
-    }
-  }, [cleanup, cleanupPartyChannel, navigation, setupPartyChannel]);
+    },
+    [
+      activeRaids,
+      applyPlayerProfile,
+      chatNickname,
+      chatPlayerId,
+      cleanupPartyChannel,
+      hasVisibleCoreData,
+      isAdmin,
+      loadPartyData,
+      loadSocialData,
+      normalRaidProgress,
+      unlockedBossStages,
+    ],
+  );
 
   useEffect(() => {
     loadDataRef.current = loadData;
   }, [loadData]);
 
   useEffect(() => {
+    refreshPartyStateRef.current = refreshPartyState;
+  }, [refreshPartyState]);
+
+  useEffect(() => {
     mountedRef.current = true;
-    loadData();
-    const unsubscribe = navigation.addListener('focus', loadData);
+    void loadData();
+    const unsubscribe = navigation.addListener('focus', () => {
+      void loadData({ showBlockingSpinner: false });
+    });
     return () => {
       mountedRef.current = false;
       unsubscribe();
@@ -785,7 +1079,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           filter: `invitee_id=eq.${chatPlayerId}`,
         },
         () => {
-          void loadDataRef.current();
+          void loadSocialData(chatPlayerId);
         },
       )
       .subscribe(status => {
@@ -814,14 +1108,14 @@ export default function RaidLobbyScreen({ navigation }: any) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'user_presence' },
         () => {
-          void loadDataRef.current();
+          void loadSocialData(chatPlayerId);
         },
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'friends' },
         () => {
-          void loadDataRef.current();
+          void loadSocialData(chatPlayerId);
         },
       )
       .subscribe(status => {
@@ -863,8 +1157,31 @@ export default function RaidLobbyScreen({ navigation }: any) {
     setPartyMembers([
       { playerId: playerIdRef.current, nickname: nicknameRef.current },
     ]);
+    writeRaidLobbyCoreCache({
+      playerId: playerIdRef.current,
+      nickname: nicknameRef.current,
+      activeRaids,
+      normalRaidProgress,
+      unlockedBossStages,
+      isAdmin,
+      partyId: data.id,
+      isLeader: true,
+    });
+    writeRaidLobbyPartyCache({
+      partyMembers: [
+        { playerId: playerIdRef.current, nickname: nicknameRef.current },
+      ],
+    });
     setupPartyChannel(data.id);
-  }, [setupPartyChannel]);
+    void loadPartyData(data.id);
+  }, [
+    activeRaids,
+    isAdmin,
+    loadPartyData,
+    normalRaidProgress,
+    setupPartyChannel,
+    unlockedBossStages,
+  ]);
 
   const handleLeaveParty = useCallback(async () => {
     if (!partyId) {
@@ -873,11 +1190,30 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
     await leaveParty(partyId, playerIdRef.current);
     cleanup();
+    clearRaidLobbyPartyCache();
     setPartyId(null);
     setPartyMembers([]);
     setIsLeader(false);
+    writeRaidLobbyCoreCache({
+      playerId: playerIdRef.current,
+      nickname: nicknameRef.current,
+      activeRaids,
+      normalRaidProgress,
+      unlockedBossStages,
+      isAdmin,
+      partyId: null,
+      isLeader: false,
+    });
     resetInviteModal();
-  }, [cleanup, partyId, resetInviteModal]);
+  }, [
+    activeRaids,
+    cleanup,
+    isAdmin,
+    normalRaidProgress,
+    partyId,
+    resetInviteModal,
+    unlockedBossStages,
+  ]);
 
   const handleDisbandParty = useCallback(async () => {
     if (!partyId) {
@@ -886,11 +1222,30 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
     await disbandParty(partyId);
     cleanup();
+    clearRaidLobbyPartyCache();
     setPartyId(null);
     setPartyMembers([]);
     setIsLeader(false);
+    writeRaidLobbyCoreCache({
+      playerId: playerIdRef.current,
+      nickname: nicknameRef.current,
+      activeRaids,
+      normalRaidProgress,
+      unlockedBossStages,
+      isAdmin,
+      partyId: null,
+      isLeader: false,
+    });
     resetInviteModal();
-  }, [cleanup, partyId, resetInviteModal]);
+  }, [
+    activeRaids,
+    cleanup,
+    isAdmin,
+    normalRaidProgress,
+    partyId,
+    resetInviteModal,
+    unlockedBossStages,
+  ]);
 
   const handleSearchInviteTargets = useCallback(async () => {
     if (!partyId || !isLeader) {
@@ -952,13 +1307,13 @@ export default function RaidLobbyScreen({ navigation }: any) {
       setInviteSearchResults(current =>
         current.filter(candidate => candidate.id !== inviteeId),
       );
-      void loadDataRef.current();
+      void loadSocialData(playerIdRef.current);
       Alert.alert(
         '파티 초대',
         `${inviteeNickname || '대상 유저'}에게 초대를 보냈습니다.`,
       );
     },
-    [isLeader, partyId, resetInviteModal],
+    [isLeader, loadSocialData, partyId, resetInviteModal],
   );
 
   const handleAcceptInvite = useCallback(async (inviteId: string) => {
@@ -972,8 +1327,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
       return;
     }
 
-    await loadDataRef.current();
-  }, []);
+    await refreshPartyState();
+    void loadSocialData(playerIdRef.current);
+  }, [loadSocialData, refreshPartyState]);
 
   const handleDeclineInvite = useCallback(async (inviteId: string) => {
     const { error } = await declinePartyInvite(inviteId, playerIdRef.current);
@@ -982,8 +1338,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
       return;
     }
 
-    await loadDataRef.current();
-  }, []);
+    await loadSocialData(playerIdRef.current);
+  }, [loadSocialData]);
 
   const handleInviteFromChat = useCallback(
     (inviteeId: string, inviteeNickname: string) => {
@@ -1074,7 +1430,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
   const handleChallengeBoss = useCallback(
     async (bossStage: number) => {
-      if (false && !bossWindowInfo.isOpen) {
+      if (!bossWindowInfo.isOpen) {
         Alert.alert(
           '보스 레이드',
           '보스 레이드는 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수 있습니다.',
@@ -1097,28 +1453,13 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
       const raidDisplay = resolveRaidDisplay('boss', bossStage);
 
-      const selectedCharacter = await getSelectedCharacter();
-      let raidTimeBonusMs = 0;
-      if (selectedCharacter) {
-        const characterData = await loadCharacterData(selectedCharacter);
-        raidTimeBonusMs = getCharacterSkillEffects(
-          selectedCharacter,
-          characterData,
-          {
-            mode: 'raid',
-            partySize: Math.max(1, partyMembers.length || 1),
-            bossHpRatio: 1,
-          },
-        ).raidTimeBonusMs;
-      }
-
       const { data: instance, error } = await startRaid(
         bossStage,
         raidDisplay.maxHp,
         playerIdRef.current,
         nicknameRef.current,
         {
-          expiresInMs: raidDisplay.timeLimitMs + raidTimeBonusMs,
+          expiresInMs: BOSS_RAID_WINDOW_MS,
           reuseOpenInstance: true,
           skipCooldown: true,
           partyId,
@@ -1159,7 +1500,6 @@ export default function RaidLobbyScreen({ navigation }: any) {
       isLeader,
       navigation,
       partyId,
-      partyMembers.length,
       resolveRaidDisplay,
       unlockedBossStages,
     ],
@@ -1187,7 +1527,12 @@ export default function RaidLobbyScreen({ navigation }: any) {
       );
 
       if (error) {
-        Alert.alert('오류', error.message);
+        Alert.alert(
+          '오류',
+          error.message === 'raid_expired'
+            ? '이미 만료된 보스 레이드입니다. 다시 목록을 불러와 주세요.'
+            : error.message,
+        );
         return;
       }
 
@@ -1220,7 +1565,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       !partyMembers.some(member => member.playerId === friend.id),
   );
 
-  if (loading) {
+  if (coreLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
@@ -1301,6 +1646,15 @@ export default function RaidLobbyScreen({ navigation }: any) {
             >
               <Text style={styles.retryBtnText}>다시 시도</Text>
             </TouchableOpacity>
+          </View>
+        )}
+        {(socialLoading || partyLoading) && (
+          <View style={styles.sectionLoadingCard}>
+            <Text style={styles.sectionLoadingText}>
+              {partyLoading
+                ? '파티 정보를 불러오는 중입니다.'
+                : '친구와 초대 정보를 불러오는 중입니다.'}
+            </Text>
           </View>
         )}
         {raidMode === 'normal' ? (
@@ -1625,7 +1979,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           onClose={resetInviteModal}
         />
 
-        {!loading && chatPlayerId ? (
+        {!coreLoading && chatPlayerId ? (
           <LobbyChatPanel
             title="레이드 모집 채팅"
             accentColor={raidMode === 'boss' ? '#ef4444' : '#22c55e'}
@@ -1753,6 +2107,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '800',
+  },
+  sectionLoadingCard: {
+    backgroundColor: 'rgba(15,23,42,0.7)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(96,165,250,0.28)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  sectionLoadingText: {
+    color: '#bfdbfe',
+    fontSize: 12,
+    fontWeight: '700',
   },
   modeDesc: {
     color: '#94a3b8',

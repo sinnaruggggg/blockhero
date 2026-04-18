@@ -13,7 +13,11 @@ import MenuScreenFrame from '../components/MenuScreenFrame';
 import {getAdminStatus} from '../services/adminSync';
 import {openGameDialog, showGameConfirm} from '../services/gameDialogService';
 import {supabase} from '../services/supabase';
-import {CURRENT_VERSION_NAME} from '../services/updateService';
+import {CURRENT_VERSION_NAME} from '../constants/appVersion';
+import {
+  downloadPublishedVisualConfigIfNeeded,
+  getCachedVisualConfigManifest,
+} from '../services/visualConfigService';
 import {
   loadGameSettings,
   saveGameSettings,
@@ -29,17 +33,19 @@ const NOTICE_MODE_OPTIONS: Array<{
   {
     label: '끄기',
     value: 'off',
-    description: '전투 중 스킬과 효과 알림을 표시하지 않습니다.',
+    description: '전투 중 스킬 발동과 효과 알림을 표시하지 않습니다.',
   },
   {
-    label: '확률·조건만',
+    label: '실제 발동만',
     value: 'triggered_only',
-    description: '회피, 부활, 자동 회복, 추가타처럼 실제 발동한 이벤트만 보여줍니다.',
+    description:
+      '회피, 부활, 자동 회복처럼 실제로 발동한 효과만 간단히 보여줍니다.',
   },
   {
     label: '모든 효과',
     value: 'all_effects',
-    description: '기본 발동 외에도 콤보, 피버, 강화 적용 순간까지 같이 보여줍니다.',
+    description:
+      '기본 발동 외에 콤보, 피버, 강화 적용 시간까지 모두 표시합니다.',
   },
 ];
 
@@ -75,6 +81,7 @@ export default function SettingsScreen({navigation}: any) {
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [skillNoticeMode, setSkillNoticeMode] =
     useState<SkillTriggerNoticeMode>('triggered_only');
+  const [visualConfigVersion, setVisualConfigVersion] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -94,6 +101,7 @@ export default function SettingsScreen({navigation}: any) {
       setVibrationEnabled(settings.vibration);
       setNotificationEnabled(settings.notification);
       setSkillNoticeMode(settings.skillTriggerNoticeMode);
+      setVisualConfigVersion(getCachedVisualConfigManifest().version);
     })();
   }, []);
 
@@ -118,7 +126,8 @@ export default function SettingsScreen({navigation}: any) {
   const handleDeleteAccount = async () => {
     const confirmed = await showGameConfirm({
       title: '계정 삭제',
-      message: '정말 계정을 삭제하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.',
+      message:
+        '정말 계정을 삭제하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.',
       confirmText: '삭제',
       variant: 'error',
     });
@@ -126,7 +135,10 @@ export default function SettingsScreen({navigation}: any) {
       return;
     }
 
-    openGameDialog({title: '알림', message: '계정 삭제 요청이 접수되었습니다.'});
+    openGameDialog({
+      title: '알림',
+      message: '계정 삭제 요청이 접수되었습니다.',
+    });
     await supabase.auth.signOut();
   };
 
@@ -146,7 +158,8 @@ export default function SettingsScreen({navigation}: any) {
   const handleSwitchGoogleAccount = async () => {
     const confirmed = await showGameConfirm({
       title: '구글 계정 변경',
-      message: '현재 구글 로그인을 해제하고 다른 계정으로 다시 로그인합니다.',
+      message:
+        '현재 구글 로그인을 해제하고 다른 계정으로 다시 로그인합니다.',
       confirmText: '계정 변경',
     });
     if (!confirmed) {
@@ -179,6 +192,24 @@ export default function SettingsScreen({navigation}: any) {
     }
   };
 
+  const handleRefreshVisualConfig = async () => {
+    try {
+      const snapshot = await downloadPublishedVisualConfigIfNeeded(true);
+      setVisualConfigVersion(snapshot.manifest.version);
+      openGameDialog({
+        title: 'UI 새로고침',
+        message: `최신 화면 설정 v${snapshot.manifest.version}을 다시 불러왔습니다.`,
+      });
+    } catch (error: any) {
+      openGameDialog({
+        title: 'UI 새로고침 실패',
+        message:
+          error?.message || '최신 화면 설정을 다시 불러오지 못했습니다.',
+        variant: 'error',
+      });
+    }
+  };
+
   return (
     <MenuScreenFrame
       title="설정"
@@ -191,7 +222,9 @@ export default function SettingsScreen({navigation}: any) {
           <Text style={styles.infoValue}>{email || '불러오는 중...'}</Text>
         </View>
         {provider === 'google' ? (
-          <TouchableOpacity style={styles.menuItem} onPress={handleSwitchGoogleAccount}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={handleSwitchGoogleAccount}>
             <Text style={styles.menuText}>구글 계정 변경</Text>
           </TouchableOpacity>
         ) : null}
@@ -228,7 +261,7 @@ export default function SettingsScreen({navigation}: any) {
       <GamePanel>
         <Text style={styles.sectionTitle}>전투 알림</Text>
         <Text style={styles.sectionHint}>
-          스킬과 전투 효과 알림 범위를 선택합니다.
+          스킬 발동과 전투 효과 알림 범위를 선택합니다.
         </Text>
         <View style={styles.optionList}>
           {NOTICE_MODE_OPTIONS.map(option => {
@@ -243,10 +276,16 @@ export default function SettingsScreen({navigation}: any) {
                   await saveSkillTriggerNoticeMode(option.value);
                 }}>
                 <View style={styles.optionHeader}>
-                  <Text style={[styles.optionTitle, active && styles.optionTitleActive]}>
+                  <Text
+                    style={[
+                      styles.optionTitle,
+                      active && styles.optionTitleActive,
+                    ]}>
                     {option.label}
                   </Text>
-                  {active ? <Text style={styles.optionBadge}>사용 중</Text> : null}
+                  {active ? (
+                    <Text style={styles.optionBadge}>사용 중</Text>
+                  ) : null}
                 </View>
                 <Text
                   style={[
@@ -275,6 +314,13 @@ export default function SettingsScreen({navigation}: any) {
 
       <GamePanel>
         <Text style={styles.sectionTitle}>지원</Text>
+        <View style={styles.infoCard}>
+          <Text style={styles.infoLabel}>현재 화면 배포본</Text>
+          <Text style={styles.infoValue}>v{visualConfigVersion}</Text>
+        </View>
+        <TouchableOpacity style={styles.menuItem} onPress={handleRefreshVisualConfig}>
+          <Text style={styles.menuText}>화면 UI 새로고침</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.menuItem} onPress={handleClearCache}>
           <Text style={styles.menuText}>캐시 삭제</Text>
         </TouchableOpacity>
@@ -344,6 +390,7 @@ const styles = StyleSheet.create({
     borderColor: '#d2b089',
     paddingHorizontal: 14,
     paddingVertical: 14,
+    marginBottom: 10,
   },
   infoLabel: {
     color: '#886447',

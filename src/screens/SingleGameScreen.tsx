@@ -2397,38 +2397,52 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 {renderBattleLane()}
               </VisualElementView>
 
-              <VisualElementView
-                screenId="level"
-                elementId="board"
-                style={styles.boardContainer}
-                onLayout={handleBoardLayout}
-              >
-                {comboGaugeRule.visible && (
-                  <ComboGaugeOverlay
-                    combo={combo}
-                    comboRemainingMs={comboRemainingMs}
-                    comboMaxMs={comboGaugeMaxMs}
-                    visualAutomationLabel={buildVisualAutomationLabel(
-                      'level',
-                      'combo_gauge',
-                    )}
-                    style={buildVisualElementStyle(
-                      comboGaugeRule,
-                      visualViewport,
-                      visualManifest.referenceViewport,
-                    )}
+              <View style={styles.boardContainer}>
+                <VisualElementView
+                  screenId="level"
+                  elementId="board"
+                  style={styles.boardVisualAnchor}
+                  onLayout={handleBoardLayout}
+                >
+                  {comboGaugeRule.visible && (
+                    <ComboGaugeOverlay
+                      combo={combo}
+                      comboRemainingMs={comboRemainingMs}
+                      comboMaxMs={comboGaugeMaxMs}
+                      visualAutomationLabel={buildVisualAutomationLabel(
+                        'level',
+                        'combo_gauge',
+                      )}
+                      style={buildVisualElementStyle(
+                        comboGaugeRule,
+                        visualViewport,
+                        visualManifest.referenceViewport,
+                      )}
+                    />
+                  )}
+                  <Board
+                    ref={boardRef}
+                    board={board}
+                    viewport={visualViewport}
+                    backgroundColor={skinBoardBg}
+                    previewCells={dragDrop.previewCells}
+                    invalidPreview={dragDrop.invalidPreview}
+                    clearGuideCells={dragDrop.clearGuideCells}
                   />
-                )}
-                <Board
-                  ref={boardRef}
-                board={board}
-                viewport={visualViewport}
-                backgroundColor={skinBoardBg}
-                previewCells={dragDrop.previewCells}
-                invalidPreview={dragDrop.invalidPreview}
-                clearGuideCells={dragDrop.clearGuideCells}
-              />
-            </VisualElementView>
+                  <VisualElementView
+                    screenId="level"
+                    elementId="skill_effect"
+                    style={styles.boardSkillEffectLayer}
+                    pointerEvents="none"
+                    viewport={visualViewport}
+                  >
+                    <SkillTriggerBoardEffect
+                      message={skillEffectMessage}
+                      triggerKey={skillEffectMessageKey}
+                    />
+                  </VisualElementView>
+                </VisualElementView>
+              </View>
 
               <View style={styles.bottomActionRow}>
                 <View style={styles.bottomPieceArea}>
@@ -2517,50 +2531,52 @@ export default function SingleGameScreen({ route, navigation }: any) {
               {renderBattleLane()}
             </VisualElementView>
 
-            <VisualElementView
-              screenId="level"
-              elementId="board"
-              style={styles.boardContainer}
-              onLayout={handleBoardLayout}
-            >
-              {comboGaugeRule.visible && (
-                <ComboGaugeOverlay
-                  combo={combo}
-                  comboRemainingMs={comboRemainingMs}
-                  comboMaxMs={comboGaugeMaxMs}
-                  visualAutomationLabel={buildVisualAutomationLabel(
-                    'level',
-                    'combo_gauge',
-                  )}
-                  style={buildVisualElementStyle(
-                    comboGaugeRule,
-                    visualViewport,
-                    visualManifest.referenceViewport,
-                  )}
-                />
-              )}
-              <Board
-                ref={boardRef}
-                board={board}
-                viewport={visualViewport}
-                backgroundColor={skinBoardBg}
-                previewCells={dragDrop.previewCells}
-                invalidPreview={dragDrop.invalidPreview}
-                clearGuideCells={dragDrop.clearGuideCells}
-              />
+            <View style={styles.boardContainer}>
               <VisualElementView
                 screenId="level"
-                elementId="skill_effect"
-                style={styles.boardSkillEffectLayer}
-                pointerEvents="none"
-                viewport={visualViewport}
+                elementId="board"
+                style={styles.boardVisualAnchor}
+                onLayout={handleBoardLayout}
               >
-                <SkillTriggerBoardEffect
-                  message={skillEffectMessage}
-                  triggerKey={skillEffectMessageKey}
+                {comboGaugeRule.visible && (
+                  <ComboGaugeOverlay
+                    combo={combo}
+                    comboRemainingMs={comboRemainingMs}
+                    comboMaxMs={comboGaugeMaxMs}
+                    visualAutomationLabel={buildVisualAutomationLabel(
+                      'level',
+                      'combo_gauge',
+                    )}
+                    style={buildVisualElementStyle(
+                      comboGaugeRule,
+                      visualViewport,
+                      visualManifest.referenceViewport,
+                    )}
+                  />
+                )}
+                <Board
+                  ref={boardRef}
+                  board={board}
+                  viewport={visualViewport}
+                  backgroundColor={skinBoardBg}
+                  previewCells={dragDrop.previewCells}
+                  invalidPreview={dragDrop.invalidPreview}
+                  clearGuideCells={dragDrop.clearGuideCells}
                 />
+                <VisualElementView
+                  screenId="level"
+                  elementId="skill_effect"
+                  style={styles.boardSkillEffectLayer}
+                  pointerEvents="none"
+                  viewport={visualViewport}
+                >
+                  <SkillTriggerBoardEffect
+                    message={skillEffectMessage}
+                    triggerKey={skillEffectMessageKey}
+                  />
+                </VisualElementView>
               </VisualElementView>
-            </VisualElementView>
+            </View>
 
             <View style={styles.bottomActionRow}>
               <View style={styles.bottomPieceArea}>
@@ -3337,6 +3353,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 38,
     paddingBottom: 8,
+  },
+  boardVisualAnchor: {
+    alignSelf: 'center',
   },
   bottomActionRow: {
     flexDirection: 'row',

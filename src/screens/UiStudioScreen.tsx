@@ -340,11 +340,10 @@ export default function UiStudioScreen({navigation}: any) {
       setDraftManifest(current => {
         const next = cloneVisualConfigManifest(current);
         mutator(next);
-        next.referenceViewport = activePreviewViewport;
         return sanitizeVisualConfigManifest(next);
       });
     },
-    [activePreviewViewport],
+    [],
   );
 
   const patchElementRule = useCallback(
@@ -490,10 +489,7 @@ export default function UiStudioScreen({navigation}: any) {
   const handleSaveDraft = useCallback(async () => {
     setSaving(true);
     try {
-      let nextDraft = sanitizeVisualConfigManifest({
-        ...draftManifest,
-        referenceViewport: activePreviewViewport,
-      });
+      let nextDraft = sanitizeVisualConfigManifest(draftManifest);
       nextDraft = await captureActiveScreenSnapshotIntoManifest(nextDraft);
       await saveVisualConfigDraft(nextDraft);
       setDraftManifest(nextDraft);
@@ -508,7 +504,6 @@ export default function UiStudioScreen({navigation}: any) {
       setSaving(false);
     }
   }, [
-    activePreviewViewport,
     captureActiveScreenSnapshotIntoManifest,
     draftManifest,
     syncCustomViewportFromManifest,
@@ -517,10 +512,7 @@ export default function UiStudioScreen({navigation}: any) {
   const handlePublish = useCallback(async () => {
     setPublishing(true);
     try {
-      let nextDraft = sanitizeVisualConfigManifest({
-        ...draftManifest,
-        referenceViewport: activePreviewViewport,
-      });
+      let nextDraft = sanitizeVisualConfigManifest(draftManifest);
       nextDraft = await captureActiveScreenSnapshotIntoManifest(nextDraft);
       await saveVisualConfigDraft(nextDraft);
       const version = await publishVisualConfigDraft(publishNotes);
@@ -543,7 +535,6 @@ export default function UiStudioScreen({navigation}: any) {
       setPublishing(false);
     }
   }, [
-    activePreviewViewport,
     captureActiveScreenSnapshotIntoManifest,
     draftManifest,
     publishNotes,

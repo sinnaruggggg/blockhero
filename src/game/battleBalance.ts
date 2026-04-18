@@ -10,6 +10,7 @@ const ENEMY_ATTACK_BUFF_MULTIPLIER = 1.1;
 const LEVEL_ENEMY_ATTACK_MULTIPLIER = 0.5;
 const ENEMY_ATTACK_GLOBAL_MULTIPLIER = 0.5;
 const ENEMY_HP_GLOBAL_MULTIPLIER = 2;
+const LEVEL_ENEMY_EXTRA_MULTIPLIER = 1.5;
 
 export function adjustEnemyAttackValue(baseAttack: number): number {
   return Math.max(
@@ -51,7 +52,8 @@ export function getLevelEnemyStats(
           chapterIndex * 4 +
           stageNumberInChapter * (tier === 'boss' ? 2 : 1)) *
           ENEMY_ATTACK_BUFF_MULTIPLIER *
-          LEVEL_ENEMY_ATTACK_MULTIPLIER,
+          LEVEL_ENEMY_ATTACK_MULTIPLIER *
+          LEVEL_ENEMY_EXTRA_MULTIPLIER,
       ),
     ),
     attackIntervalMs: (tier === 'boss' ? 3 : tier === 'elite' ? 4 : 5) * 1000,
@@ -60,7 +62,9 @@ export function getLevelEnemyStats(
 }
 
 export function getAdjustedLevelMonsterHp(baseHp: number): number {
-  return adjustEnemyHpValue(Math.max(1, Math.round(baseHp * 2)));
+  return adjustEnemyHpValue(
+    Math.max(1, Math.round(baseHp * 2 * LEVEL_ENEMY_EXTRA_MULTIPLIER)),
+  );
 }
 
 export function getNormalRaidAttackStats(stage: number): EnemyAttackStats {

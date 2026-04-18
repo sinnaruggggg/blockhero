@@ -993,6 +993,7 @@ export default function EndlessScreen({ navigation }: any) {
         },
       ]}
     >
+      <View style={styles.screenContent}>
       <VisualElementView screenId="endless" elementId="header">
         <GameHeader
           score={score}
@@ -1016,6 +1017,7 @@ export default function EndlessScreen({ navigation }: any) {
           feverGauge={feverGauge}
         />
       </VisualElementView>
+
 
       <Animated.View
         style={[
@@ -1053,6 +1055,7 @@ export default function EndlessScreen({ navigation }: any) {
         bottom={148}
       />
 
+
       <VisualElementView screenId="endless" elementId="status_bar">
         <View style={styles.goldBar}>
           <Text style={styles.goldBarText}>
@@ -1066,9 +1069,15 @@ export default function EndlessScreen({ navigation }: any) {
         </View>
       </VisualElementView>
 
-      <VisualElementView screenId="endless" elementId="next_preview">
-        {skillEffectsRef.current.previewCountBonus > 0 &&
-          nextPieces.length > 0 && (
+
+
+      {skillEffectsRef.current.previewCountBonus > 0 &&
+        nextPieces.length > 0 && (
+          <VisualElementView
+            screenId="endless"
+            elementId="next_preview"
+            style={styles.visualWrapper}
+          >
             <NextPiecePreview
               pieces={nextPieces.slice(
                 0,
@@ -1076,11 +1085,17 @@ export default function EndlessScreen({ navigation }: any) {
               )}
               viewport={visualViewport}
             />
-          )}
-      </VisualElementView>
+          </VisualElementView>
+        )}
 
-      <VisualElementView screenId="endless" elementId="summon_panel">
-        {activeSkinIdRef.current > 0 && (
+
+
+      {activeSkinIdRef.current > 0 && (
+        <VisualElementView
+          screenId="endless"
+          elementId="summon_panel"
+          style={styles.visualWrapper}
+        >
           <View style={styles.summonCard}>
             <View style={styles.summonHeader}>
               <Text style={styles.summonTitle}>소환수</Text>
@@ -1127,57 +1142,64 @@ export default function EndlessScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
           </View>
-        )}
-      </VisualElementView>
+        </VisualElementView>
+      )}
+      <View style={styles.boardStage}>
+        <View style={styles.boardContainer}>
+          <VisualElementView
+            screenId="endless"
+            elementId="board"
+            style={styles.boardVisualAnchor}
+            onLayout={handleBoardLayout}
+          >
+            {comboGaugeRule.visible && (
+              <ComboGaugeOverlay
+                combo={combo}
+                comboRemainingMs={comboRemainingMs}
+                comboMaxMs={comboGaugeMaxMs}
+                visualAutomationLabel={buildVisualAutomationLabel(
+                  'endless',
+                  'combo_gauge',
+                )}
+                style={buildVisualElementStyle(
+                  comboGaugeRule,
+                  visualViewport,
+                  visualManifest.referenceViewport,
+                )}
+              />
+            )}
+            <Board
+              ref={boardRef}
+              board={board}
+              viewport={visualViewport}
+              backgroundColor={skinBoardBg}
+              compact={useCompactLayout}
+              previewCells={dragDrop.previewCells}
+              invalidPreview={dragDrop.invalidPreview}
+              clearGuideCells={dragDrop.clearGuideCells}
+            />
+            <VisualElementView
+              screenId="endless"
+              elementId="skill_effect"
+              style={styles.boardSkillEffectLayer}
+              pointerEvents="none"
+              viewport={visualViewport}
+            >
+              <SkillTriggerBoardEffect
+                message={skillEffectMessage}
+                triggerKey={skillEffectMessageKey}
+              />
+            </VisualElementView>
+          </VisualElementView>
+        </View>
+      </View>
 
       <VisualElementView
         screenId="endless"
-        elementId="board"
+        elementId="piece_tray"
         style={styles.visualWrapper}
       >
-        <View style={styles.boardContainer} onLayout={handleBoardLayout}>
-          {comboGaugeRule.visible && (
-            <ComboGaugeOverlay
-              combo={combo}
-              comboRemainingMs={comboRemainingMs}
-              comboMaxMs={comboGaugeMaxMs}
-              visualAutomationLabel={buildVisualAutomationLabel(
-                'endless',
-                'combo_gauge',
-              )}
-              style={buildVisualElementStyle(
-                comboGaugeRule,
-                visualViewport,
-                visualManifest.referenceViewport,
-              )}
-            />
-          )}
-          <Board
-            ref={boardRef}
-            board={board}
-            viewport={visualViewport}
-            backgroundColor={skinBoardBg}
-            compact={useCompactLayout}
-            previewCells={dragDrop.previewCells}
-            invalidPreview={dragDrop.invalidPreview}
-            clearGuideCells={dragDrop.clearGuideCells}
-          />
-          <VisualElementView
-            screenId="endless"
-            elementId="skill_effect"
-            style={styles.boardSkillEffectLayer}
-            pointerEvents="none"
-            viewport={visualViewport}
-          >
-            <SkillTriggerBoardEffect
-              message={skillEffectMessage}
-              triggerKey={skillEffectMessageKey}
-            />
-          </VisualElementView>
-        </View>
-      </VisualElementView>
-
-      <VisualElementView screenId="endless" elementId="piece_tray">
+      <View style={styles.pieceTraySection}>
         <PieceSelector
           pieces={pieces}
           onDragStart={dragDrop.onDragStart}
@@ -1188,9 +1210,15 @@ export default function EndlessScreen({ navigation }: any) {
           boardCompact={useCompactLayout}
           viewport={visualViewport}
         />
+      </View>
       </VisualElementView>
       {gameData && (
-        <VisualElementView screenId="endless" elementId="item_bar">
+        <VisualElementView
+          screenId="endless"
+          elementId="item_bar"
+          style={styles.visualWrapper}
+        >
+        <View style={styles.itemBarSection}>
         <ItemBar
           items={gameData.items}
           loadout={runItemLoadout}
@@ -1199,8 +1227,10 @@ export default function EndlessScreen({ navigation }: any) {
           onSelectItem={handleItemSelect}
           showAddTurns={false}
         />
+        </View>
         </VisualElementView>
       )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -1213,10 +1243,18 @@ const styles = StyleSheet.create({
   visualWrapper: {
     alignSelf: 'stretch',
   },
+  screenContent: {
+    flex: 1,
+    minHeight: 0,
+  },
   boardSkillEffectLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 30,
     elevation: 30,
+  },
+  boardStage: {
+    flex: 1,
+    minHeight: 0,
   },
   boardContainer: {
     flex: 1,
@@ -1226,6 +1264,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
+  },
+  boardVisualAnchor: {
+    alignSelf: 'center',
+  },
+  pieceTraySection: {
+    flexShrink: 0,
+  },
+  itemBarSection: {
+    flexShrink: 0,
   },
   milestoneBanner: {
     position: 'absolute',

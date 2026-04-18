@@ -4,12 +4,81 @@ import {
   MAX_RAID_PLAYERS,
   getTierForStage,
 } from '../constants/raidConfig';
+import { getBossRaidWindowInfo } from '../game/raidRules';
 
 interface StartRaidOptions {
   expiresInMs?: number;
   reuseOpenInstance?: boolean;
   skipCooldown?: boolean;
   partyId?: string | null;
+}
+
+interface RaidInstanceRecord {
+  id: string;
+  boss_stage: number;
+  status: string;
+  started_at?: string | null;
+  expires_at?: string | null;
+  party_id?: string | null;
+}
+
+const NORMAL_RAID_DURATION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
+function getRaidDurationMs(
+  instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
+) {
+  const startedAt = Date.parse(instance.started_at ?? '');
+  const expiresAt = Date.parse(instance.expires_at ?? '');
+  if (!Number.isFinite(startedAt) || !Number.isFinite(expiresAt)) {
+    return 0;
+  }
+  return Math.max(0, expiresAt - startedAt);
+}
+
+function isNormalRaidInstance(
+  instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
+) {
+  return getRaidDurationMs(instance) >= NORMAL_RAID_DURATION_THRESHOLD_MS;
+}
+
+function isCurrentBossWindowInstance(
+  instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
+  now = Date.now(),
+) {
+  const startedAt = Date.parse(instance.started_at ?? '');
+  if (!Number.isFinite(startedAt)) {
+    return false;
+  }
+  const windowInfo = getBossRaidWindowInfo(now);
+  return (
+    startedAt >= windowInfo.windowStartAt && startedAt < windowInfo.windowEndAt
+  );
+}
+
+function isUsableActiveRaidInstance(
+  instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
+  now = Date.now(),
+) {
+  if (isNormalRaidInstance(instance)) {
+    return true;
+  }
+  return isCurrentBossWindowInstance(instance, now);
+}
+
+export async function expireStaleRaidInstances() {
+  return supabase
+    .from('raid_instances')
+    .update({ status: 'expired' })
+    .eq('status', 'active')
+    .lte('expires_at', new Date().toISOString());
+}
+
+export async function expireRaidInstance(instanceId: string) {
+  return supabase
+    .from('raid_instances')
+    .update({ status: 'expired' })
+    .eq('id', instanceId)
+    .eq('status', 'active');
 }
 
 export async function createRaidInstance(
@@ -59,7 +128,11 @@ export async function findJoinableRaidInstance(
     return { data: null, error };
   }
 
-  for (const instance of instances) {
+  const usableInstances = instances.filter(instance =>
+    isUsableActiveRaidInstance(instance),
+  );
+
+  for (const instance of usableInstances) {
     const { count } = await supabase
       .from('raid_participants')
       .select('*', { count: 'exact', head: true })
@@ -81,13 +154,19 @@ export async function getPartyActiveRaid(partyId: string, bossStage?: number) {
     .eq('status', 'active')
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
-    .limit(1);
+    .limit(10);
 
   if (typeof bossStage === 'number') {
     query = query.eq('boss_stage', bossStage);
   }
 
-  return query.maybeSingle();
+  const { data, error } = await query;
+  if (error || !data) {
+    return { data: null, error };
+  }
+
+  const usableInstance = data.find(instance => isUsableActiveRaidInstance(instance));
+  return { data: usableInstance ?? null, error: null };
 }
 
 export async function getRaidInstance(instanceId: string) {
@@ -111,7 +190,15 @@ export async function getActiveInstances(friendIds?: string[]) {
     query = query.in('starter_id', friendIds);
   }
 
-  return query.limit(20);
+  const { data, error } = await query.limit(20);
+  if (error || !data) {
+    return { data: [], error };
+  }
+
+  return {
+    data: data.filter(instance => isUsableActiveRaidInstance(instance)),
+    error: null,
+  };
 }
 
 export async function joinRaidInstance(
@@ -119,6 +206,25 @@ export async function joinRaidInstance(
   playerId: string,
   nickname: string,
 ) {
+  const { data: instance, error: instanceError } = await supabase
+    .from('raid_instances')
+    .select('*')
+    .eq('id', instanceId)
+    .maybeSingle();
+
+  if (instanceError) {
+    return { data: null, error: instanceError };
+  }
+
+  if (
+    !instance ||
+    instance.status !== 'active' ||
+    new Date(instance.expires_at).getTime() <= Date.now() ||
+    !isUsableActiveRaidInstance(instance)
+  ) {
+    return { data: null, error: { message: 'raid_expired' } };
+  }
+
   const { data: existingParticipant, error: existingParticipantError } =
     await supabase
       .from('raid_participants')

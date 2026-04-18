@@ -21,6 +21,7 @@ import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
+import VisualElementView from '../components/VisualElementView';
 import { useBattleNotice } from '../hooks/useBattleNotice';
 import { useDragDrop } from '../game/useDragDrop';
 import { ATTACKS } from '../constants';
@@ -1039,7 +1040,11 @@ export default function BattleScreen({ route, navigation }: any) {
       ]}
     >
       {!gameOver && (
-        <View style={styles.backButtonDock}>
+        <VisualElementView
+          screenId="battle"
+          elementId="back_button"
+          style={styles.backButtonDock}
+        >
           <BackImageButton
             onPress={() => {
               Alert.alert(
@@ -1066,14 +1071,25 @@ export default function BattleScreen({ route, navigation }: any) {
             }}
             size={42}
           />
-        </View>
+        </VisualElementView>
       )}
       <View style={styles.screenContent}>
+        <VisualElementView
+          screenId="battle"
+          elementId="opponent_panel"
+          style={styles.visualWrapper}
+        >
         <View style={styles.opponentSection}>
           <Text style={styles.opponentName}>상대 {opponentName}</Text>
           <Board board={opponentBoard} small viewport={visualViewport} />
         </View>
+        </VisualElementView>
 
+        <VisualElementView
+          screenId="battle"
+          elementId="attack_bar"
+          style={styles.visualWrapper}
+        >
         <View style={styles.attackBar}>
           <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
           {ATTACKS.map((atk, i) => (
@@ -1093,6 +1109,7 @@ export default function BattleScreen({ route, navigation }: any) {
             </TouchableOpacity>
           ))}
         </View>
+        </VisualElementView>
 
         <View style={styles.boardStage}>
           <Animated.View
@@ -1102,26 +1119,43 @@ export default function BattleScreen({ route, navigation }: any) {
                 transform: [{ translateX: shakeAnim }],
               },
             ]}
-            onLayout={handleBoardLayout}
           >
-            <Board
-              ref={boardRef}
-              board={board}
-              viewport={visualViewport}
-              compact
-              previewCells={dragDrop.previewCells}
-              invalidPreview={dragDrop.invalidPreview}
-              clearGuideCells={dragDrop.clearGuideCells}
-            />
-            <View style={styles.skillEffectLayer} pointerEvents="none">
-              <SkillTriggerBoardEffect
-                message={battleNoticeMessage}
-                triggerKey={battleNoticeKey}
+            <VisualElementView
+              screenId="battle"
+              elementId="board"
+              style={styles.boardVisualAnchor}
+              onLayout={handleBoardLayout}
+            >
+              <Board
+                ref={boardRef}
+                board={board}
+                viewport={visualViewport}
+                compact
+                previewCells={dragDrop.previewCells}
+                invalidPreview={dragDrop.invalidPreview}
+                clearGuideCells={dragDrop.clearGuideCells}
               />
-            </View>
+              <VisualElementView
+                screenId="battle"
+                elementId="skill_effect"
+                style={styles.skillEffectLayer}
+                pointerEvents="none"
+                viewport={visualViewport}
+              >
+                <SkillTriggerBoardEffect
+                  message={battleNoticeMessage}
+                  triggerKey={battleNoticeKey}
+                />
+              </VisualElementView>
+            </VisualElementView>
           </Animated.View>
         </View>
 
+        <VisualElementView
+          screenId="battle"
+          elementId="piece_tray"
+          style={styles.visualWrapper}
+        >
         <View style={styles.pieceTraySection}>
           <PieceSelector
             pieces={pieces}
@@ -1134,6 +1168,7 @@ export default function BattleScreen({ route, navigation }: any) {
             viewport={visualViewport}
           />
         </View>
+        </VisualElementView>
       </View>
 
       {placementEffect && (
@@ -1242,6 +1277,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a0a3e',
   },
+  visualWrapper: {
+    alignSelf: 'stretch',
+  },
   screenContent: {
     flex: 1,
     minHeight: 0,
@@ -1306,6 +1344,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
+  },
+  boardVisualAnchor: {
+    alignSelf: 'center',
   },
   pieceTraySection: {
     flexShrink: 0,
