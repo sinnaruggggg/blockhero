@@ -21,7 +21,6 @@ import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
-import VisualElementView from '../components/VisualElementView';
 import { useBattleNotice } from '../hooks/useBattleNotice';
 import { useDragDrop } from '../game/useDragDrop';
 import { ATTACKS } from '../constants';
@@ -46,6 +45,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { t } from '../i18n';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
+import {CURRENT_VERSION_CODE, CURRENT_VERSION_NAME} from '../constants/appVersion';
 import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
@@ -524,11 +524,25 @@ export default function BattleScreen({ route, navigation }: any) {
 
         const { data: roomData } = await supabase
           .from('rooms')
-          .select('seed')
+          .select('seed, app_version_code, app_version_name')
           .eq('code', roomCode)
           .single();
 
         if (!mounted) return;
+
+        if (roomData?.app_version_code !== CURRENT_VERSION_CODE) {
+          Alert.alert(
+            t('common.error'),
+            `같은 버전끼리만 대전할 수 있습니다.\n내 버전: ${CURRENT_VERSION_NAME}\n방 버전: ${roomData?.app_version_name || roomData?.app_version_code || '알 수 없음'}`,
+            [
+              {
+                text: '확인',
+                onPress: () => navigation.replace('Lobby'),
+              },
+            ],
+          );
+          return;
+        }
 
         if (roomData?.seed != null) {
           seedRef.current = roomData.seed;
@@ -1025,11 +1039,7 @@ export default function BattleScreen({ route, navigation }: any) {
       ]}
     >
       {!gameOver && (
-        <VisualElementView
-          screenId="battle"
-          elementId="back_button"
-          style={styles.backButtonDock}
-        >
+        <View style={styles.backButtonDock}>
           <BackImageButton
             onPress={() => {
               Alert.alert(
@@ -1056,24 +1066,14 @@ export default function BattleScreen({ route, navigation }: any) {
             }}
             size={42}
           />
-        </VisualElementView>
+        </View>
       )}
-      <VisualElementView
-        screenId="battle"
-        elementId="opponent_panel"
-        style={styles.visualWrapper}
-      >
+      <View style={styles.screenContent}>
         <View style={styles.opponentSection}>
           <Text style={styles.opponentName}>상대 {opponentName}</Text>
           <Board board={opponentBoard} small viewport={visualViewport} />
         </View>
-      </VisualElementView>
 
-      <VisualElementView
-        screenId="battle"
-        elementId="attack_bar"
-        style={styles.visualWrapper}
-      >
         <View style={styles.attackBar}>
           <Text style={styles.attackLabel}>공격 포인트 {attackPoints}</Text>
           {ATTACKS.map((atk, i) => (
@@ -1093,58 +1093,48 @@ export default function BattleScreen({ route, navigation }: any) {
             </TouchableOpacity>
           ))}
         </View>
-      </VisualElementView>
 
-      <VisualElementView
-        screenId="battle"
-        elementId="board"
-        style={styles.visualWrapper}
-      >
-        <Animated.View
-          style={[
-            styles.boardContainer,
-            {
-              transform: [{ translateX: shakeAnim }],
-            },
-          ]}
-          onLayout={handleBoardLayout}
-        >
-          <Board
-            ref={boardRef}
-            board={board}
-            viewport={visualViewport}
-            compact
-            previewCells={dragDrop.previewCells}
-            invalidPreview={dragDrop.invalidPreview}
-            clearGuideCells={dragDrop.clearGuideCells}
-          />
-          <VisualElementView
-            screenId="battle"
-            elementId="skill_effect"
-            style={styles.skillEffectLayer}
-            pointerEvents="none"
-            viewport={visualViewport}
+        <View style={styles.boardStage}>
+          <Animated.View
+            style={[
+              styles.boardContainer,
+              {
+                transform: [{ translateX: shakeAnim }],
+              },
+            ]}
+            onLayout={handleBoardLayout}
           >
-            <SkillTriggerBoardEffect
-              message={battleNoticeMessage}
-              triggerKey={battleNoticeKey}
+            <Board
+              ref={boardRef}
+              board={board}
+              viewport={visualViewport}
+              compact
+              previewCells={dragDrop.previewCells}
+              invalidPreview={dragDrop.invalidPreview}
+              clearGuideCells={dragDrop.clearGuideCells}
             />
-          </VisualElementView>
-        </Animated.View>
-      </VisualElementView>
+            <View style={styles.skillEffectLayer} pointerEvents="none">
+              <SkillTriggerBoardEffect
+                message={battleNoticeMessage}
+                triggerKey={battleNoticeKey}
+              />
+            </View>
+          </Animated.View>
+        </View>
 
-      <VisualElementView screenId="battle" elementId="piece_tray">
-        <PieceSelector
-          pieces={pieces}
-          onDragStart={dragDrop.onDragStart}
-          onDragMove={dragDrop.onDragMove}
-          onDragEnd={dragDrop.onDragEnd}
-          onDragCancel={dragDrop.onDragCancel}
-          compact
-          boardCompact
-          viewport={visualViewport}
-        />
-      </VisualElementView>
+        <View style={styles.pieceTraySection}>
+          <PieceSelector
+            pieces={pieces}
+            onDragStart={dragDrop.onDragStart}
+            onDragMove={dragDrop.onDragMove}
+            onDragEnd={dragDrop.onDragEnd}
+            onDragCancel={dragDrop.onDragCancel}
+            compact
+            boardCompact
+            viewport={visualViewport}
+          />
+        </View>
+      </View>
 
       {placementEffect && (
         <PiecePlacementEffect
@@ -1252,8 +1242,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a0a3e',
   },
-  visualWrapper: {
-    alignSelf: 'stretch',
+  screenContent: {
+    flex: 1,
+    minHeight: 0,
   },
   skillEffectLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -1270,6 +1261,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
     backgroundColor: 'rgba(0,0,0,0.3)',
+    flexShrink: 0,
   },
   opponentName: {
     color: '#e2e8f0',
@@ -1284,6 +1276,11 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 5,
     backgroundColor: 'rgba(30,27,75,0.6)',
+    flexShrink: 0,
+  },
+  boardStage: {
+    flex: 1,
+    minHeight: 0,
   },
   attackLabel: {
     color: '#ef4444',
@@ -1303,10 +1300,15 @@ const styles = StyleSheet.create({
   attackCost: { color: '#fbbf24', fontSize: 9 },
   boardContainer: {
     flex: 1,
+    flexShrink: 1,
+    minHeight: 0,
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 8,
+  },
+  pieceTraySection: {
+    flexShrink: 0,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

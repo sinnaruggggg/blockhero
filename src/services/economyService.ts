@@ -50,6 +50,15 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as {message?: unknown}).message === 'string'
+  ) {
+    return (error as {message: string}).message;
+  }
+
   return String(error || 'unknown_error');
 }
 

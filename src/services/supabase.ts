@@ -1,5 +1,6 @@
 import {createClient} from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {CURRENT_VERSION_CODE, CURRENT_VERSION_NAME} from '../constants/appVersion';
 
 const SUPABASE_URL = 'https://alhlmdhixmlmsdvgzhdu.supabase.co';
 const SUPABASE_ANON_KEY =
@@ -55,7 +56,13 @@ export function generateRoomCode(): string {
 
 // Create a room
 export async function createRoom(roomCode: string, seed?: number) {
-  return supabase.from('rooms').insert({code: roomCode, status: 'waiting', seed: seed ?? null});
+  return supabase.from('rooms').insert({
+    code: roomCode,
+    status: 'waiting',
+    seed: seed ?? null,
+    app_version_code: CURRENT_VERSION_CODE,
+    app_version_name: CURRENT_VERSION_NAME,
+  });
 }
 
 // Join a room
@@ -64,6 +71,8 @@ export async function joinRoom(roomCode: string, playerId: string, nickname: str
     room_code: roomCode,
     player_id: playerId,
     nickname,
+    app_version_code: CURRENT_VERSION_CODE,
+    app_version_name: CURRENT_VERSION_NAME,
     board: null,
     game_over: false,
   });
@@ -76,6 +85,8 @@ export async function enterMatchingQueue(playerId: string, nickname: string) {
     nickname,
     status: 'waiting',
     room_code: null,
+    app_version_code: CURRENT_VERSION_CODE,
+    app_version_name: CURRENT_VERSION_NAME,
   });
 }
 
@@ -90,7 +101,9 @@ export async function findWaitingPlayers(excludePlayerId: string) {
     .from('matching_queue')
     .select('*')
     .eq('status', 'waiting')
+    .eq('app_version_code', CURRENT_VERSION_CODE)
     .neq('player_id', excludePlayerId)
+    .order('created_at', {ascending: true})
     .limit(1);
 }
 

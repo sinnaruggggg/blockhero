@@ -2,9 +2,7 @@ import { Linking, Platform } from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { openGameDialog } from './gameDialogService';
 import { isNewerVersion } from './updateVersion';
-
-export const CURRENT_VERSION_CODE = 185;
-export const CURRENT_VERSION_NAME = '1.3.58';
+import {CURRENT_VERSION_CODE, CURRENT_VERSION_NAME} from '../constants/appVersion';
 
 const GITHUB_REPO = 'sinnaruggggg/blockhero';
 const GITHUB_API_BASE = `https://api.github.com/repos/${GITHUB_REPO}`;

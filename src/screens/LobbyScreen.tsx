@@ -34,6 +34,7 @@ import {
   cleanupMatching,
   cleanupBattleState,
 } from '../services/supabase';
+import {CURRENT_VERSION_CODE, CURRENT_VERSION_NAME} from '../constants/appVersion';
 
 const {width: W, height: H} = Dimensions.get('window');
 
@@ -202,7 +203,7 @@ export default function LobbyScreen({navigation}: any) {
 
       const {data: rooms, error} = await supabase
         .from('rooms')
-        .select('*')
+        .select('code, status, app_version_code, app_version_name')
         .eq('code', code)
         .eq('status', 'waiting')
         .limit(1);
@@ -215,6 +216,17 @@ export default function LobbyScreen({navigation}: any) {
 
       if (!rooms || rooms.length === 0) {
         Alert.alert(t('common.error'), t('lobby.notFound'));
+        setWaiting(false);
+        return;
+      }
+
+      const roomVersionCode = rooms[0]?.app_version_code ?? null;
+      const roomVersionName = rooms[0]?.app_version_name ?? null;
+      if (roomVersionCode !== CURRENT_VERSION_CODE) {
+        Alert.alert(
+          t('common.error'),
+          `같은 버전끼리만 대전할 수 있습니다.\n내 버전: ${CURRENT_VERSION_NAME}\n방 버전: ${roomVersionName || roomVersionCode || '알 수 없음'}`,
+        );
         setWaiting(false);
         return;
       }

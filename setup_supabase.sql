@@ -84,11 +84,15 @@ CREATE TABLE IF NOT EXISTS rooms (
     code TEXT NOT NULL UNIQUE,
     status TEXT DEFAULT 'waiting',
     seed INTEGER,
+    app_version_code INTEGER,
+    app_version_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 기존 테이블에 seed 컬럼 추가 (이미 테이블이 있는 경우)
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS seed INTEGER;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS app_version_code INTEGER;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS app_version_name TEXT;
 
 ALTER TABLE rooms REPLICA IDENTITY FULL;
 ALTER TABLE rooms ENABLE ROW LEVEL SECURITY;
@@ -106,10 +110,15 @@ CREATE TABLE IF NOT EXISTS players (
     room_code TEXT NOT NULL,
     player_id TEXT NOT NULL,
     nickname TEXT NOT NULL,
+    app_version_code INTEGER,
+    app_version_name TEXT,
     board JSONB,
     game_over BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE players ADD COLUMN IF NOT EXISTS app_version_code INTEGER;
+ALTER TABLE players ADD COLUMN IF NOT EXISTS app_version_name TEXT;
 
 ALTER TABLE players REPLICA IDENTITY FULL;
 ALTER TABLE players ENABLE ROW LEVEL SECURITY;
@@ -128,8 +137,13 @@ CREATE TABLE IF NOT EXISTS matching_queue (
     nickname TEXT NOT NULL,
     status TEXT DEFAULT 'waiting',
     room_code TEXT,
+    app_version_code INTEGER,
+    app_version_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE matching_queue ADD COLUMN IF NOT EXISTS app_version_code INTEGER;
+ALTER TABLE matching_queue ADD COLUMN IF NOT EXISTS app_version_name TEXT;
 
 ALTER TABLE matching_queue REPLICA IDENTITY FULL;
 ALTER TABLE matching_queue ENABLE ROW LEVEL SECURITY;
