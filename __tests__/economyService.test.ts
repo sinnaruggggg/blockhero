@@ -29,8 +29,14 @@ const sampleGameData = {
   gold: 999,
   diamonds: 77,
   items: {
-    hammer: 2,
+    hammer: 0,
     refresh: 1,
+    heal_small: 2,
+    heal_medium: 0,
+    heal_large: 0,
+    power_small: 1,
+    power_medium: 0,
+    power_large: 0,
     addTurns: 0,
     bomb: 0,
     piece_square3: 0,
@@ -53,10 +59,10 @@ describe('economyService', () => {
       error: null,
     });
 
-    const result = await purchaseShopItem('hammer', 'gold');
+    const result = await purchaseShopItem('heal_small', 'gold');
 
     expect(rpcMock).toHaveBeenCalledWith('bh_purchase_shop_item', {
-      p_item_id: 'hammer',
+      p_item_id: 'heal_small',
       p_currency: 'gold',
     });
     expect(mergePlayerStateCacheMock).toHaveBeenCalledWith({

@@ -62,10 +62,14 @@ const GRANT_TYPES = [
   { value: 'gold', label: '🪙 골드' },
   { value: 'diamonds', label: '💎 다이아' },
   { value: 'hearts', label: '❤️ 하트' },
-  { value: 'hammer', label: '🔨 해머' },
   { value: 'refresh', label: '🔄 새로고침' },
+  { value: 'heal_small', label: '♥ 힐링 포션 소' },
+  { value: 'heal_medium', label: '♥ 힐링 포션 중' },
+  { value: 'heal_large', label: '♥ 힐링 포션 대' },
+  { value: 'power_small', label: '⚡ 파워업 포션 소' },
+  { value: 'power_medium', label: '⚡ 파워업 포션 중' },
+  { value: 'power_large', label: '⚡ 파워업 포션 대' },
   { value: 'addTurns', label: '➕ 턴 추가' },
-  { value: 'bomb', label: '💣 폭탄' },
 ];
 
 const CHARACTER_NAME_MAP = Object.fromEntries(

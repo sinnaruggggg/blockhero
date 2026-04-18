@@ -97,7 +97,7 @@ export interface StageDefinition {
 }
 
 export interface ItemPriceDefinition {
-  itemId: 'hammer' | 'bomb' | 'refresh';
+  itemId: string;
   goldPrice: number;
   diamondPrice: number;
 }

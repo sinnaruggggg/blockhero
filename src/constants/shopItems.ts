@@ -1,3 +1,8 @@
+import {
+  ACTIVE_ITEM_KEYS,
+  ITEM_DEFINITIONS,
+} from './itemCatalog';
+
 export interface ShopItem {
   id: string;
   nameKey: string;
@@ -40,46 +45,24 @@ export const SPECIAL_PIECE_SHAPE_MAP: Record<SpecialPieceUnlockKey, number[]> =
   };
 
 export const SHOP_ITEMS: ShopItem[] = [
-  {
-    id: 'hammer',
-    nameKey: 'item.hammer',
-    diamondPrice: 5,
-    goldPrice: 120,
-    type: 'item',
-    itemKey: 'hammer',
+  ...ACTIVE_ITEM_KEYS.map(itemKey => ({
+    id: itemKey,
+    nameKey: `item.${itemKey}`,
+    diamondPrice: ITEM_DEFINITIONS[itemKey].diamondPrice,
+    goldPrice: ITEM_DEFINITIONS[itemKey].goldPrice,
+    type: 'item' as const,
+    itemKey,
     itemCount: 1,
-    emoji: '🔨',
-    label: '망치',
-  },
-  {
-    id: 'bomb',
-    nameKey: 'item.bomb',
-    diamondPrice: 6,
-    goldPrice: 160,
-    type: 'item',
-    itemKey: 'bomb',
-    itemCount: 1,
-    emoji: '💣',
-    label: '폭탄',
-  },
-  {
-    id: 'refresh',
-    nameKey: 'item.refresh',
-    diamondPrice: 3,
-    goldPrice: 80,
-    type: 'item',
-    itemKey: 'refresh',
-    itemCount: 1,
-    emoji: '🔄',
-    label: '새로고침',
-  },
+    emoji: ITEM_DEFINITIONS[itemKey].emoji,
+    label: ITEM_DEFINITIONS[itemKey].label,
+  })),
   {
     id: 'hearts',
     nameKey: 'shop.heartRefill',
     diamondPrice: 5,
     goldPrice: 60,
     type: 'hearts',
-    emoji: '❤️',
+    emoji: '\u2665',
     label: '하트 충전',
   },
 ];
@@ -92,10 +75,10 @@ export const SPECIAL_PIECE_ITEMS: ShopItem[] = [
     goldPrice: 0,
     type: 'piece',
     itemKey: 'piece_diag',
-    emoji: '╱',
+    emoji: '\u2573',
     pieceIndices: SPECIAL_PIECE_SHAPE_MAP.piece_diag,
     label: '대각선 블록',
-    description: '구매 후 영구 해금. 이후 블록 생성 시 함께 등장합니다.',
+    description: '구매 후 영구 해금됩니다.',
   },
   {
     id: 'piece_rect',
@@ -104,10 +87,10 @@ export const SPECIAL_PIECE_ITEMS: ShopItem[] = [
     goldPrice: 0,
     type: 'piece',
     itemKey: 'piece_rect',
-    emoji: '▭',
+    emoji: '\u25AD',
     pieceIndices: SPECIAL_PIECE_SHAPE_MAP.piece_rect,
-    label: '3×2 블록',
-    description: '구매 후 영구 해금. 이후 블록 생성 시 함께 등장합니다.',
+    label: '3x2 블록',
+    description: '구매 후 영구 해금됩니다.',
   },
   {
     id: 'piece_single',
@@ -118,8 +101,8 @@ export const SPECIAL_PIECE_ITEMS: ShopItem[] = [
     itemKey: 'piece_single',
     emoji: '1',
     pieceIndices: SPECIAL_PIECE_SHAPE_MAP.piece_single,
-    label: '한 칸 블록',
-    description: '기본 생성 풀에서는 나오지 않으며 구매 후에만 등장합니다.',
+    label: '1칸 블록',
+    description: '구매 후 영구 해금됩니다.',
   },
   {
     id: 'piece_line5',
@@ -128,10 +111,10 @@ export const SPECIAL_PIECE_ITEMS: ShopItem[] = [
     goldPrice: 0,
     type: 'piece',
     itemKey: 'piece_line5',
-    emoji: '━',
+    emoji: '\u2501',
     pieceIndices: SPECIAL_PIECE_SHAPE_MAP.piece_line5,
     label: '5칸 라인 블록',
-    description: '구매 후 영구 해금. 이후 블록 생성 시 함께 등장합니다.',
+    description: '구매 후 영구 해금됩니다.',
   },
   {
     id: 'piece_square3',
@@ -140,10 +123,22 @@ export const SPECIAL_PIECE_ITEMS: ShopItem[] = [
     goldPrice: 0,
     type: 'piece',
     itemKey: 'piece_square3',
-    emoji: '▣',
+    emoji: '\u25A3',
     pieceIndices: SPECIAL_PIECE_SHAPE_MAP.piece_square3,
-    label: '3×3 블록',
-    description: '구매 후 영구 해금. 이후 블록 생성 시 함께 등장합니다.',
+    label: '3x3 블록',
+    description: '구매 후 영구 해금됩니다.',
+  },
+  {
+    id: 'piece_num2',
+    nameKey: 'item.pieceNum2',
+    diamondPrice: 600,
+    goldPrice: 0,
+    type: 'piece',
+    itemKey: 'piece_num2',
+    emoji: '2',
+    pieceIndices: SPECIAL_PIECE_SHAPE_MAP.piece_num2,
+    label: '숫자 2 블록',
+    description: '구매 후 영구 해금됩니다.',
   },
 ];
 

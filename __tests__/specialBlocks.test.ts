@@ -61,7 +61,7 @@ describe('special block rewards', () => {
         color: '#ec4899',
         shape: [[1, 1, 1]],
         isItem: true,
-        itemType: 'hammer',
+        itemType: 'heal_small',
       },
       1,
       0,
@@ -71,20 +71,26 @@ describe('special block rewards', () => {
     const result = checkAndClearLines(placed);
 
     expect(result.gemsFound).toBe(0);
-    expect(result.itemsFound).toEqual(['hammer']);
+    expect(result.itemsFound).toEqual(['heal_small']);
   });
 
-  it('caps collected battle items at two per type and ignores unsupported drops', async () => {
+  it('collects new active items up to the expanded cap and ignores unsupported drops', async () => {
     const data: GameData = {
       hearts: 10,
       lastHeartTime: Date.now(),
       gold: 0,
       diamonds: 5,
       items: {
-        hammer: 1,
-        refresh: 0,
+        hammer: 0,
+        refresh: 98,
+        heal_small: 97,
+        heal_medium: 0,
+        heal_large: 0,
+        power_small: 0,
+        power_medium: 0,
+        power_large: 0,
         addTurns: 0,
-        bomb: 2,
+        bomb: 0,
         piece_square3: 0,
         piece_rect: 0,
         piece_line5: 0,
@@ -94,18 +100,21 @@ describe('special block rewards', () => {
     };
 
     const rewardResult = await collectSpecialBlockRewards(data, 2, [
-      'hammer',
-      'hammer',
-      'bomb',
+      'heal_small',
+      'heal_small',
+      'refresh',
       'refresh',
       'addTurns',
     ]);
 
     expect(rewardResult.data.diamonds).toBe(7);
-    expect(rewardResult.data.items.hammer).toBe(2);
-    expect(rewardResult.data.items.bomb).toBe(2);
-    expect(rewardResult.data.items.refresh).toBe(1);
-    expect(rewardResult.itemsCollected).toEqual(['hammer', 'refresh']);
-    expect(rewardResult.itemsSkipped).toEqual(['hammer', 'bomb']);
+    expect(rewardResult.data.items.heal_small).toBe(99);
+    expect(rewardResult.data.items.refresh).toBe(99);
+    expect(rewardResult.itemsCollected).toEqual([
+      'heal_small',
+      'heal_small',
+      'refresh',
+    ]);
+    expect(rewardResult.itemsSkipped).toEqual(['refresh']);
   });
 });

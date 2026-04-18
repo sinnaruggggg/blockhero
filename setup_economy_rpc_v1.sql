@@ -35,9 +35,13 @@ insert into public.shop_items (
   item_count
 )
 values
-  ('hammer', 120, 5, true, 'item', 'hammer', 1),
-  ('bomb', 160, 6, true, 'item', 'bomb', 1),
   ('refresh', 80, 3, true, 'item', 'refresh', 1),
+  ('heal_small', 100, 2, true, 'item', 'heal_small', 1),
+  ('heal_medium', 250, 3, true, 'item', 'heal_medium', 1),
+  ('heal_large', 400, 7, true, 'item', 'heal_large', 1),
+  ('power_small', 100, 2, true, 'item', 'power_small', 1),
+  ('power_medium', 250, 3, true, 'item', 'power_medium', 1),
+  ('power_large', 400, 7, true, 'item', 'power_large', 1),
   ('hearts', 60, 5, true, 'hearts', null, 1),
   ('piece_square3', 600, 20, true, 'piece', 'piece_square3', 1),
   ('piece_rect', 600, 20, true, 'piece', 'piece_rect', 1),
@@ -52,6 +56,10 @@ set
   item_type = excluded.item_type,
   item_key = excluded.item_key,
   item_count = excluded.item_count;
+
+update public.shop_items
+set is_active = false
+where item_id in ('hammer', 'bomb');
 
 create or replace function public.bh_now_ms()
 returns bigint
@@ -71,9 +79,20 @@ as $$
     'lastHeartTime', public.bh_now_ms(),
     'gold', 0,
     'diamonds', 0,
+    'startingItemLoadout', jsonb_build_array(
+      jsonb_build_object('itemKey', null, 'count', 0),
+      jsonb_build_object('itemKey', null, 'count', 0),
+      jsonb_build_object('itemKey', null, 'count', 0)
+    ),
     'items', jsonb_build_object(
       'hammer', 0,
       'refresh', 0,
+      'heal_small', 0,
+      'heal_medium', 0,
+      'heal_large', 0,
+      'power_small', 0,
+      'power_medium', 0,
+      'power_large', 0,
       'addTurns', 0,
       'bomb', 0,
       'piece_square3', 0,
@@ -229,14 +248,8 @@ returns integer
 language plpgsql
 immutable
 as $$
-declare
-  v_points integer := 0;
 begin
-  if p_state.selected_character_id = 'rogue' then
-    v_points := public.bh_selected_character_points(p_state, 8);
-  end if;
-
-  return 2 + case when v_points >= 3 then 1 else 0 end;
+  return 99;
 end;
 $$;
 
@@ -454,7 +467,15 @@ begin
     v_current_count := coalesce((v_game->'items'->>v_item_key)::integer, 0);
     v_next_count := v_current_count + coalesce(v_item.item_count, 1);
 
-    if v_item_key in ('hammer', 'bomb', 'refresh') then
+    if v_item_key in (
+      'refresh',
+      'heal_small',
+      'heal_medium',
+      'heal_large',
+      'power_small',
+      'power_medium',
+      'power_large'
+    ) then
       v_next_count := least(public.bh_item_cap(v_state), v_next_count);
       if v_next_count <= v_current_count then
         raise exception 'item_cap_reached';
@@ -709,7 +730,15 @@ begin
         v_current_count := coalesce((v_game->'items'->>v_item_key)::integer, 0);
         v_next_count := v_current_count + greatest(v_grant.amount, 0);
 
-        if v_item_key in ('hammer', 'bomb', 'refresh') then
+        if v_item_key in (
+          'refresh',
+          'heal_small',
+          'heal_medium',
+          'heal_large',
+          'power_small',
+          'power_medium',
+          'power_large'
+        ) then
           v_next_count := least(public.bh_item_cap(v_state), v_next_count);
         end if;
 

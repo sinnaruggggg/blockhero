@@ -109,7 +109,7 @@ export function formatHeartStatus(
 
 // Max items per type and total types
 export const MAX_ITEM_TYPES = 3;
-export const MAX_ITEM_PER_TYPE = 2;
+export const MAX_ITEM_PER_TYPE = 99;
 
 // Battle attacks
 export const ATTACKS = [

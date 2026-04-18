@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import MageSprite from '../components/MageSprite';
 import KnightSprite from '../components/KnightSprite';
 import GameBottomNav from '../components/GameBottomNav';
+import ItemLoadoutModal from '../components/ItemLoadoutModal';
 import {CHARACTER_CLASSES, getCharacterAtk, getCharacterHp} from '../constants/characters';
 import {loadCharacterData, CharacterData} from '../stores/gameStore';
 import {
@@ -41,6 +42,7 @@ import {
   getSelectedCharacter,
   setSelectedCharacter,
   GameData,
+  saveStartingItemLoadout,
 } from '../stores/gameStore';
 import {
   HEART_REGEN_MS,
@@ -136,6 +138,7 @@ export default function HomeScreen({navigation}: any) {
     imageUrl?: string | null;
   } | null>(null);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [showEndlessLoadoutModal, setShowEndlessLoadoutModal] = useState(false);
   const [selectedChar, setSelectedCharState] = useState<string | null>(null);
   const [showCharSelect, setShowCharSelect] = useState(false);
   const [charData, setCharData] = useState<CharacterData | null>(null);
@@ -566,6 +569,31 @@ export default function HomeScreen({navigation}: any) {
     setShowCharSelect(false);
   }, [charDataMap]);
 
+  const handleOpenEndless = useCallback(() => {
+    if (!gameData) {
+      return;
+    }
+
+    setShowEndlessLoadoutModal(true);
+  }, [gameData]);
+
+  const handleConfirmEndlessLoadout = useCallback(
+    async (loadout: GameData['startingItemLoadout']) => {
+      if (!gameData) {
+        return;
+      }
+
+      const updatedGameData = await saveStartingItemLoadout(
+        gameData,
+        loadout ?? [],
+      );
+      setGameData(updatedGameData);
+      setShowEndlessLoadoutModal(false);
+      navigation.navigate('Endless');
+    },
+    [gameData, navigation],
+  );
+
   if (!gameData || (selectedChar === null && !showCharSelect)) {
     return (
       <View style={styles.container}>
@@ -726,7 +754,7 @@ export default function HomeScreen({navigation}: any) {
           <View style={styles.modeRow}>
             <TouchableOpacity
               style={styles.modeBtnWrapper}
-              onPress={() => navigation.navigate('Endless')}>
+              onPress={handleOpenEndless}>
               <Image source={IMG_ENDLESS} style={styles.modeIcon} resizeMode="contain" />
               <Text style={styles.modeLabel}>무한 모드</Text>
             </TouchableOpacity>
@@ -931,6 +959,16 @@ export default function HomeScreen({navigation}: any) {
             </View>
           </View>
         </Modal>
+        {gameData && (
+          <ItemLoadoutModal
+            visible={showEndlessLoadoutModal}
+            mode="endless"
+            items={gameData.items}
+            initialLoadout={gameData.startingItemLoadout}
+            onClose={() => setShowEndlessLoadoutModal(false)}
+            onConfirm={handleConfirmEndlessLoadout}
+          />
+        )}
       </SafeAreaView>
     </View>
   );

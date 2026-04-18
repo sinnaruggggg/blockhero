@@ -498,6 +498,7 @@ export default function RaidScreen({ route, navigation }: any) {
         getPieceGenerationOptions(getRaidEffects()),
         activeSkinIdRef.current,
       ),
+      rewardMode: 'raid' as const,
       unlockedSpecialShapeIndices: getUnlockedSpecialPieceShapeIndices(
         gameDataRef.current,
       ),

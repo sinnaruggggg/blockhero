@@ -28,6 +28,7 @@ import {
   changeNicknameWithServerCharge,
   getEconomyErrorCode,
 } from '../services/economyService';
+import {ACTIVE_ITEM_KEYS, ITEM_DEFINITIONS} from '../constants/itemCatalog';
 
 const CHARACTER_OPTIONS = CHARACTER_CLASSES.map(character => ({
   id: character.id,
@@ -35,12 +36,11 @@ const CHARACTER_OPTIONS = CHARACTER_CLASSES.map(character => ({
   emoji: character.emoji,
 }));
 
-const ITEM_SUMMARY = [
-  {key: 'hammer', emoji: '🔨', label: '망치'},
-  {key: 'refresh', emoji: '🔄', label: '새로고침'},
-  {key: 'bomb', emoji: '💣', label: '폭탄'},
-  {key: 'addTurns', emoji: '➕', label: '턴 추가'},
-] as const;
+const ITEM_SUMMARY = ACTIVE_ITEM_KEYS.map(itemKey => ({
+  key: itemKey,
+  emoji: ITEM_DEFINITIONS[itemKey].emoji,
+  label: ITEM_DEFINITIONS[itemKey].label,
+}));
 
 export default function ProfileScreen({navigation}: any) {
   const [gameData, setGameData] = useState<GameData | null>(null);

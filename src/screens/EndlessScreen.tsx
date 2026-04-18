@@ -104,6 +104,14 @@ import {
 } from '../game/piecePlacementEffect';
 import { scaleGameplayUnit } from '../game/layoutScale';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
+import {
+  ENDLESS_LOADOUT_ITEM_KEYS,
+  createDefaultStartingItemLoadout,
+  getItemDefinition,
+  resolveStartingItemLoadout,
+  type ActiveItemKey,
+  type StartingItemLoadoutSlot,
+} from '../constants/itemCatalog';
 
 export default function EndlessScreen({ navigation }: any) {
   const windowDimensions = useWindowDimensions();
@@ -126,6 +134,9 @@ export default function EndlessScreen({ navigation }: any) {
   const [feverGauge, setFeverGauge] = useState(0);
   const [feverActive, setFeverActive] = useState(false);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [runItemLoadout, setRunItemLoadout] = useState<StartingItemLoadoutSlot[]>(
+    createDefaultStartingItemLoadout(),
+  );
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [gameOver, setGameOver] = useState(false);
   const [boardLayout, setBoardLayout] = useState<{
@@ -162,6 +173,8 @@ export default function EndlessScreen({ navigation }: any) {
   const nextMilestoneRef = useRef(0);
   const goldEarnedRef = useRef(0);
   const gameDataRef = useRef<GameData | null>(null);
+  const baseAttackPowerRef = useRef(10);
+  const powerItemMultiplierRef = useRef(1);
   const startedAtRef = useRef(Date.now());
   const skillEffectsRef = useRef(getCharacterSkillEffects(null, null));
   const smallPieceStreakRef = useRef(0);
@@ -194,6 +207,7 @@ export default function EndlessScreen({ navigation }: any) {
         getPieceGenerationOptions(skillEffectsRef.current),
         activeSkinIdRef.current,
       ),
+      rewardMode: 'endless' as const,
       unlockedSpecialShapeIndices: getUnlockedSpecialPieceShapeIndices(
         gameDataRef.current,
       ),
@@ -205,6 +219,26 @@ export default function EndlessScreen({ navigation }: any) {
     nextPiecesRef.current = piecesToPreview;
     setNextPieces(piecesToPreview);
   }, []);
+
+  const updateAttackPowerWithPotion = useCallback((baseAttack: number) => {
+    baseAttackPowerRef.current = baseAttack;
+    setAttackPower(
+      Math.max(1, Math.round(baseAttack * powerItemMultiplierRef.current)),
+    );
+  }, []);
+
+  const buildRunItemLoadout = useCallback(
+    (data: GameData | null) =>
+      resolveStartingItemLoadout(
+        data?.items ?? {},
+        data?.startingItemLoadout,
+        ENDLESS_LOADOUT_ITEM_KEYS,
+      ).map(slot => ({
+        itemKey: slot.itemKey,
+        count: slot.effectiveCount,
+      })),
+    [],
+  );
 
   const showPlacementEffect = useCallback(
     (piece: Piece, row: number, col: number) => {
@@ -289,6 +323,11 @@ export default function EndlessScreen({ navigation }: any) {
     setSummonRemainingMs(0);
     setComboRemainingMs(0);
     updateNextPieces([]);
+    setSelectedItem(null);
+    setRunItemLoadout(createDefaultStartingItemLoadout());
+    powerItemMultiplierRef.current = 1;
+    baseAttackPowerRef.current = 10;
+    updateAttackPowerWithPotion(10);
     const initialPack = buildPiecePack('easy', initialBoard);
     setPieces(initialPack);
     updateNextPieces(buildPiecePack('easy', initialBoard));
@@ -301,6 +340,7 @@ export default function EndlessScreen({ navigation }: any) {
       ]);
       setGameData(loadedGameData);
       gameDataRef.current = loadedGameData;
+      setRunItemLoadout(buildRunItemLoadout(loadedGameData));
       skillNoticeModeRef.current = noticeMode;
 
       setActiveSkin(skinData.activeSkinId);
@@ -326,7 +366,7 @@ export default function EndlessScreen({ navigation }: any) {
         mode: 'endless',
       });
       skillEffectsRef.current = effects;
-      setAttackPower(
+      updateAttackPowerWithPotion(
         Math.round(
           getCharacterAtk(charId, charData.level) *
             effects.baseAttackMultiplier *
@@ -342,7 +382,12 @@ export default function EndlessScreen({ navigation }: any) {
         setBoardLayout({ x, y });
       });
     }, 300);
-  }, [buildPiecePack, updateNextPieces]);
+  }, [
+    buildPiecePack,
+    buildRunItemLoadout,
+    updateAttackPowerWithPotion,
+    updateNextPieces,
+  ]);
 
   const showMilestoneBanner = useCallback(
     (text: string) => {
@@ -839,38 +884,95 @@ export default function EndlessScreen({ navigation }: any) {
     setSummonActive(summonActiveRef.current);
   }, []);
 
+  const decrementRunItemSlot = useCallback((slotIndex?: number) => {
+    if (slotIndex === undefined) {
+      return;
+    }
+
+    setRunItemLoadout(current =>
+      current.map((slot, index) =>
+        index === slotIndex
+          ? { ...slot, count: Math.max(0, slot.count - 1) }
+          : slot,
+      ),
+    );
+  }, []);
+
   const handleItemSelect = useCallback(
-    (item: string) => {
-      if (!gameData) {
+    (item: string, slotIndex?: number) => {
+      const itemKey = item as ActiveItemKey;
+      const itemDefinition = getItemDefinition(itemKey);
+      if (!gameData || !itemDefinition || gameOver) {
         return;
       }
-      if (selectedItem === item) {
-        setSelectedItem(null);
+
+      const inventoryCount = gameData.items[itemKey] ?? 0;
+      const slotCount =
+        slotIndex === undefined
+          ? inventoryCount
+          : runItemLoadout[slotIndex]?.itemKey === itemKey
+            ? runItemLoadout[slotIndex]?.count ?? 0
+            : 0;
+
+      if (inventoryCount <= 0 || slotCount <= 0) {
+        showBattleNotice(`${itemDefinition.label}이 없습니다.`);
         return;
       }
-      if (item === 'refresh') {
-        if (gameData.items.refresh <= 0) {
-          return;
-        }
-        consumeItem(gameData, 'refresh').then(updated => {
+
+      if (itemKey === 'refresh') {
+        consumeItem(gameData, itemKey).then(updated => {
           if (updated) {
             setGameData(updated);
             gameDataRef.current = updated;
             const diff = getDifficulty(currentLevel);
             setPieces(buildPiecePack(diff, board));
+            decrementRunItemSlot(slotIndex);
+            setSelectedItem(null);
+            showBattleNotice('새 블록으로 교체했습니다.');
           }
         });
         return;
       }
-      if (item === 'addTurns') {
+
+      if (itemDefinition.type !== 'power') {
         return;
       }
-      if ((gameData.items[item as keyof typeof gameData.items] ?? 0) <= 0) {
+
+      const nextMultiplier = itemDefinition.powerMultiplier ?? 1;
+      if (nextMultiplier <= powerItemMultiplierRef.current) {
+        showBattleNotice('더 높은 등급의 파워업 포션이 필요합니다.');
         return;
       }
-      setSelectedItem(item);
+
+      consumeItem(gameData, itemKey).then(updated => {
+        if (!updated) {
+          return;
+        }
+
+        setGameData(updated);
+        gameDataRef.current = updated;
+        powerItemMultiplierRef.current = nextMultiplier;
+        updateAttackPowerWithPotion(baseAttackPowerRef.current);
+        decrementRunItemSlot(slotIndex);
+        setSelectedItem(null);
+        showBattleNotice(
+          `${itemDefinition.label} 사용: 공격 ${Math.round(
+            nextMultiplier * 100,
+          )}%`,
+        );
+      });
     },
-    [board, buildPiecePack, currentLevel, gameData, selectedItem],
+    [
+      board,
+      buildPiecePack,
+      currentLevel,
+      decrementRunItemSlot,
+      gameData,
+      gameOver,
+      runItemLoadout,
+      showBattleNotice,
+      updateAttackPowerWithPotion,
+    ],
   );
 
   const nextMilestone = ENDLESS_GOLD_MILESTONES[nextMilestoneIdx];
@@ -1089,12 +1191,14 @@ export default function EndlessScreen({ navigation }: any) {
       </VisualElementView>
       {gameData && (
         <VisualElementView screenId="endless" elementId="item_bar">
-          <ItemBar
-            items={gameData.items}
-            selectedItem={selectedItem}
-            onSelectItem={handleItemSelect}
-            showAddTurns={false}
-          />
+        <ItemBar
+          items={gameData.items}
+          loadout={runItemLoadout}
+          allowedItemKeys={ENDLESS_LOADOUT_ITEM_KEYS}
+          selectedItem={selectedItem}
+          onSelectItem={handleItemSelect}
+          showAddTurns={false}
+        />
         </VisualElementView>
       )}
     </SafeAreaView>

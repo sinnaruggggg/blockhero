@@ -53,8 +53,6 @@ import {
   countBlocks,
   canPlaceAnyPiece,
   addObstacles,
-  useHammer as applyHammerCell,
-  useBomb as applyBombCell,
   resetPieceGenerationHistory,
   Piece,
   Board as BoardType,
@@ -143,6 +141,14 @@ import {
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
+import {
+  ActiveItemKey,
+  LEVEL_LOADOUT_ITEM_KEYS,
+  createDefaultStartingItemLoadout,
+  getItemDefinition,
+  resolveStartingItemLoadout,
+  type StartingItemLoadoutSlot,
+} from '../constants/itemCatalog';
 
 type FailureReason = 'board_full' | 'hp_zero';
 
@@ -401,6 +407,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const [combo, setCombo] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [runItemLoadout, setRunItemLoadout] = useState<StartingItemLoadoutSlot[]>(
+    createDefaultStartingItemLoadout(),
+  );
   const [attackPower, setAttackPower] = useState(10);
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [boardLayout, setBoardLayout] = useState<{
@@ -487,6 +496,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const diamondsEarnedRef = useRef(0);
   const nextPiecesRef = useRef<Piece[]>([]);
   const usedBattleItemRef = useRef(false);
+  const baseAttackPowerRef = useRef(10);
+  const powerItemMultiplierRef = useRef(1);
   const isAdminRef = useRef(false);
   const monsterHpAnim = useRef(new Animated.Value(1)).current;
   const playerHpAnim = useRef(new Animated.Value(1)).current;
@@ -511,6 +522,26 @@ export default function SingleGameScreen({ route, navigation }: any) {
     messageKey: skillEffectMessageKey,
     showNotice: showSkillEffect,
   } = useBattleNotice(1600);
+
+  const updateAttackPowerWithPotion = useCallback((baseAttack: number) => {
+    baseAttackPowerRef.current = baseAttack;
+    setAttackPower(
+      Math.max(1, Math.round(baseAttack * powerItemMultiplierRef.current)),
+    );
+  }, []);
+
+  const buildRunItemLoadout = useCallback(
+    (data: GameData | null) =>
+      resolveStartingItemLoadout(
+        data?.items ?? {},
+        data?.startingItemLoadout,
+        LEVEL_LOADOUT_ITEM_KEYS,
+      ).map(slot => ({
+        itemKey: slot.itemKey,
+        count: slot.effectiveCount,
+      })),
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -545,6 +576,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         getPieceGenerationOptions(skillEffectsRef.current),
         activeSkinIdRef.current,
       ),
+      rewardMode: 'level' as const,
       unlockedSpecialShapeIndices: getUnlockedSpecialPieceShapeIndices(
         gameDataRef.current,
       ),
@@ -647,14 +679,17 @@ export default function SingleGameScreen({ route, navigation }: any) {
     diamondsEarnedRef.current = 0;
     gameDataRef.current = null;
     usedBattleItemRef.current = false;
+    powerItemMultiplierRef.current = 1;
+    baseAttackPowerRef.current = 10;
 
     setMonsterHp(maxMonsterHp);
     setPlayerHp(200);
     setMaxPlayerHp(200);
-    setAttackPower(10);
+    updateAttackPowerWithPotion(10);
     setCombo(0);
     setGameOver(false);
     setSelectedItem(null);
+    setRunItemLoadout(createDefaultStartingItemLoadout());
     setFeverActive(false);
     setFeverGauge(0);
     setSummonGauge(0);
@@ -709,6 +744,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         isAdminRef.current = isAdmin;
         skillNoticeModeRef.current = noticeMode;
         setGameData(loadedGameData);
+        setRunItemLoadout(buildRunItemLoadout(loadedGameData));
         setActiveSkin(skinData.activeSkinId);
         setSkinBoardBg(getSkinBoardBg());
 
@@ -753,7 +789,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
           const resolvedHp = Math.round(
             getCharacterHp(charId, charData.level) * effects.maxHpMultiplier,
           );
-          setAttackPower(resolvedAttack);
+          updateAttackPowerWithPotion(resolvedAttack);
           setPlayerHp(resolvedHp);
           setMaxPlayerHp(resolvedHp);
           playerHpRef.current = resolvedHp;
@@ -814,11 +850,13 @@ export default function SingleGameScreen({ route, navigation }: any) {
   }, [
     activeLevel,
     buildPiecePack,
+    buildRunItemLoadout,
     clearNotice,
     levelPieceDifficulty,
     maxMonsterHp,
     monsterHpAnim,
     playerHpAnim,
+    updateAttackPowerWithPotion,
     updateNextPieces,
   ]);
 
@@ -1798,24 +1836,43 @@ export default function SingleGameScreen({ route, navigation }: any) {
     setSummonActive(summonActiveRef.current);
   }, []);
 
+  const decrementRunItemSlot = useCallback((slotIndex?: number) => {
+    if (slotIndex === undefined) {
+      return;
+    }
+
+    setRunItemLoadout(current =>
+      current.map((slot, index) =>
+        index === slotIndex
+          ? { ...slot, count: Math.max(0, slot.count - 1) }
+          : slot,
+      ),
+    );
+  }, []);
+
   const handleItemSelect = useCallback(
-    (item: string) => {
-      if (!gameData) {
+    (item: string, slotIndex?: number) => {
+      const itemKey = item as ActiveItemKey;
+      const itemDefinition = getItemDefinition(itemKey);
+      if (!gameData || !itemDefinition || gameOverRef.current) {
         return;
       }
 
-      if (selectedItem === item) {
-        setSelectedItem(null);
+      const inventoryCount = gameData.items[itemKey] ?? 0;
+      const slotCount =
+        slotIndex === undefined
+          ? inventoryCount
+          : runItemLoadout[slotIndex]?.itemKey === itemKey
+            ? runItemLoadout[slotIndex]?.count ?? 0
+            : 0;
+
+      if (inventoryCount <= 0 || slotCount <= 0) {
+        showBattleNotice(`${itemDefinition.label}이 없습니다.`);
         return;
       }
 
-      if (item === 'refresh') {
-        if (gameData.items.refresh <= 0) {
-          showBattleNotice(t('item.noRefresh'));
-          return;
-        }
-
-        consumeItem(gameData, 'refresh').then(updatedData => {
+      if (itemKey === 'refresh') {
+        consumeItem(gameData, itemKey).then(updatedData => {
           if (!updatedData) {
             return;
           }
@@ -1824,58 +1881,82 @@ export default function SingleGameScreen({ route, navigation }: any) {
           gameDataRef.current = updatedData;
           setGameData(updatedData);
           setPieces(buildPiecePack(board));
+          decrementRunItemSlot(slotIndex);
+          setSelectedItem(null);
+          showBattleNotice('새 블록으로 교체했습니다.');
         });
         return;
       }
 
-      if ((gameData.items[item as keyof typeof gameData.items] ?? 0) <= 0) {
-        showBattleNotice(t('item.noItems'));
-        return;
-      }
-
-      setSelectedItem(item);
-    },
-    [board, buildPiecePack, gameData, selectedItem, showBattleNotice],
-  );
-
-  const handleBoardTapForItem = useCallback(
-    (row: number, col: number) => {
-      if (!selectedItem || !gameData) {
-        return;
-      }
-
-      if (selectedItem === 'hammer') {
-        const result = applyHammerCell(board, row, col);
-        if (!result) {
+      if (itemDefinition.type === 'heal') {
+        if (playerHpRef.current >= maxPlayerHp) {
+          showBattleNotice('HP가 이미 가득 찼습니다.');
           return;
         }
 
-        consumeItem(gameData, 'hammer').then(updatedData => {
-          if (updatedData) {
-            usedBattleItemRef.current = true;
-            gameDataRef.current = updatedData;
-            setGameData(updatedData);
+        consumeItem(gameData, itemKey).then(updatedData => {
+          if (!updatedData) {
+            return;
           }
+
+          usedBattleItemRef.current = true;
+          gameDataRef.current = updatedData;
+          setGameData(updatedData);
+          const healAmount = Math.max(
+            1,
+            Math.round(maxPlayerHp * (itemDefinition.healPercent ?? 0)),
+          );
+          const healedHp = Math.min(maxPlayerHp, playerHpRef.current + healAmount);
+          const recovered = Math.max(0, healedHp - playerHpRef.current);
+          playerHpRef.current = healedHp;
+          setPlayerHp(healedHp);
+          animatePlayerHpBar(healedHp / Math.max(1, maxPlayerHp));
+          decrementRunItemSlot(slotIndex);
+          setSelectedItem(null);
+          showBattleNotice(`${itemDefinition.label} 사용: HP +${recovered}`);
         });
-        setBoard(result);
-        setSelectedItem(null);
         return;
       }
 
-      if (selectedItem === 'bomb') {
-        const result = applyBombCell(board, row, col);
-        consumeItem(gameData, 'bomb').then(updatedData => {
-          if (updatedData) {
-            usedBattleItemRef.current = true;
-            gameDataRef.current = updatedData;
-            setGameData(updatedData);
+      if (itemDefinition.type === 'power') {
+        const nextMultiplier = itemDefinition.powerMultiplier ?? 1;
+        if (nextMultiplier <= powerItemMultiplierRef.current) {
+          showBattleNotice('더 높은 등급의 파워업 포션이 필요합니다.');
+          return;
+        }
+
+        consumeItem(gameData, itemKey).then(updatedData => {
+          if (!updatedData) {
+            return;
           }
+
+          usedBattleItemRef.current = true;
+          gameDataRef.current = updatedData;
+          setGameData(updatedData);
+          powerItemMultiplierRef.current = nextMultiplier;
+          updateAttackPowerWithPotion(baseAttackPowerRef.current);
+          decrementRunItemSlot(slotIndex);
+          setSelectedItem(null);
+          showBattleNotice(
+            `${itemDefinition.label} 사용: 공격 ${Math.round(
+              nextMultiplier * 100,
+            )}%`,
+          );
         });
-        setBoard(result.board);
-        setSelectedItem(null);
+        return;
       }
     },
-    [board, gameData, selectedItem],
+    [
+      animatePlayerHpBar,
+      board,
+      buildPiecePack,
+      decrementRunItemSlot,
+      gameData,
+      maxPlayerHp,
+      runItemLoadout,
+      showBattleNotice,
+      updateAttackPowerWithPotion,
+    ],
   );
 
   const handleRetryLevel = useCallback(async () => {
@@ -2340,28 +2421,14 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 )}
                 <Board
                   ref={boardRef}
-                  board={board}
-                  viewport={visualViewport}
-                  backgroundColor={skinBoardBg}
-                  previewCells={dragDrop.previewCells}
-                  invalidPreview={dragDrop.invalidPreview}
-                  clearGuideCells={dragDrop.clearGuideCells}
-                  onCellPress={selectedItem ? handleBoardTapForItem : undefined}
-                />
-              </VisualElementView>
-
-              {selectedItem && (
-                <View style={styles.itemHintRow}>
-                  <Text style={styles.itemHint}>
-                    {selectedItem === 'hammer'
-                      ? '망치로 제거할 칸을 선택하세요'
-                      : '폭탄을 사용할 칸을 선택하세요'}
-                  </Text>
-                  <TouchableOpacity onPress={() => setSelectedItem(null)}>
-                    <Text style={styles.cancelItem}>{t('common.cancel')}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                board={board}
+                viewport={visualViewport}
+                backgroundColor={skinBoardBg}
+                previewCells={dragDrop.previewCells}
+                invalidPreview={dragDrop.invalidPreview}
+                clearGuideCells={dragDrop.clearGuideCells}
+              />
+            </VisualElementView>
 
               <View style={styles.bottomActionRow}>
                 <View style={styles.bottomPieceArea}>
@@ -2399,6 +2466,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 >
                   <ItemBar
                     items={gameData.items}
+                    loadout={runItemLoadout}
+                    allowedItemKeys={LEVEL_LOADOUT_ITEM_KEYS}
                     selectedItem={selectedItem}
                     onSelectItem={handleItemSelect}
                     showAddTurns={false}
@@ -2478,7 +2547,6 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 previewCells={dragDrop.previewCells}
                 invalidPreview={dragDrop.invalidPreview}
                 clearGuideCells={dragDrop.clearGuideCells}
-                onCellPress={selectedItem ? handleBoardTapForItem : undefined}
               />
               <VisualElementView
                 screenId="level"
@@ -2493,19 +2561,6 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 />
               </VisualElementView>
             </VisualElementView>
-
-            {selectedItem && (
-              <View style={styles.itemHintRow}>
-                <Text style={styles.itemHint}>
-                  {selectedItem === 'hammer'
-                    ? '망치로 제거할 칸을 선택하세요'
-                    : '폭탄을 사용할 칸을 선택하세요'}
-                </Text>
-                <TouchableOpacity onPress={() => setSelectedItem(null)}>
-                  <Text style={styles.cancelItem}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
 
             <View style={styles.bottomActionRow}>
               <View style={styles.bottomPieceArea}>
@@ -2543,6 +2598,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
               >
                 <ItemBar
                   items={gameData.items}
+                  loadout={runItemLoadout}
+                  allowedItemKeys={LEVEL_LOADOUT_ITEM_KEYS}
                   selectedItem={selectedItem}
                   onSelectItem={handleItemSelect}
                   showAddTurns={false}

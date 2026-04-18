@@ -1,7 +1,8 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {t} from '../i18n';
 import {RewardResult} from '../constants/raidRewards';
+import {getItemDefinition} from '../constants/itemCatalog';
 
 interface RaidRewardPopupProps {
   reward: RewardResult;
@@ -9,12 +10,26 @@ interface RaidRewardPopupProps {
   onCollect: () => void;
 }
 
-function getItemEmoji(key: string): string {
-  if (key === 'hammer') return '🔨';
-  if (key === 'bomb') return '💣';
-  if (key === 'refresh') return '🔄';
-  if (key === 'addTurns') return '➕';
-  return '🎁';
+function getRewardItemMeta(key: string) {
+  const item = getItemDefinition(key);
+  if (item) {
+    return {
+      emoji: item.emoji,
+      label: item.label,
+    };
+  }
+
+  if (key === 'addTurns') {
+    return {
+      emoji: '➕',
+      label: t('item.addTurns'),
+    };
+  }
+
+  return {
+    emoji: '🎁',
+    label: t(`item.${key}`),
+  };
 }
 
 export default function RaidRewardPopup({
@@ -23,7 +38,8 @@ export default function RaidRewardPopup({
   onCollect,
 }: RaidRewardPopupProps) {
   const rankLabel = reward.rank === 1 ? 'MVP!' : `#${reward.rank}`;
-  const multLabel = reward.rankMultiplier > 1 ? ` (x${reward.rankMultiplier})` : '';
+  const multLabel =
+    reward.rankMultiplier > 1 ? ` (x${reward.rankMultiplier})` : '';
 
   return (
     <View style={styles.overlay}>
@@ -51,14 +67,17 @@ export default function RaidRewardPopup({
               <Text style={styles.rewardValue}>+{reward.diamonds}</Text>
             </View>
           )}
-          {Object.entries(reward.items).map(([key, count]) => (
-            <View key={key} style={styles.rewardRow}>
-              <Text style={styles.rewardEmoji}>{getItemEmoji(key)}</Text>
-              <Text style={styles.rewardValue}>
-                {t(`item.${key}`)} x{count}
-              </Text>
-            </View>
-          ))}
+          {Object.entries(reward.items).map(([key, count]) => {
+            const meta = getRewardItemMeta(key);
+            return (
+              <View key={key} style={styles.rewardRow}>
+                <Text style={styles.rewardEmoji}>{meta.emoji}</Text>
+                <Text style={styles.rewardValue}>
+                  {meta.label} x{count}
+                </Text>
+              </View>
+            );
+          })}
         </View>
 
         {reward.skinUnlocked !== null && (

@@ -58,7 +58,7 @@ CREATE TRIGGER announcements_updated_at
 CREATE TABLE IF NOT EXISTS resource_grants (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    grant_type TEXT NOT NULL, -- 'stars', 'diamonds', 'hearts', 'hammer', 'refresh', 'addTurns', 'bomb'
+    grant_type TEXT NOT NULL, -- 'stars', 'diamonds', 'hearts', 'refresh', 'heal_small', 'heal_medium', 'heal_large', 'power_small', 'power_medium', 'power_large', 'addTurns'
     amount INTEGER NOT NULL,
     reason TEXT,
     status TEXT DEFAULT 'pending', -- 'pending', 'claimed'

@@ -1,4 +1,11 @@
 import {
+  ACTIVE_ITEM_KEYS,
+  GEM_BLOCK_SPAWN_RATE,
+  ITEM_BLOCK_SPAWN_RATE,
+  ITEM_DEFINITIONS,
+  ITEM_INVENTORY_CAP,
+} from '../constants/itemCatalog';
+import {
   EndlessRewardThreshold,
   ItemPriceDefinition,
 } from '../types/gameDesign';
@@ -14,11 +21,11 @@ export const FEVER_LINE_REQUIREMENT = 20;
 export const FEVER_DURATION_MS = 10 * 1000;
 export const FEVER_DAMAGE_MULTIPLIER = 2;
 
-export const ITEM_CELL_SPAWN_RATE = 0.02;
-export const GEM_CELL_SPAWN_RATE = 0.015;
+export const ITEM_CELL_SPAWN_RATE = ITEM_BLOCK_SPAWN_RATE;
+export const GEM_CELL_SPAWN_RATE = GEM_BLOCK_SPAWN_RATE;
 
-export const DEFAULT_ITEM_CAP = 2;
-export const DEFAULT_ITEM_IDS = ['hammer', 'bomb', 'refresh'] as const;
+export const DEFAULT_ITEM_CAP = ITEM_INVENTORY_CAP;
+export const DEFAULT_ITEM_IDS = ACTIVE_ITEM_KEYS;
 
 export const LINE_CLEAR_DAMAGE_BONUS_PER_LINE = 0.15;
 
@@ -43,9 +50,11 @@ export const ENDLESS_REWARD_THRESHOLDS: EndlessRewardThreshold[] = [
 ];
 
 export const SHOP_ITEM_PRICES: ItemPriceDefinition[] = [
-  {itemId: 'hammer', goldPrice: 120, diamondPrice: 5},
-  {itemId: 'bomb', goldPrice: 160, diamondPrice: 6},
-  {itemId: 'refresh', goldPrice: 80, diamondPrice: 3},
+  ...ACTIVE_ITEM_KEYS.map(itemId => ({
+    itemId,
+    goldPrice: ITEM_DEFINITIONS[itemId].goldPrice,
+    diamondPrice: ITEM_DEFINITIONS[itemId].diamondPrice,
+  })),
 ];
 
 export const NORMAL_RAID_DIAMOND_REWARDS = [

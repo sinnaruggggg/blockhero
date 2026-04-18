@@ -32,13 +32,22 @@ import {
   type VisualViewport,
 } from '../game/visualConfig';
 import { createBoard, type Piece } from '../game/engine';
+import {
+  ENDLESS_LOADOUT_ITEM_KEYS,
+  LEVEL_LOADOUT_ITEM_KEYS,
+  type StartingItemLoadoutSlot,
+} from '../constants/itemCatalog';
 
 const LEVEL_BG = require('../assets/ui/grassland_bg.jpg');
 
 const SAMPLE_ITEMS = {
-  hammer: 2,
-  bomb: 1,
   refresh: 2,
+  heal_small: 3,
+  heal_medium: 2,
+  heal_large: 1,
+  power_small: 3,
+  power_medium: 2,
+  power_large: 1,
   addTurns: 0,
   piece_square3: 1,
   piece_rect: 0,
@@ -46,6 +55,18 @@ const SAMPLE_ITEMS = {
   piece_num2: 0,
   piece_diag: 1,
 };
+
+const SAMPLE_LEVEL_LOADOUT: StartingItemLoadoutSlot[] = [
+  { itemKey: 'heal_small', count: 3 },
+  { itemKey: 'power_medium', count: 2 },
+  { itemKey: 'refresh', count: 2 },
+];
+
+const SAMPLE_ENDLESS_LOADOUT: StartingItemLoadoutSlot[] = [
+  { itemKey: 'power_small', count: 3 },
+  { itemKey: 'power_large', count: 1 },
+  { itemKey: 'refresh', count: 2 },
+];
 
 const SAMPLE_PIECES: Piece[] = [
   {
@@ -561,6 +582,8 @@ export default function VisualRuntimePreview({
       >
         <ItemBar
           items={SAMPLE_ITEMS}
+          loadout={SAMPLE_LEVEL_LOADOUT}
+          allowedItemKeys={LEVEL_LOADOUT_ITEM_KEYS}
           selectedItem={null}
           onSelectItem={() => undefined}
           showAddTurns={false}
@@ -723,6 +746,8 @@ export default function VisualRuntimePreview({
       >
         <ItemBar
           items={SAMPLE_ITEMS}
+          loadout={SAMPLE_ENDLESS_LOADOUT}
+          allowedItemKeys={ENDLESS_LOADOUT_ITEM_KEYS}
           selectedItem={null}
           onSelectItem={() => undefined}
           showAddTurns={false}

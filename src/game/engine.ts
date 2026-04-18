@@ -7,6 +7,12 @@ import {
   PIECES_MEDIUM,
   PIECES_HARD,
 } from '../constants';
+import {
+  GEM_BLOCK_SPAWN_RATE,
+  ITEM_BLOCK_SPAWN_RATE,
+  getItemDropPool,
+  type GameModeRewardItemKey,
+} from '../constants/itemCatalog';
 
 // Types
 // 'hard' obstacles have a hit counter: needs `hits` more line-clears to be destroyed
@@ -26,6 +32,7 @@ export interface PieceGenerationOptions {
   gemChanceBonus?: number;
   itemChanceBonus?: number;
   unlockedSpecialShapeIndices?: number[];
+  rewardMode?: GameModeRewardItemKey;
 }
 
 export interface Piece {
@@ -623,7 +630,11 @@ function applyPieceRewardRolls(
 ): Piece {
   let nextPiece = applyGemChance(piece, options.gemChanceBonus ?? 0);
   if (!nextPiece.isGem) {
-    nextPiece = applyItemChance(nextPiece, options.itemChanceBonus ?? 0);
+    nextPiece = applyItemChance(
+      nextPiece,
+      options.itemChanceBonus ?? 0,
+      options.rewardMode,
+    );
   }
   return nextPiece;
 }
@@ -1264,18 +1275,25 @@ export function addEndlessHardObstacles(board: Board, level: number): Board {
 
 // Apply random gem block chance (1-2%) to a generated piece
 export function applyGemChance(piece: Piece, chanceBonus: number = 0): Piece {
-  if (Math.random() < 0.015 + chanceBonus) {
-    // 1.5% chance
+  if (Math.random() < GEM_BLOCK_SPAWN_RATE + chanceBonus) {
     return { ...piece, isGem: true, color: '#f59e0b' }; // gold color for gems
   }
   return piece;
 }
 
-// Apply random item block chance (2%) to a generated piece
-const ITEM_TYPES = ['hammer', 'bomb', 'refresh'];
-export function applyItemChance(piece: Piece, chanceBonus: number = 0): Piece {
-  if (Math.random() < 0.02 + chanceBonus) {
-    const itemType = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+// Apply random item block chance to a generated piece
+export function applyItemChance(
+  piece: Piece,
+  chanceBonus: number = 0,
+  rewardMode?: GameModeRewardItemKey,
+): Piece {
+  const itemPool = getItemDropPool(rewardMode);
+  if (itemPool.length === 0) {
+    return piece;
+  }
+
+  if (Math.random() < ITEM_BLOCK_SPAWN_RATE + chanceBonus) {
+    const itemType = itemPool[Math.floor(Math.random() * itemPool.length)];
     return { ...piece, isItem: true, itemType, color: '#ec4899' };
   }
   return piece;
@@ -1290,7 +1308,11 @@ export function generatePieceWithEffects(
   let piece = generatePiece(difficulty, colors, options);
   piece = applyGemChance(piece, options.gemChanceBonus ?? 0);
   if (!piece.isGem)
-    piece = applyItemChance(piece, options.itemChanceBonus ?? 0);
+    piece = applyItemChance(
+      piece,
+      options.itemChanceBonus ?? 0,
+      options.rewardMode,
+    );
   return piece;
 }
 

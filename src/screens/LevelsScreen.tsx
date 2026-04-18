@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
+import ItemLoadoutModal from '../components/ItemLoadoutModal';
 import { getWorldMonsterSprite } from '../assets/monsterSprites';
 import {
   INFINITE_HEARTS_VALUE,
@@ -40,6 +41,7 @@ import {
   loadGameData,
   loadLevelProgress,
   resetLevelModeBreakthrough,
+  saveStartingItemLoadout,
   useHeart as consumeHeart,
 } from '../stores/gameStore';
 
@@ -52,6 +54,8 @@ export default function LevelsScreen({ navigation }: any) {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [expandedWorld, setExpandedWorld] = useState<number>(1);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showLoadoutModal, setShowLoadoutModal] = useState(false);
+  const [pendingLevelId, setPendingLevelId] = useState<number | null>(null);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
     null,
   );
@@ -174,22 +178,8 @@ export default function LevelsScreen({ navigation }: any) {
         return;
       }
 
-      const updatedGameData = await consumeHeart(gameData);
-      if (!updatedGameData) {
-        return;
-      }
-
-      const preparedGameData =
-        selectedCharacterId === 'knight' &&
-        levelModeBreakthroughAttackPerClear > 0
-          ? await clearLevelModeBreakthroughIfChallengeBroken(
-              updatedGameData,
-              levelId,
-            )
-          : await resetLevelModeBreakthrough(updatedGameData);
-
-      setGameData(preparedGameData);
-      navigation.navigate('SingleGame', { levelId });
+      setPendingLevelId(levelId);
+      setShowLoadoutModal(true);
     },
     [
       disabledLevelIds,
@@ -199,6 +189,44 @@ export default function LevelsScreen({ navigation }: any) {
       navigation,
       selectedCharacterId,
       unlockedLevel,
+    ],
+  );
+
+  const handleConfirmLoadout = useCallback(
+    async (loadout: GameData['startingItemLoadout']) => {
+      if (!gameData || pendingLevelId === null) {
+        return;
+      }
+
+      const savedGameData = await saveStartingItemLoadout(gameData, loadout ?? []);
+      const updatedGameData = await consumeHeart(savedGameData);
+      if (!updatedGameData) {
+        setGameData(savedGameData);
+        setShowLoadoutModal(false);
+        setPendingLevelId(null);
+        return;
+      }
+
+      const preparedGameData =
+        selectedCharacterId === 'knight' &&
+        levelModeBreakthroughAttackPerClear > 0
+          ? await clearLevelModeBreakthroughIfChallengeBroken(
+              updatedGameData,
+              pendingLevelId,
+            )
+          : await resetLevelModeBreakthrough(updatedGameData);
+
+      setGameData(preparedGameData);
+      setShowLoadoutModal(false);
+      setPendingLevelId(null);
+      navigation.navigate('SingleGame', { levelId: pendingLevelId });
+    },
+    [
+      gameData,
+      levelModeBreakthroughAttackPerClear,
+      navigation,
+      pendingLevelId,
+      selectedCharacterId,
     ],
   );
 
@@ -381,6 +409,20 @@ export default function LevelsScreen({ navigation }: any) {
           );
         })}
       </ScrollView>
+
+      {gameData && (
+        <ItemLoadoutModal
+          visible={showLoadoutModal}
+          mode="level"
+          items={gameData.items}
+          initialLoadout={gameData.startingItemLoadout}
+          onClose={() => {
+            setShowLoadoutModal(false);
+            setPendingLevelId(null);
+          }}
+          onConfirm={handleConfirmLoadout}
+        />
+      )}
     </SafeAreaView>
   );
 }

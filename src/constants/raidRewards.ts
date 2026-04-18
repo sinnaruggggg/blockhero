@@ -20,7 +20,7 @@ export const DAMAGE_RANK_MULTIPLIERS: Record<number, number> = {
 };
 
 export const DEFAULT_RANK_MULTIPLIER = 1;
-export const ITEM_KEYS = ['hammer', 'bomb', 'refresh'] as const;
+export const ITEM_KEYS = ACTIVE_ITEM_KEYS;
 
 function randRange(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -62,3 +62,4 @@ export function calculateRewards(
     titlesUnlocked: [],
   };
 }
+import { ACTIVE_ITEM_KEYS } from './itemCatalog';

@@ -39,6 +39,15 @@ import {
   type SpecialPieceUnlockKey,
 } from '../constants/shopItems';
 import {
+  ACTIVE_ITEM_KEYS,
+  ITEM_INVENTORY_CAP,
+  createDefaultStartingItemLoadout,
+  isActiveItemKey,
+  normalizeStartingItemLoadout,
+  type ActiveItemKey,
+  type StartingItemLoadoutSlot,
+} from '../constants/itemCatalog';
+import {
   advanceLevelModeBreakthroughState,
   normalizeLevelModeBreakthroughState,
   shouldResetLevelModeBreakthroughOnChallenge,
@@ -53,9 +62,16 @@ export interface GameData {
   diamonds: number;
   unlockedSpecialPieces?: SpecialPieceUnlockKey[];
   levelModeBreakthrough?: LevelModeBreakthroughState | null;
+  startingItemLoadout?: StartingItemLoadoutSlot[];
   items: {
     hammer: number;
     refresh: number;
+    heal_small: number;
+    heal_medium: number;
+    heal_large: number;
+    power_small: number;
+    power_medium: number;
+    power_large: number;
     addTurns: number;
     bomb: number;
     piece_square3: number;
@@ -110,9 +126,16 @@ const defaultGameData: GameData = {
   diamonds: 0,
   unlockedSpecialPieces: [],
   levelModeBreakthrough: null,
+  startingItemLoadout: createDefaultStartingItemLoadout(),
   items: {
     hammer: 0,
     refresh: 0,
+    heal_small: 0,
+    heal_medium: 0,
+    heal_large: 0,
+    power_small: 0,
+    power_medium: 0,
+    power_large: 0,
     addTurns: 0,
     bomb: 0,
     piece_square3: 0,
@@ -183,13 +206,22 @@ export function normalizeGameDataSpecialPieceUnlocks(data: GameData): GameData {
   }
 
   const nextItems = { ...normalizedItems };
+  nextItems.hammer = 0;
+  nextItems.bomb = 0;
   for (const itemKey of LEGACY_SPECIAL_PIECE_ITEM_KEYS) {
     nextItems[itemKey] = 0;
+  }
+  for (const itemKey of ACTIVE_ITEM_KEYS) {
+    nextItems[itemKey] = Math.max(
+      0,
+      Math.min(ITEM_INVENTORY_CAP, nextItems[itemKey] ?? 0),
+    );
   }
 
   return {
     ...data,
     items: nextItems,
+    startingItemLoadout: normalizeStartingItemLoadout(data.startingItemLoadout),
     levelModeBreakthrough: normalizeLevelModeBreakthroughState(
       data.levelModeBreakthrough,
     ),
@@ -634,6 +666,18 @@ export async function saveGameData(data: GameData): Promise<void> {
   });
 }
 
+export async function saveStartingItemLoadout(
+  data: GameData,
+  startingItemLoadout: StartingItemLoadoutSlot[],
+): Promise<GameData> {
+  const updated = normalizeGameDataSpecialPieceUnlocks({
+    ...data,
+    startingItemLoadout,
+  });
+  await save('gameData', updated);
+  return updated;
+}
+
 export async function useHeart(data: GameData): Promise<GameData | null> {
   const isInfiniteHearts = await hasInfiniteHeartsAccess();
   if (isInfiniteHearts) {
@@ -701,9 +745,7 @@ export async function addItem(
 }
 
 const COLLECTIBLE_BATTLE_ITEMS: Array<keyof GameData['items']> = [
-  'hammer',
-  'bomb',
-  'refresh',
+  ...ACTIVE_ITEM_KEYS,
 ];
 
 export interface SpecialBlockRewardResult {
@@ -729,6 +771,10 @@ export async function collectSpecialBlockRewards(
   const itemsSkipped: Array<keyof GameData['items']> = [];
 
   for (const item of itemsFound) {
+    if (!isActiveItemKey(item)) {
+      continue;
+    }
+
     if (!COLLECTIBLE_BATTLE_ITEMS.includes(item as keyof GameData['items'])) {
       continue;
     }
