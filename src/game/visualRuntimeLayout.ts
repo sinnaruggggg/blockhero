@@ -89,7 +89,7 @@ function getNextPreviewHeight() {
 }
 
 function getSummonPanelHeight() {
-  return 78;
+  return 0;
 }
 
 function getItemBarHeight() {
@@ -129,11 +129,12 @@ function buildLevelLayout(viewport: VisualViewport): VisualRuntimeLayout {
   const trayWidth = Math.max(0, viewport.width - 24);
   const gauge = getComboGaugeMetrics(viewport, false);
   const boardMetrics = getBoardMetrics(viewport);
-  const boardRect = makeRect(0, boardTop, viewport.width, boardHeight);
-  const skillEffectRect = getCenteredBoardRect(
-    boardRect,
+  const boardStageRect = makeRect(0, boardTop, viewport.width, boardHeight);
+  const boardRect = getCenteredBoardRect(
+    boardStageRect,
     boardMetrics.boardSize,
   );
+  const skillEffectRect = boardRect;
 
   return {
     header: makeRect(0, content.top, viewport.width, headerHeight),
@@ -154,7 +155,7 @@ function buildLevelLayout(viewport: VisualViewport): VisualRuntimeLayout {
     ),
     combo_gauge: makeRect(
       (viewport.width - gauge.width) / 2,
-      boardTop + gauge.top,
+      boardRect.top + gauge.top,
       gauge.width,
       gauge.height,
     ),
@@ -168,7 +169,7 @@ function buildEndlessLayout(viewport: VisualViewport): VisualRuntimeLayout {
   const nextPreviewHeight = getNextPreviewHeight();
   const summonPanelHeight = getSummonPanelHeight();
   const itemBarHeight = getItemBarHeight();
-  const pieceTrayHeight = getPieceTrayHeight(viewport, false);
+  const pieceTrayHeight = getPieceTrayHeight(viewport, true);
   const boardTop =
     content.top +
     headerHeight +
@@ -177,13 +178,14 @@ function buildEndlessLayout(viewport: VisualViewport): VisualRuntimeLayout {
     summonPanelHeight;
   const pieceTrayTop = content.bottom - itemBarHeight - pieceTrayHeight;
   const boardHeight = Math.max(0, pieceTrayTop - boardTop);
-  const boardMetrics = getBoardMetrics(viewport);
-  const gauge = getComboGaugeMetrics(viewport, false);
-  const boardRect = makeRect(0, boardTop, viewport.width, boardHeight);
-  const skillEffectRect = getCenteredBoardRect(
-    boardRect,
+  const boardMetrics = getBoardMetrics(viewport, { compact: true });
+  const gauge = getComboGaugeMetrics(viewport, true);
+  const boardStageRect = makeRect(0, boardTop, viewport.width, boardHeight);
+  const boardRect = getCenteredBoardRect(
+    boardStageRect,
     boardMetrics.boardSize,
   );
+  const skillEffectRect = boardRect;
 
   return {
     header: makeRect(0, content.top, viewport.width, headerHeight),
@@ -216,9 +218,7 @@ function buildEndlessLayout(viewport: VisualViewport): VisualRuntimeLayout {
     ),
     combo_gauge: makeRect(
       (viewport.width - gauge.width) / 2,
-      boardTop +
-        Math.max(0, (boardHeight - boardMetrics.boardSize) / 2) +
-        gauge.top,
+      boardRect.top + gauge.top,
       gauge.width,
       gauge.height,
     ),
@@ -233,17 +233,18 @@ function buildBattleLayout(viewport: VisualViewport): VisualRuntimeLayout {
   const pieceTrayHeight = getPieceTrayHeight(viewport, true);
   const boardTop = content.top + opponentPanelHeight + attackBarHeight;
   const pieceTrayTop = content.bottom - pieceTrayHeight;
-  const boardRect = makeRect(
+  const boardStageRect = makeRect(
     0,
     boardTop,
     viewport.width,
     Math.max(0, pieceTrayTop - boardTop),
   );
   const boardMetrics = getBoardMetrics(viewport, { compact: true });
-  const skillEffectRect = getCenteredBoardRect(
-    boardRect,
+  const boardRect = getCenteredBoardRect(
+    boardStageRect,
     boardMetrics.boardSize,
   );
+  const skillEffectRect = boardRect;
 
   return {
     back_button: makeRect(12, content.top + 10, backSize, backSize),
@@ -283,11 +284,12 @@ function buildRaidLayout(
     pieceTrayTop - boardTop,
   );
   const gauge = getComboGaugeMetrics(viewport, true);
-  const boardRect = makeRect(0, boardTop, viewport.width, boardHeight);
-  const skillEffectRect = getCenteredBoardRect(
-    boardRect,
+  const boardStageRect = makeRect(0, boardTop, viewport.width, boardHeight);
+  const boardRect = getCenteredBoardRect(
+    boardStageRect,
     boardMetrics.boardSize,
   );
+  const skillEffectRect = boardRect;
 
   return {
     top_panel: makeRect(0, content.top, viewport.width, topPanelHeight),
@@ -308,7 +310,7 @@ function buildRaidLayout(
     piece_tray: makeRect(0, pieceTrayTop, viewport.width, pieceTrayHeight),
     combo_gauge: makeRect(
       (viewport.width - gauge.width) / 2,
-      boardTop + gauge.top,
+      boardRect.top + gauge.top,
       gauge.width,
       gauge.height,
     ),

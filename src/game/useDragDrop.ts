@@ -10,6 +10,10 @@ import {
 import { ROWS, COLS } from '../constants';
 import { getBoardMetrics } from '../components/Board';
 import type { VisualViewport } from './visualConfig';
+import {
+  resolveBoardScreenMetrics,
+  type MeasuredBoardLayout,
+} from './boardScreenMetrics';
 
 export interface PreviewCell {
   row: number;
@@ -78,27 +82,28 @@ function screenToBoardFloat(
   boardX: number,
   boardY: number,
   metrics: {
-    cellSize: number;
-    gap: number;
-    padding: number;
+    cellWidth: number;
+    cellHeight: number;
+    gapX: number;
+    gapY: number;
+    paddingX: number;
+    paddingY: number;
   },
 ): { row: number; col: number } {
-  const cs = metrics.cellSize;
-  const cg = metrics.gap;
-  const bp = metrics.padding;
-  const localX = x - boardX - bp;
-  const localY = y - boardY - bp;
-  const cellStep = cs + cg;
+  const localX = x - boardX - metrics.paddingX;
+  const localY = y - boardY - metrics.paddingY;
+  const cellStepX = metrics.cellWidth + metrics.gapX;
+  const cellStepY = metrics.cellHeight + metrics.gapY;
   return {
-    row: (localY - cs / 2) / cellStep,
-    col: (localX - cs / 2) / cellStep,
+    row: (localY - metrics.cellHeight / 2) / cellStepY,
+    col: (localX - metrics.cellWidth / 2) / cellStepX,
   };
 }
 
 export function useDragDrop(
   board: Board,
   pieces: (Piece | null)[],
-  boardLayout: { x: number; y: number } | null,
+  boardLayout: MeasuredBoardLayout | null,
   onPlace: (pieceIndex: number, row: number, col: number) => void,
   compact?: boolean,
   yOffsetCells: number = 0,
@@ -187,9 +192,10 @@ export function useDragDrop(
       const piece = pieces[index];
       if (!piece) return;
 
-      const metrics = getBoardMetrics(viewport, { compact });
-      const cellStep = metrics.cellSize + metrics.gap;
-      const offsetY = absY - yOffsetCells * cellStep;
+      const baseMetrics = getBoardMetrics(viewport, { compact });
+      const screenMetrics = resolveBoardScreenMetrics(baseMetrics, boardLayout);
+      const cellStepY = screenMetrics.cellHeight + screenMetrics.gapY;
+      const offsetY = absY - yOffsetCells * cellStepY;
 
       // Use floating-point board coordinates for precise centering
       const floatPos = screenToBoardFloat(
@@ -197,7 +203,7 @@ export function useDragDrop(
         offsetY,
         boardLayout.x,
         boardLayout.y,
-        metrics,
+        screenMetrics,
       );
 
       const { r, c } = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
@@ -313,9 +319,10 @@ export function useDragDrop(
         return;
       }
 
-      const metrics = getBoardMetrics(viewport, { compact });
-      const cellStep = metrics.cellSize + metrics.gap;
-      const offsetY = absY - yOffsetCells * cellStep;
+      const baseMetrics = getBoardMetrics(viewport, { compact });
+      const screenMetrics = resolveBoardScreenMetrics(baseMetrics, boardLayout);
+      const cellStepY = screenMetrics.cellHeight + screenMetrics.gapY;
+      const offsetY = absY - yOffsetCells * cellStepY;
 
       // Use floating-point board coordinates for precise centering
       const floatPos = screenToBoardFloat(
@@ -323,7 +330,7 @@ export function useDragDrop(
         offsetY,
         boardLayout.x,
         boardLayout.y,
-        metrics,
+        screenMetrics,
       );
       const { r, c } = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
 

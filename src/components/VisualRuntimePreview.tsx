@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+﻿import React, { useMemo, useRef } from 'react';
 import {
   ImageBackground,
   PanResponder,
@@ -291,7 +291,7 @@ function SampleBattleLane() {
         <Text style={styles.hpText}>148 / 200</Text>
       </View>
       <View style={styles.unitCard}>
-        <Text style={[styles.unitName, { color: '#f97316' }]}>슬라임 킹</Text>
+        <Text style={[styles.unitName, { color: '#f97316' }]}>드래곤</Text>
         <View style={styles.hpTrack}>
           <View style={[styles.hpFill, styles.enemyHpFill, { width: '58%' }]} />
         </View>
@@ -420,6 +420,11 @@ export default function VisualRuntimePreview({
     'endless',
     'combo_gauge',
   );
+  const endlessCompactLayout = getVisualElementRule(
+    manifest,
+    'endless',
+    'next_preview',
+  ).visible;
   const comboGaugeRaidNormal = getVisualElementRule(
     manifest,
     'raidNormal',
@@ -514,7 +519,7 @@ export default function VisualRuntimePreview({
       </EditorFrame>
 
       <EditorFrame
-        label="보드"
+        label="블록 보드"
         selected={selectedElementId === 'board'}
         elementId="board"
         viewport={viewport}
@@ -546,7 +551,7 @@ export default function VisualRuntimePreview({
       <View style={styles.flexFill} />
 
       <EditorFrame
-        label="하단 블록 트레이"
+        label="블록 트레이"
         selected={selectedElementId === 'piece_tray'}
         elementId="piece_tray"
         viewport={viewport}
@@ -632,7 +637,7 @@ export default function VisualRuntimePreview({
         style={styles.sectionGap}
       >
         <View style={styles.statusBar}>
-          <Text style={styles.statusBarText}>이번 판 획득 골드: 120</Text>
+          <Text style={styles.statusBarText}>이번 라운드 골드: 120</Text>
           <Text style={styles.statusBarSub}>다음: 15,000점</Text>
         </View>
       </EditorFrame>
@@ -654,29 +659,7 @@ export default function VisualRuntimePreview({
       </EditorFrame>
 
       <EditorFrame
-        label="소환 패널"
-        selected={selectedElementId === 'summon_panel'}
-        elementId="summon_panel"
-        viewport={viewport}
-        displayScale={displayScale}
-        manifest={manifest}
-        screenId="endless"
-        onSelect={onSelectElement}
-        onMove={onMoveElement}
-        onMeasure={reportEndlessMeasure}
-        style={styles.sectionGapSmall}
-      >
-        <View style={styles.summonCard}>
-          <Text style={styles.summonTitle}>소환수</Text>
-          <Text style={styles.summonSub}>번개정령 Lv.3</Text>
-          <View style={styles.summonTrack}>
-            <View style={[styles.summonFill, { width: '62%' }]} />
-          </View>
-        </View>
-      </EditorFrame>
-
-      <EditorFrame
-        label="보드"
+        label="블록 보드"
         selected={selectedElementId === 'board'}
         elementId="board"
         viewport={viewport}
@@ -689,7 +672,11 @@ export default function VisualRuntimePreview({
         style={[styles.sectionGap, styles.centered]}
       >
         <View>
-          <Board board={board} compact viewport={viewport} />
+          <Board
+            board={board}
+            compact={endlessCompactLayout}
+            viewport={viewport}
+          />
           {comboGaugeEndless.visible ? (
             <ComboGaugeOverlay
               combo={6}
@@ -708,7 +695,7 @@ export default function VisualRuntimePreview({
       <View style={styles.flexFill} />
 
       <EditorFrame
-        label="하단 블록 트레이"
+        label="블록 트레이"
         selected={selectedElementId === 'piece_tray'}
         elementId="piece_tray"
         viewport={viewport}
@@ -725,8 +712,8 @@ export default function VisualRuntimePreview({
           onDragMove={() => undefined}
           onDragEnd={() => undefined}
           onDragCancel={() => undefined}
-          compact
-          boardCompact
+          compact={endlessCompactLayout}
+          boardCompact={endlessCompactLayout}
           viewport={viewport}
         />
       </EditorFrame>
@@ -759,7 +746,7 @@ export default function VisualRuntimePreview({
   const renderBattle = () => (
     <View style={[styles.runtimeScreen, contentPadding]}>
       <EditorFrame
-        label="뒤로가기"
+        label="뒤로 가기"
         selected={selectedElementId === 'back_button'}
         elementId="back_button"
         viewport={viewport}
@@ -808,7 +795,7 @@ export default function VisualRuntimePreview({
         style={styles.sectionGap}
       >
         <View style={styles.attackBar}>
-          <Text style={styles.attackLabel}>공격 포인트 24</Text>
+          <Text style={styles.attackLabel}>공격 라인 수 24</Text>
           <View style={styles.attackChipRow}>
             {['약공', '중공', '강공'].map(label => (
               <View key={label} style={styles.attackChip}>
@@ -820,7 +807,7 @@ export default function VisualRuntimePreview({
       </EditorFrame>
 
       <EditorFrame
-        label="보드"
+        label="블록 보드"
         selected={selectedElementId === 'board'}
         elementId="board"
         viewport={viewport}
@@ -838,7 +825,7 @@ export default function VisualRuntimePreview({
       <View style={styles.flexFill} />
 
       <EditorFrame
-        label="하단 블록 트레이"
+        label="블록 트레이"
         selected={selectedElementId === 'piece_tray'}
         elementId="piece_tray"
         viewport={viewport}

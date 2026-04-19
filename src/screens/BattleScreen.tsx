@@ -27,6 +27,7 @@ import { useDragDrop } from '../game/useDragDrop';
 import { ATTACKS } from '../constants';
 import {
   createBoard,
+  decayLockedAttackBlocks,
   generateSeededPieces,
   placePiece,
   checkAndClearLines,
@@ -51,6 +52,7 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { scaleGameplayUnit } from '../game/layoutScale';
 
 // Neon spark particle effect - sparks scatter fast from placed block area
@@ -451,10 +453,9 @@ export default function BattleScreen({ route, navigation }: any) {
   const [gameOver, setGameOver] = useState(false);
   const [opponentName, setOpponentName] = useState(t('battle.opponent'));
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
-  const [boardLayout, setBoardLayout] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [boardLayout, setBoardLayout] = useState<MeasuredBoardLayout | null>(
+    null,
+  );
   const boardRef = useRef<View>(null);
 
   // Effects state
@@ -500,6 +501,31 @@ export default function BattleScreen({ route, navigation }: any) {
     ((nextSeed: number) => Promise<void>) | null
   >(null);
   const startRematchRef = useRef<(() => Promise<void>) | null>(null);
+
+  const broadcastBoardState = useCallback((nextBoard: BoardType) => {
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'board_state',
+      payload: {
+        playerId: playerIdRef.current,
+        nickname: nicknameRef.current,
+        board: nextBoard,
+      },
+    });
+  }, []);
+
+  const syncBoardState = useCallback(
+    (nextBoard: BoardType) => {
+      broadcastBoardState(nextBoard);
+      supabase
+        .from('players')
+        .update({ board: nextBoard })
+        .eq('room_code', roomCode)
+        .eq('player_id', playerIdRef.current)
+        .then();
+    },
+    [broadcastBoardState, roomCode],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -581,6 +607,12 @@ export default function BattleScreen({ route, navigation }: any) {
               }
             },
           )
+          .on('broadcast', { event: 'board_state' }, ({ payload }: any) => {
+            if (!mounted || !payload) return;
+            if (payload.playerId === playerIdRef.current) return;
+            if (payload.board) setOpponentBoard(payload.board);
+            if (payload.nickname) setOpponentName(payload.nickname);
+          })
           .on('broadcast', { event: 'attack' }, ({ payload }: any) => {
             if (!mounted || !payload) return;
             if (payload.senderId !== playerIdRef.current) {
@@ -592,9 +624,17 @@ export default function BattleScreen({ route, navigation }: any) {
                   skillEffectsRef.current.battleCounterAttackChance;
               // Attack received - shake + vibrate (NO missiles on receive)
               triggerShake();
+              let attackedBoard: BoardType | null = null;
               setBoard(prev => {
-                const newBoard = generateAttackLines(prev, payload.lines);
-                // Check game over after attack lines
+                attackedBoard = generateAttackLines(
+                  prev,
+                  payload.lines,
+                  payload.attackStage ?? payload.lines,
+                );
+                return attackedBoard;
+              });
+              if (attackedBoard) {
+                syncBoardState(attackedBoard);
                 setTimeout(() => {
                   setPieces(currentPieces => {
                     const active = currentPieces.filter(
@@ -602,7 +642,7 @@ export default function BattleScreen({ route, navigation }: any) {
                     ) as Piece[];
                     if (
                       active.length > 0 &&
-                      !canPlaceAnyPiece(newBoard, active)
+                      !canPlaceAnyPiece(attackedBoard as BoardType, active)
                     ) {
                       if (!gameOverRef.current) {
                         rematchAcceptedRef.current = false;
@@ -623,8 +663,7 @@ export default function BattleScreen({ route, navigation }: any) {
                     return currentPieces;
                   });
                 }, 100);
-                return newBoard;
-              });
+              }
               if (shouldCounterAttack) {
                 showBattleNotice('반격 발동');
                 setMissileEffect(1);
@@ -634,6 +673,7 @@ export default function BattleScreen({ route, navigation }: any) {
                   payload: {
                     senderId: playerIdRef.current,
                     lines: 1,
+                    attackStage: 1,
                     isCounter: true,
                   },
                 });
@@ -710,6 +750,7 @@ export default function BattleScreen({ route, navigation }: any) {
           return;
         }
         channelRef.current = channel;
+        syncBoardState(createBoard());
 
         // Start heartbeat
         heartbeatTimer.current = setInterval(() => {
@@ -767,19 +808,14 @@ export default function BattleScreen({ route, navigation }: any) {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       if (reconnectTimer.current) clearInterval(reconnectTimer.current);
     };
-  }, [isHost, navigation, roomCode, showBattleNotice, triggerShake]);
-
-  const syncBoardToDB = useCallback(
-    (b: BoardType) => {
-      supabase
-        .from('players')
-        .update({ board: b })
-        .eq('room_code', roomCode)
-        .eq('player_id', playerIdRef.current)
-        .then();
-    },
-    [roomCode],
-  );
+  }, [
+    isHost,
+    navigation,
+    roomCode,
+    showBattleNotice,
+    syncBoardState,
+    triggerShake,
+  ]);
 
   const showPlacementEffect = useCallback(
     (piece: Piece, row: number, col: number) => {
@@ -846,8 +882,9 @@ export default function BattleScreen({ route, navigation }: any) {
       if (error) {
         throw error;
       }
+      broadcastBoardState(freshBoard);
     },
-    [roomCode],
+    [broadcastBoardState, roomCode],
   );
 
   const startRematch = useCallback(async () => {
@@ -938,7 +975,8 @@ export default function BattleScreen({ route, navigation }: any) {
         const r = checkAndClearLines(newBoard);
         const cl = r.clearedRows.length + r.clearedCols.length;
         if (cl === 0) break;
-        newBoard = r.newBoard;
+        const decayResult = decayLockedAttackBlocks(r.newBoard, cl);
+        newBoard = decayResult.newBoard;
         totalLines += cl;
         combo++;
       }
@@ -950,7 +988,7 @@ export default function BattleScreen({ route, navigation }: any) {
       setBoard(newBoard);
       setScore(prev => prev + gained);
       setAttackPoints(prev => prev + ap);
-      syncBoardToDB(newBoard);
+      syncBoardState(newBoard);
 
       const newPieces = [...pieces];
       newPieces[pieceIndex] = null;
@@ -971,7 +1009,7 @@ export default function BattleScreen({ route, navigation }: any) {
         if (!canPlaceAnyPiece(newBoard, active)) handleGameOver();
       }, 200);
     },
-    [board, pieces, showPlacementEffect, syncBoardToDB, handleGameOver],
+    [board, pieces, showPlacementEffect, syncBoardState, handleGameOver],
   );
 
   const dragDrop = useDragDrop(
@@ -986,17 +1024,21 @@ export default function BattleScreen({ route, navigation }: any) {
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 100);
   }, []);
 
   useEffect(() => {
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 500);
   }, [round]);
 
@@ -1022,6 +1064,7 @@ export default function BattleScreen({ route, navigation }: any) {
         payload: {
           senderId: playerIdRef.current,
           lines: totalLines,
+          attackStage: attackIdx + 1,
           isCounter: false,
         },
       });

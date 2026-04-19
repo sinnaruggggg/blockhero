@@ -19,6 +19,12 @@
     "directories": {
       "output": "dist"
     },
+    "extraResources": [
+      {
+        "from": "bundled-platform-tools",
+        "to": "platform-tools"
+      }
+    ],
     "files": [
       "main.js",
       "desktop-preload.js",

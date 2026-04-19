@@ -1,4 +1,4 @@
-export type VisualScreenId =
+﻿export type VisualScreenId =
   | 'level'
   | 'endless'
   | 'battle'
@@ -136,11 +136,11 @@ export type VisualConfigManifest = {
 };
 
 export const VISUAL_SCREEN_LABELS: Record<VisualScreenId, string> = {
-  level: '?? ??',
-  endless: '?? ??',
-  battle: '?? ??',
-  raidNormal: '?? ??? ??',
-  raidBoss: '?? ??? ??',
+  level: '레벨 모드',
+  endless: '무한 모드',
+  battle: '대전 모드',
+  raidNormal: '일반 레이드',
+  raidBoss: '보스 레이드',
 };
 
 export const DEFAULT_VISUAL_REFERENCE_VIEWPORT: VisualViewport = {
@@ -200,43 +200,42 @@ export const VISUAL_ELEMENT_LABELS: Record<
   level: [
     { id: 'header', label: '상단 헤더' },
     { id: 'battle_lane', label: '전투 HUD' },
-    { id: 'board', label: '보드' },
-    { id: 'piece_tray', label: '하단 블록 트레이' },
+    { id: 'board', label: '블록 보드' },
+    { id: 'piece_tray', label: '블록 트레이' },
     { id: 'item_bar', label: '아이템 바' },
     { id: 'combo_gauge', label: '콤보 게이지' },
   ],
   endless: [
     { id: 'header', label: '상단 헤더' },
     { id: 'status_bar', label: '상태 바' },
-    { id: 'summon_panel', label: '소환 패널' },
     { id: 'next_preview', label: '다음 블록' },
-    { id: 'board', label: '보드' },
-    { id: 'piece_tray', label: '하단 블록 트레이' },
+    { id: 'board', label: '블록 보드' },
+    { id: 'piece_tray', label: '블록 트레이' },
     { id: 'item_bar', label: '아이템 바' },
     { id: 'combo_gauge', label: '콤보 게이지' },
   ],
   battle: [
-    { id: 'back_button', label: '???? ??' },
-    { id: 'opponent_panel', label: '?? ??' },
-    { id: 'attack_bar', label: '?? ?' },
-    { id: 'board', label: '??' },
-    { id: 'piece_tray', label: '?? ?? ???' },
+    { id: 'back_button', label: '뒤로 버튼' },
+    { id: 'opponent_panel', label: '상대 패널' },
+    { id: 'attack_bar', label: '공격 바' },
+    { id: 'board', label: '블록 보드' },
+    { id: 'piece_tray', label: '블록 트레이' },
   ],
   raidNormal: [
-    { id: 'top_panel', label: '?? ??? ??' },
-    { id: 'skill_bar', label: '?? ?' },
-    { id: 'info_bar', label: '?? ?' },
-    { id: 'board', label: '??' },
-    { id: 'piece_tray', label: '?? ?? ???' },
-    { id: 'combo_gauge', label: '?? ???' },
+    { id: 'top_panel', label: '상단 패널' },
+    { id: 'skill_bar', label: '스킬 바' },
+    { id: 'info_bar', label: '정보 바' },
+    { id: 'board', label: '블록 보드' },
+    { id: 'piece_tray', label: '블록 트레이' },
+    { id: 'combo_gauge', label: '콤보 게이지' },
   ],
   raidBoss: [
-    { id: 'top_panel', label: '?? ??? ??' },
-    { id: 'skill_bar', label: '?? ?' },
-    { id: 'info_bar', label: '?? ?' },
-    { id: 'board', label: '??' },
-    { id: 'piece_tray', label: '?? ?? ???' },
-    { id: 'combo_gauge', label: '?? ???' },
+    { id: 'top_panel', label: '상단 패널' },
+    { id: 'skill_bar', label: '스킬 바' },
+    { id: 'info_bar', label: '정보 바' },
+    { id: 'board', label: '블록 보드' },
+    { id: 'piece_tray', label: '블록 트레이' },
+    { id: 'combo_gauge', label: '콤보 게이지' },
   ],
 };
 

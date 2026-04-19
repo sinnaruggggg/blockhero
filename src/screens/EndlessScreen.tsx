@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
   Text,
   Animated,
-  TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
 import {
@@ -73,7 +72,6 @@ import {
   getUnlockedSpecialPieceShapeIndices,
   loadCharacterData,
   collectSpecialBlockRewards,
-  gainSummonExp,
   loadSkinData,
 } from '../stores/gameStore';
 import { getCharacterAtk } from '../constants/characters';
@@ -86,7 +84,6 @@ import {
   applySkinCombatDamage,
   applySkinRewardBonuses,
   getActiveSkinLoadout,
-  getSummonGaugeGain,
   mergeSkinPieceGenerationOptions,
 } from '../game/skinSummonRuntime';
 import { useBattleNotice } from '../hooks/useBattleNotice';
@@ -104,6 +101,7 @@ import {
 } from '../game/piecePlacementEffect';
 import { scaleGameplayUnit } from '../game/layoutScale';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
+import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import {
   ENDLESS_LOADOUT_ITEM_KEYS,
   createDefaultStartingItemLoadout,
@@ -139,20 +137,15 @@ export default function EndlessScreen({ navigation }: any) {
   );
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [gameOver, setGameOver] = useState(false);
-  const [boardLayout, setBoardLayout] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [boardLayout, setBoardLayout] = useState<MeasuredBoardLayout | null>(
+    null,
+  );
   const [attackPower, setAttackPower] = useState(10);
   const [nextMilestoneIdx, setNextMilestoneIdx] = useState(0);
   const [goldEarned, setGoldEarned] = useState(0);
   const [milestoneText, setMilestoneText] = useState('');
   const [skinBoardBg, setSkinBoardBg] = useState(getSkinBoardBg());
-  const [summonGauge, setSummonGauge] = useState(0);
-  const [summonGaugeRequired, setSummonGaugeRequired] = useState(0);
-  const [summonAttack, setSummonAttack] = useState(0);
-  const [summonActive, setSummonActive] = useState(false);
-  const [summonRemainingMs, setSummonRemainingMs] = useState(0);
+  const [feverRemainingMs, setFeverRemainingMs] = useState(0);
   const [nextPieces, setNextPieces] = useState<Piece[]>([]);
   const [placementEffect, setPlacementEffect] = useState<{
     id: number;
@@ -163,7 +156,10 @@ export default function EndlessScreen({ navigation }: any) {
   const placementEffectIdRef = useRef(0);
   const maxComboRef = useRef(0);
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feverTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const feverExpireAtRef = useRef<number | null>(null);
   const feverActiveRef = useRef(false);
+  const feverRemainingMsRef = useRef(0);
   const comboTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const comboTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const comboExpireAtRef = useRef<number | null>(null);
@@ -180,12 +176,7 @@ export default function EndlessScreen({ navigation }: any) {
   const smallPieceStreakRef = useRef(0);
   const lastPlacementAtRef = useRef<number | null>(null);
   const activeSkinIdRef = useRef(0);
-  const summonGaugeRef = useRef(0);
-  const summonGaugeRequiredRef = useRef(0);
-  const summonAttackRef = useRef(0);
-  const summonActiveRef = useRef(false);
-  const summonRemainingMsRef = useRef(0);
-  const summonExpEarnedRef = useRef(0);
+  const skinBattleEffectsRef = useRef(getActiveSkinLoadout(null).effects);
   const nextPiecesRef = useRef<Piece[]>([]);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const {
@@ -240,15 +231,21 @@ export default function EndlessScreen({ navigation }: any) {
     [],
   );
 
+  const shouldUseCompactEndlessLayout = useCallback(() => {
+    const nextPreviewRule = getVisualElementRule(
+      visualManifest,
+      'endless',
+      'next_preview',
+    );
+    return nextPreviewRule.visible;
+  }, [visualManifest]);
+
   const showPlacementEffect = useCallback(
     (piece: Piece, row: number, col: number) => {
       if (!boardLayout) {
         return;
       }
-      const compactLayout =
-        activeSkinIdRef.current > 0 ||
-        (skillEffectsRef.current.previewCountBonus > 0 &&
-          nextPiecesRef.current.length > 0);
+      const compactLayout = shouldUseCompactEndlessLayout();
       const cells = buildPiecePlacementEffectCells(
         boardLayout,
         piece,
@@ -263,7 +260,7 @@ export default function EndlessScreen({ navigation }: any) {
       placementEffectIdRef.current += 1;
       setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
-    [boardLayout, visualViewport],
+    [boardLayout, shouldUseCompactEndlessLayout, visualViewport],
   );
 
   const showSkillTriggerNotice = useCallback(
@@ -309,18 +306,11 @@ export default function EndlessScreen({ navigation }: any) {
     setBoard(initialBoard);
     lastPlacementAtRef.current = null;
     activeSkinIdRef.current = 0;
-    summonGaugeRef.current = 0;
-    summonGaugeRequiredRef.current = 0;
-    summonAttackRef.current = 0;
-    summonActiveRef.current = false;
-    summonRemainingMsRef.current = 0;
-    summonExpEarnedRef.current = 0;
+    skinBattleEffectsRef.current = getActiveSkinLoadout(null).effects;
+    feverExpireAtRef.current = null;
+    feverRemainingMsRef.current = 0;
     setPlacementEffect(null);
-    setSummonGauge(0);
-    setSummonGaugeRequired(0);
-    setSummonAttack(0);
-    setSummonActive(false);
-    setSummonRemainingMs(0);
+    setFeverRemainingMs(0);
     setComboRemainingMs(0);
     updateNextPieces([]);
     setSelectedItem(null);
@@ -347,12 +337,7 @@ export default function EndlessScreen({ navigation }: any) {
       setSkinBoardBg(getSkinBoardBg());
       const skinLoadout = getActiveSkinLoadout(skinData);
       activeSkinIdRef.current = skinLoadout.skinId;
-      summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
-      summonAttackRef.current = skinLoadout.summonAttack;
-      summonRemainingMsRef.current = skinLoadout.summonDurationMs;
-      setSummonGaugeRequired(skinLoadout.summonGaugeRequired);
-      setSummonAttack(skinLoadout.summonAttack);
-      setSummonRemainingMs(skinLoadout.summonDurationMs);
+      skinBattleEffectsRef.current = skinLoadout.effects;
 
       if (!charId) {
         const refreshedPack = buildPiecePack('easy', initialBoard);
@@ -378,9 +363,11 @@ export default function EndlessScreen({ navigation }: any) {
       updateNextPieces(buildPiecePack('easy', initialBoard));
     })();
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 300);
   }, [
     buildPiecePack,
@@ -388,6 +375,58 @@ export default function EndlessScreen({ navigation }: any) {
     updateAttackPowerWithPotion,
     updateNextPieces,
   ]);
+
+  const clearFeverTimers = useCallback(() => {
+    if (feverTimerRef.current) {
+      clearTimeout(feverTimerRef.current);
+      feverTimerRef.current = null;
+    }
+    if (feverTickerRef.current) {
+      clearInterval(feverTickerRef.current);
+      feverTickerRef.current = null;
+    }
+  }, []);
+
+  const stopFever = useCallback(() => {
+    clearFeverTimers();
+    feverExpireAtRef.current = null;
+    feverRemainingMsRef.current = 0;
+    feverActiveRef.current = false;
+    setFeverActive(false);
+    setFeverGauge(0);
+    setFeverRemainingMs(0);
+  }, [clearFeverTimers]);
+
+  const activateFever = useCallback(() => {
+    const durationMs =
+      FEVER_DURATION +
+      skillEffectsRef.current.feverDurationBonusMs +
+      skinBattleEffectsRef.current.feverDurationBonusMs;
+
+    clearFeverTimers();
+    feverActiveRef.current = true;
+    feverExpireAtRef.current = Date.now() + durationMs;
+    feverRemainingMsRef.current = durationMs;
+    setFeverActive(true);
+    setFeverGauge(FEVER_MAX);
+    setFeverRemainingMs(durationMs);
+
+    feverTickerRef.current = setInterval(() => {
+      if (!feverExpireAtRef.current) {
+        return;
+      }
+      const remaining = Math.max(0, feverExpireAtRef.current - Date.now());
+      feverRemainingMsRef.current = remaining;
+      setFeverRemainingMs(remaining);
+      if (remaining <= 0) {
+        stopFever();
+      }
+    }, 50);
+
+    feverTimerRef.current = setTimeout(() => {
+      stopFever();
+    }, durationMs);
+  }, [clearFeverTimers, stopFever]);
 
   const showMilestoneBanner = useCallback(
     (text: string) => {
@@ -410,45 +449,9 @@ export default function EndlessScreen({ navigation }: any) {
     [milestoneAnim],
   );
 
-  const activateFever = useCallback(() => {
-    setFeverActive(true);
-    feverActiveRef.current = true;
-    setFeverGauge(FEVER_MAX);
-    if (feverTimerRef.current) {
-      clearTimeout(feverTimerRef.current);
-    }
-    feverTimerRef.current = setTimeout(() => {
-      setFeverActive(false);
-      feverActiveRef.current = false;
-      setFeverGauge(0);
-    }, FEVER_DURATION + skillEffectsRef.current.feverDurationBonusMs);
-  }, []);
-
-  useEffect(() => {
-    if (!summonActive || summonRemainingMs <= 0 || gameOver) {
-      return;
-    }
-
-    const timer = setInterval(() => {
-      setSummonRemainingMs(current => {
-        const next = Math.max(0, current - 1000);
-        summonRemainingMsRef.current = next;
-        if (next <= 0) {
-          summonActiveRef.current = false;
-          setSummonActive(false);
-        }
-        return next;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [gameOver, summonActive, summonRemainingMs]);
-
   useEffect(() => {
     return () => {
-      if (feverTimerRef.current) {
-        clearTimeout(feverTimerRef.current);
-      }
+      clearFeverTimers();
       if (comboTimerRef.current) {
         clearTimeout(comboTimerRef.current);
       }
@@ -456,7 +459,7 @@ export default function EndlessScreen({ navigation }: any) {
         clearInterval(comboTickerRef.current);
       }
     };
-  }, []);
+  }, [clearFeverTimers]);
 
   const resetComboTimer = useCallback(() => {
     const durationMs =
@@ -503,9 +506,10 @@ export default function EndlessScreen({ navigation }: any) {
       return;
     }
     setGameOver(true);
-    if (feverTimerRef.current) {
-      clearTimeout(feverTimerRef.current);
-    }
+    clearFeverTimers();
+    feverExpireAtRef.current = null;
+    feverRemainingMsRef.current = 0;
+    setFeverRemainingMs(0);
     if (comboTimerRef.current) {
       clearTimeout(comboTimerRef.current);
     }
@@ -519,10 +523,6 @@ export default function EndlessScreen({ navigation }: any) {
     const finalScore = scoreRef.current;
     const finalLines = linesClearedRef.current;
     const finalGold = goldEarnedRef.current;
-
-    if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
-      await gainSummonExp(activeSkinIdRef.current, summonExpEarnedRef.current);
-    }
 
     const stats = await loadEndlessStats();
     await saveEndlessStats(
@@ -553,13 +553,13 @@ export default function EndlessScreen({ navigation }: any) {
 
     const isHighScore = finalScore > stats.highScore;
     Alert.alert(
-      isHighScore ? '새 최고 기록!' : '게임 종료',
+      isHighScore ? '최고 기록 갱신!' : '게임 종료',
       `점수: ${finalScore.toLocaleString()}\n레벨: ${currentLevel}\n클리어 줄: ${finalLines}\n최대 콤보: ${
         maxComboRef.current
       }\n획득 골드: +${finalGold}`,
       [{ text: '확인', onPress: () => navigation.goBack() }],
     );
-  }, [currentLevel, gameOver, navigation]);
+  }, [clearFeverTimers, currentLevel, gameOver, navigation]);
 
   const checkMilestones = useCallback(
     async (newScore: number) => {
@@ -680,7 +680,9 @@ export default function EndlessScreen({ navigation }: any) {
           1,
           Math.round(20 * effects.feverRequirementMultiplier),
         ),
-        feverGaugeGainMultiplier: effects.feverGaugeGainMultiplier,
+        feverGaugeGainMultiplier:
+          effects.feverGaugeGainMultiplier *
+          skinBattleEffectsRef.current.feverGaugeGainMultiplier,
       });
       if (turnResult.nextCombo > maxComboRef.current) {
         maxComboRef.current = turnResult.nextCombo;
@@ -722,15 +724,7 @@ export default function EndlessScreen({ navigation }: any) {
           didClear: turnResult.didClear,
         },
       ).damage;
-      const summonBonus =
-        summonActiveRef.current && summonRemainingMsRef.current > 0
-          ? summonAttackRef.current
-          : 0;
-      if (summonBonus > 0) {
-        summonExpEarnedRef.current += Math.max(1, Math.round(summonBonus / 8));
-      }
-
-      const scoreThisTurn = skinScore + summonBonus;
+      const scoreThisTurn = skinScore;
       const newScore = score + scoreThisTurn;
       const newLines = linesCleared + totalLines;
       scoreRef.current = newScore;
@@ -762,20 +756,6 @@ export default function EndlessScreen({ navigation }: any) {
       setLinesCleared(newLines);
       setCurrentLevel(newLevel);
       setFeverGauge(newFeverGauge);
-
-      if (
-        activeSkinIdRef.current > 0 &&
-        summonGaugeRequiredRef.current > 0 &&
-        !summonActiveRef.current
-      ) {
-        const nextGauge = Math.min(
-          summonGaugeRequiredRef.current,
-          summonGaugeRef.current +
-            getSummonGaugeGain(activeSkinIdRef.current, blockCount, totalLines),
-        );
-        summonGaugeRef.current = nextGauge;
-        setSummonGauge(nextGauge);
-      }
 
       if (
         gameDataRef.current &&
@@ -839,9 +819,13 @@ export default function EndlessScreen({ navigation }: any) {
     ],
   );
 
-  const useCompactLayout =
-    activeSkinIdRef.current > 0 ||
-    (skillEffectsRef.current.previewCountBonus > 0 && nextPieces.length > 0);
+  const nextPreviewRule = getVisualElementRule(
+    visualManifest,
+    'endless',
+    'next_preview',
+  );
+  const boardRule = getVisualElementRule(visualManifest, 'endless', 'board');
+  const useCompactLayout = shouldUseCompactEndlessLayout();
   const dragDrop = useDragDrop(
     board,
     pieces,
@@ -854,34 +838,12 @@ export default function EndlessScreen({ navigation }: any) {
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 100);
-  }, []);
-
-  const handleToggleSummon = useCallback(() => {
-    if (
-      summonGaugeRequiredRef.current <= 0 ||
-      summonRemainingMsRef.current <= 0
-    ) {
-      return;
-    }
-
-    if (
-      !summonActiveRef.current &&
-      summonGaugeRef.current < summonGaugeRequiredRef.current
-    ) {
-      return;
-    }
-
-    if (!summonActiveRef.current) {
-      summonGaugeRef.current = 0;
-      setSummonGauge(0);
-    }
-
-    summonActiveRef.current = !summonActiveRef.current;
-    setSummonActive(summonActiveRef.current);
   }, []);
 
   const decrementRunItemSlot = useCallback((slotIndex?: number) => {
@@ -915,7 +877,7 @@ export default function EndlessScreen({ navigation }: any) {
             : 0;
 
       if (inventoryCount <= 0 || slotCount <= 0) {
-        showBattleNotice(`${itemDefinition.label}이 없습니다.`);
+        showBattleNotice(`${itemDefinition.label}이(가) 없습니다.`);
         return;
       }
 
@@ -983,6 +945,11 @@ export default function EndlessScreen({ navigation }: any) {
     'endless',
     'combo_gauge',
   );
+  const feverDurationMs =
+    FEVER_DURATION +
+    skillEffectsRef.current.feverDurationBonusMs +
+    skinBattleEffectsRef.current.feverDurationBonusMs;
+  const boardScaleY = boardRule.scale * (boardRule.heightScale ?? 1);
   return (
     <SafeAreaView
       style={[
@@ -1002,9 +969,7 @@ export default function EndlessScreen({ navigation }: any) {
           level={`무한 모드 레벨 ${currentLevel}`}
           goalText={
             nextMilestone
-              ? `다음 골드: ${nextMilestone.score.toLocaleString()}점 / +${
-                  nextMilestone.gold
-                }골드`
+              ? `다음 골드: ${nextMilestone.score.toLocaleString()}점 / +${nextMilestone.gold}골드`
               : '최대 목표 달성!'
           }
           onBack={() => {
@@ -1058,9 +1023,7 @@ export default function EndlessScreen({ navigation }: any) {
 
       <VisualElementView screenId="endless" elementId="status_bar">
         <View style={styles.goldBar}>
-          <Text style={styles.goldBarText}>
-            이번 판 획득 골드: {goldEarned}
-          </Text>
+          <Text style={styles.goldBarText}>이번 라운드 골드: {goldEarned}</Text>
           {nextMilestone && (
             <Text style={styles.goldBarNext}>
               다음: {nextMilestone.score.toLocaleString()}점
@@ -1071,13 +1034,14 @@ export default function EndlessScreen({ navigation }: any) {
 
 
 
-      {skillEffectsRef.current.previewCountBonus > 0 &&
-        nextPieces.length > 0 && (
-          <VisualElementView
-            screenId="endless"
-            elementId="next_preview"
-            style={styles.visualWrapper}
-          >
+      <VisualElementView
+        screenId="endless"
+        elementId="next_preview"
+        style={styles.visualWrapper}
+      >
+        {nextPreviewRule.visible ? (
+          skillEffectsRef.current.previewCountBonus > 0 &&
+          nextPieces.length > 0 ? (
             <NextPiecePreview
               pieces={nextPieces.slice(
                 0,
@@ -1085,65 +1049,11 @@ export default function EndlessScreen({ navigation }: any) {
               )}
               viewport={visualViewport}
             />
-          </VisualElementView>
-        )}
-
-
-
-      {activeSkinIdRef.current > 0 && (
-        <VisualElementView
-          screenId="endless"
-          elementId="summon_panel"
-          style={styles.visualWrapper}
-        >
-          <View style={styles.summonCard}>
-            <View style={styles.summonHeader}>
-              <Text style={styles.summonTitle}>소환수</Text>
-              <Text style={styles.summonMeta}>
-                공격 {summonAttack} / 남은 시간{' '}
-                {Math.ceil(summonRemainingMs / 1000)}초
-              </Text>
-            </View>
-            <View style={styles.summonBarBg}>
-              <View
-                style={[
-                  styles.summonBarFill,
-                  {
-                    width: `${
-                      summonGaugeRequired > 0
-                        ? (summonGauge / summonGaugeRequired) * 100
-                        : 0
-                    }%`,
-                  },
-                ]}
-              />
-            </View>
-            <View style={styles.summonFooter}>
-              <Text style={styles.summonMeta}>
-                게이지 {summonGauge}/{summonGaugeRequired || '-'}
-              </Text>
-              <TouchableOpacity
-                onPress={handleToggleSummon}
-                disabled={
-                  (summonGauge < summonGaugeRequired && !summonActive) ||
-                  summonRemainingMs <= 0
-                }
-                style={[
-                  styles.summonBtn,
-                  summonActive && styles.summonBtnActive,
-                  (summonRemainingMs <= 0 ||
-                    (summonGauge < summonGaugeRequired && !summonActive)) &&
-                    styles.summonBtnDisabled,
-                ]}
-              >
-                <Text style={styles.summonBtnText}>
-                  {summonActive ? '회수' : '소환'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </VisualElementView>
-      )}
+          ) : (
+            <View style={styles.nextPreviewPlaceholder} />
+          )
+        ) : null}
+      </VisualElementView>
       <View style={styles.boardStage}>
         <View style={styles.boardContainer}>
           <VisualElementView
@@ -1157,6 +1067,9 @@ export default function EndlessScreen({ navigation }: any) {
                 combo={combo}
                 comboRemainingMs={comboRemainingMs}
                 comboMaxMs={comboGaugeMaxMs}
+                feverActive={feverActive}
+                feverRemainingMs={feverRemainingMs}
+                feverMaxMs={Math.max(1, feverDurationMs)}
                 visualAutomationLabel={buildVisualAutomationLabel(
                   'endless',
                   'combo_gauge',
@@ -1208,6 +1121,7 @@ export default function EndlessScreen({ navigation }: any) {
           onDragCancel={dragDrop.onDragCancel}
           compact={useCompactLayout}
           boardCompact={useCompactLayout}
+          boardScaleY={boardScaleY}
           viewport={visualViewport}
         />
       </View>
@@ -1299,6 +1213,9 @@ const styles = StyleSheet.create({
   },
   goldBarText: { color: '#fbbf24', fontSize: 13, fontWeight: '700' },
   goldBarNext: { color: '#94a3b8', fontSize: 12 },
+  nextPreviewPlaceholder: {
+    minHeight: 72,
+  },
   summonCard: {
     marginHorizontal: 14,
     marginTop: 8,
@@ -1336,6 +1253,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f59e0b',
     borderRadius: 999,
   },
+  feverBarFill: {
+    height: 8,
+    backgroundColor: '#f97316',
+    borderRadius: 999,
+  },
   summonFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1358,5 +1280,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '800',
+  },
+  summonPlaceholder: {
+    minHeight: 78,
+    marginHorizontal: 14,
+    marginTop: 8,
   },
 });

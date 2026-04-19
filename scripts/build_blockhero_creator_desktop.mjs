@@ -1,59 +1,32 @@
-import {build} from 'esbuild';
-import {cp, mkdir, rm} from 'node:fs/promises';
+import {access, mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
-const toolDir = path.join(rootDir, 'tools', 'blockhero-creator');
 const desktopDir = path.join(rootDir, 'tools', 'blockhero-creator-desktop');
 const desktopAppDir = path.join(desktopDir, 'app');
 const bundleOnly = process.argv.includes('--bundle-only');
 
-async function ensureCleanDir(targetDir) {
-  await rm(targetDir, {recursive: true, force: true});
-  await mkdir(targetDir, {recursive: true});
-}
-
-async function bundleCreator() {
-  await build({
-    entryPoints: [path.join(toolDir, 'creator.js')],
-    outfile: path.join(toolDir, 'creator.bundle.js'),
-    bundle: true,
-    format: 'iife',
-    platform: 'browser',
-    target: ['chrome124'],
-    loader: {
-      '.json': 'json',
-    },
-    define: {
-      'process.env.NODE_ENV': '"production"',
-    },
-    logLevel: 'info',
-  });
-}
-
 async function prepareDesktopApp() {
-  await ensureCleanDir(desktopAppDir);
-  await cp(path.join(toolDir, 'index.html'), path.join(desktopAppDir, 'index.html'));
-  await cp(path.join(toolDir, 'styles.css'), path.join(desktopAppDir, 'styles.css'));
-  await cp(
-    path.join(toolDir, 'creator.bundle.js'),
-    path.join(desktopAppDir, 'creator.bundle.js'),
+  await mkdir(desktopAppDir, {recursive: true});
+  await Promise.all(
+    ['index.html', 'styles.css', 'creator.bundle.js'].map(async fileName => {
+      await access(path.join(desktopAppDir, fileName));
+    }),
   );
 }
 
 async function main() {
-  await bundleCreator();
   await prepareDesktopApp();
 
   if (bundleOnly) {
-    console.log('BlockHero Creator bundle prepared.');
+    console.log('BlockHero Creator desktop app sources verified.');
     return;
   }
 
-  console.log('BlockHero Creator desktop app prepared.');
+  console.log('BlockHero Creator desktop app prepared from tools/blockhero-creator-desktop/app.');
 }
 
 main().catch(error => {

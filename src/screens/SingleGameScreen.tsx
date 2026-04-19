@@ -140,6 +140,7 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
 import {
   ActiveItemKey,
@@ -412,10 +413,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
   );
   const [attackPower, setAttackPower] = useState(10);
   const [gameData, setGameData] = useState<GameData | null>(null);
-  const [boardLayout, setBoardLayout] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [boardLayout, setBoardLayout] = useState<MeasuredBoardLayout | null>(
+    null,
+  );
   const [feverActive, setFeverActive] = useState(false);
   const [feverGauge, setFeverGauge] = useState(0);
   const [skinBoardBg, setSkinBoardBg] = useState(getSkinBoardBg());
@@ -826,9 +826,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
     })();
 
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 300);
 
     return () => {
@@ -1806,9 +1808,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 100);
   }, []);
 
@@ -2048,6 +2052,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     'level',
     'combo_gauge',
   );
+  const boardRule = getVisualElementRule(visualManifest, 'level', 'board');
   useEffect(() => {
     setMonsterPose('idle');
   }, [activeWorldId, monster.monsterName]);
@@ -2459,6 +2464,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                       onDragCancel={dragDrop.onDragCancel}
                       compact={compactPieceTray}
                       boardCompact={false}
+                      boardScaleY={boardRule.scale * (boardRule.heightScale ?? 1)}
                       viewport={visualViewport}
                     />
                   </VisualElementView>
@@ -2593,6 +2599,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                     onDragCancel={dragDrop.onDragCancel}
                     compact={compactPieceTray}
                     boardCompact={false}
+                    boardScaleY={boardRule.scale * (boardRule.heightScale ?? 1)}
                     viewport={visualViewport}
                   />
                 </VisualElementView>

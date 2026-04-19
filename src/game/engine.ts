@@ -20,6 +20,7 @@ export type CellValue = null | {
   color: string;
   type?: 'stone' | 'ice' | 'hard';
   hits?: number;
+  lockClears?: boolean;
   isGem?: boolean;
   isItem?: boolean;
   itemType?: string;
@@ -71,6 +72,10 @@ export interface PlaceResult {
   hardBlocksHit: number; // hard obstacles that took a hit
   gemsFound: number; // gem cells cleared
   itemsFound: string[]; // item cells cleared
+}
+
+function blocksLineClear(cell: CellValue): boolean {
+  return cell?.type === 'stone' || cell?.lockClears === true;
 }
 
 // ─── Damage calculation ────────────────────────────────────────
@@ -820,8 +825,7 @@ export function countBlocks(shape: PieceShape): number {
 }
 
 // Find and clear complete lines.
-// 'hard' obstacle blocks: count as "full" for line completion check,
-// but remain on board until their hit counter reaches 0.
+// Stone blocks and line-lock battle blocks prevent line clears.
 export function checkAndClearLines(board: Board): {
   newBoard: Board;
   clearedRows: number[];
@@ -850,7 +854,7 @@ export function checkAndClearLines(board: Board): {
         full = false;
         break;
       }
-      if (cell.type === 'stone') {
+      if (blocksLineClear(cell)) {
         full = false;
         break;
       }
@@ -867,7 +871,7 @@ export function checkAndClearLines(board: Board): {
         full = false;
         break;
       }
-      if (cell.type === 'stone') {
+      if (blocksLineClear(cell)) {
         full = false;
         break;
       }
@@ -1073,6 +1077,62 @@ export function clearLineTargets(
   };
 }
 
+export function decayLockedAttackBlocks(
+  board: Board,
+  clearCount: number = 1,
+): {
+  newBoard: Board;
+  hardBlocksDamaged: number;
+  hardBlocksDestroyed: number;
+} {
+  if (clearCount <= 0) {
+    return {
+      newBoard: board,
+      hardBlocksDamaged: 0,
+      hardBlocksDestroyed: 0,
+    };
+  }
+
+  const newBoard = board.map(row =>
+    row.map(cell => {
+      if (cell?.type !== 'hard' || cell.lockClears !== true) {
+        return cell;
+      }
+
+      const remaining = Math.max(0, (cell.hits ?? 1) - clearCount);
+      if (remaining <= 0) {
+        return null;
+      }
+
+      return {
+        ...cell,
+        hits: remaining,
+      };
+    }),
+  );
+
+  let hardBlocksDamaged = 0;
+  let hardBlocksDestroyed = 0;
+  for (let row = 0; row < ROWS; row += 1) {
+    for (let col = 0; col < COLS; col += 1) {
+      const before = board[row][col];
+      const after = newBoard[row][col];
+      if (before?.type === 'hard' && before.lockClears === true) {
+        hardBlocksDamaged += 1;
+        if (after === null) {
+          hardBlocksDestroyed += 1;
+        }
+      }
+    }
+  }
+
+  return {
+    newBoard,
+    hardBlocksDamaged,
+    hardBlocksDestroyed,
+  };
+}
+
 export function clearRandomLines(
   board: Board,
   count: number,
@@ -1177,7 +1237,7 @@ export function predictClearLines(
   for (let r = 0; r < ROWS; r++) {
     let full = true;
     for (let c = 0; c < COLS; c++) {
-      if (simBoard[r][c] === null || simBoard[r][c]?.type === 'stone') {
+      if (simBoard[r][c] === null || blocksLineClear(simBoard[r][c])) {
         full = false;
         break;
       }
@@ -1187,7 +1247,7 @@ export function predictClearLines(
   for (let c = 0; c < COLS; c++) {
     let full = true;
     for (let r = 0; r < ROWS; r++) {
-      if (simBoard[r][c] === null || simBoard[r][c]?.type === 'stone') {
+      if (simBoard[r][c] === null || blocksLineClear(simBoard[r][c])) {
         full = false;
         break;
       }
@@ -1403,18 +1463,84 @@ export function generateSeededPieces(seed: number, round: number): Piece[] {
   return pieces;
 }
 
-// Generate attack lines (random filled rows for battle)
-export function generateAttackLines(board: Board, lineCount: number): Board {
+function getAttackHardBlockRowChance(attackStage: number): number {
+  switch (Math.max(1, Math.min(4, attackStage))) {
+    case 1:
+      return 0.14;
+    case 2:
+      return 0.26;
+    case 3:
+      return 0.42;
+    case 4:
+    default:
+      return 0.58;
+  }
+}
+
+function getAttackHardBlockHits(attackStage: number): number {
+  const roll = Math.random();
+
+  switch (Math.max(1, Math.min(4, attackStage))) {
+    case 1:
+      return roll < 0.72 ? 1 : 2;
+    case 2:
+      if (roll < 0.42) return 1;
+      if (roll < 0.8) return 2;
+      return 3;
+    case 3:
+      if (roll < 0.24) return 1;
+      if (roll < 0.58) return 2;
+      if (roll < 0.86) return 3;
+      return 4;
+    case 4:
+    default:
+      if (roll < 0.12) return 1;
+      if (roll < 0.36) return 2;
+      if (roll < 0.7) return 3;
+      return 4;
+  }
+}
+
+// Generate attack lines (random filled rows for battle).
+// Higher attack stages have a higher chance to spawn line-lock hard blocks.
+export function generateAttackLines(
+  board: Board,
+  lineCount: number,
+  attackStage: number = lineCount,
+): Board {
   const newBoard = board.map(r => [...r]);
   // Shift existing rows up
   for (let i = 0; i < ROWS - lineCount; i++) {
     newBoard[i] = [...newBoard[i + lineCount]];
   }
   // Add attack lines at bottom with one random gap
+  const hardBlockChance = getAttackHardBlockRowChance(attackStage);
   for (let i = ROWS - lineCount; i < ROWS; i++) {
     const gap = Math.floor(Math.random() * COLS);
+    const hardCandidates = Array.from({ length: COLS }, (_, col) => col).filter(
+      col => col !== gap,
+    );
+    const hardCol =
+      hardCandidates.length > 0 && Math.random() < hardBlockChance
+        ? hardCandidates[Math.floor(Math.random() * hardCandidates.length)]
+        : -1;
     for (let c = 0; c < COLS; c++) {
-      newBoard[i][c] = c === gap ? null : { color: '#6b7280' };
+      if (c === gap) {
+        newBoard[i][c] = null;
+        continue;
+      }
+
+      if (c === hardCol) {
+        newBoard[i][c] = {
+          color: '#7c3aed',
+          type: 'hard',
+          hits: getAttackHardBlockHits(attackStage),
+          lockClears: true,
+        };
+        continue;
+      }
+
+      newBoard[i][c] = { color: '#6b7280' };
     }
   }
   return newBoard;

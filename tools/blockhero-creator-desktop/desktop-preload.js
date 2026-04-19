@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {contextBridge} = require('electron');
+const {contextBridge, ipcRenderer} = require('electron');
 
 function readJsonIfExists(filePath) {
   try {
@@ -37,3 +37,9 @@ function loadLocalConfig() {
 }
 
 contextBridge.exposeInMainWorld('__BLOCKHERO_CREATOR_LOCAL_CONFIG__', loadLocalConfig());
+contextBridge.exposeInMainWorld('__BLOCKHERO_CREATOR_DESKTOP__', {
+  listDevices: () => ipcRenderer.invoke('blockhero:listDevices'),
+  getDeviceViewport: serial =>
+    ipcRenderer.invoke('blockhero:getDeviceViewport', serial),
+  getDeviceFrame: serial => ipcRenderer.invoke('blockhero:getDeviceFrame', serial),
+});

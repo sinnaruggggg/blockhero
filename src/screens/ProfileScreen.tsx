@@ -1,16 +1,19 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  Alert,
+  ActivityIndicator,
+  Image,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import ViewShot, {captureRef} from 'react-native-view-shot';
 import GamePanel from '../components/GamePanel';
 import MenuScreenFrame from '../components/MenuScreenFrame';
 import {openGameDialog} from '../services/gameDialogService';
 import {supabase, getCurrentUserId, getProfile} from '../services/supabase';
+import {updateOwnProfile} from '../services/playerState';
 import {
   GameData,
   getNickname,
@@ -22,7 +25,11 @@ import {
   setSelectedCharacter,
   useDiamonds as spendDiamonds,
 } from '../stores/gameStore';
-import {MAX_HEARTS, formatHeartStatus, getConfiguredMaxHearts} from '../constants';
+import {
+  MAX_HEARTS,
+  formatHeartStatus,
+  getConfiguredMaxHearts,
+} from '../constants';
 import {CHARACTER_CLASSES} from '../constants/characters';
 import {
   changeNicknameWithServerCharge,
@@ -42,6 +49,16 @@ const ITEM_SUMMARY = ACTIVE_ITEM_KEYS.map(itemKey => ({
   label: ITEM_DEFINITIONS[itemKey].label,
 }));
 
+const AVATAR_MAX_BYTES = 100 * 1024;
+const AVATAR_CAPTURE_SIZES = [420, 360, 320, 280, 240];
+const AVATAR_CAPTURE_QUALITIES = [0.92, 0.86, 0.8, 0.74, 0.68, 0.6, 0.52, 0.44];
+const AVATAR_PREVIEW_SIZE = 420;
+
+function estimateBase64Bytes(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
+}
+
 export default function ProfileScreen({navigation}: any) {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [nickname, setNicknameState] = useState('');
@@ -53,6 +70,10 @@ export default function ProfileScreen({navigation}: any) {
   const [selectedCharacter, setSelectedCharacterState] = useState('knight');
   const [email, setEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarSourceUri, setAvatarSourceUri] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarStatusText, setAvatarStatusText] = useState('');
   const [stats, setStats] = useState({
     totalGames: 0,
     highScore: 0,
@@ -60,12 +81,99 @@ export default function ProfileScreen({navigation}: any) {
     maxCombo: 0,
   });
 
+  const avatarShotRef = useRef<ViewShot | null>(null);
+  const avatarLoadResolveRef = useRef<(() => void) | null>(null);
+  const avatarLoadRejectRef = useRef<((error: Error) => void) | null>(null);
+  const avatarLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const selectedCharacterMeta = useMemo(
     () =>
       CHARACTER_OPTIONS.find(character => character.id === selectedCharacter) ??
       CHARACTER_OPTIONS[0],
     [selectedCharacter],
   );
+
+  const clearPendingAvatarLoad = useCallback(() => {
+    if (avatarLoadTimeoutRef.current) {
+      clearTimeout(avatarLoadTimeoutRef.current);
+      avatarLoadTimeoutRef.current = null;
+    }
+    avatarLoadResolveRef.current = null;
+    avatarLoadRejectRef.current = null;
+  }, []);
+
+  const waitForAvatarPreviewLoad = useCallback(() => {
+    clearPendingAvatarLoad();
+
+    return new Promise<void>((resolve, reject) => {
+      avatarLoadResolveRef.current = () => {
+        clearPendingAvatarLoad();
+        resolve();
+      };
+      avatarLoadRejectRef.current = (error: Error) => {
+        clearPendingAvatarLoad();
+        reject(error);
+      };
+      avatarLoadTimeoutRef.current = setTimeout(() => {
+        avatarLoadRejectRef.current?.(
+          new Error('프로필 사진을 불러오는 데 시간이 너무 오래 걸립니다.'),
+        );
+      }, 8000);
+    });
+  }, [clearPendingAvatarLoad]);
+
+  const handleAvatarSourceLoaded = useCallback(() => {
+    avatarLoadResolveRef.current?.();
+  }, []);
+
+  const handleAvatarSourceError = useCallback(() => {
+    avatarLoadRejectRef.current?.(
+      new Error('프로필 사진을 불러오지 못했습니다. 다른 이미지를 선택해 주세요.'),
+    );
+  }, []);
+
+  const compressAvatarFromPreview = useCallback(async () => {
+    if (!avatarShotRef.current) {
+      throw new Error('프로필 사진 압축 캔버스를 준비하지 못했습니다.');
+    }
+
+    let bestBase64 = '';
+    let bestBytes = Number.POSITIVE_INFINITY;
+
+    for (const size of AVATAR_CAPTURE_SIZES) {
+      for (const quality of AVATAR_CAPTURE_QUALITIES) {
+        const base64 = await captureRef(avatarShotRef.current, {
+          format: 'jpg',
+          quality,
+          result: 'base64',
+          width: size,
+          height: size,
+        });
+        const bytes = estimateBase64Bytes(base64);
+
+        if (bytes < bestBytes) {
+          bestBase64 = base64;
+          bestBytes = bytes;
+        }
+
+        if (bytes <= AVATAR_MAX_BYTES) {
+          return {
+            dataUri: `data:image/jpeg;base64,${base64}`,
+            bytes,
+          };
+        }
+      }
+    }
+
+    if (!bestBase64) {
+      throw new Error('프로필 사진 압축에 실패했습니다.');
+    }
+
+    return {
+      dataUri: `data:image/jpeg;base64,${bestBase64}`,
+      bytes: bestBytes,
+    };
+  }, []);
 
   const loadAll = useCallback(async () => {
     const [loadedGameData, savedNickname, endlessStats, levelProgress, charId] =
@@ -107,6 +215,11 @@ export default function ProfileScreen({navigation}: any) {
     if (profile?.nickname_changed) {
       setNameChanged(true);
     }
+    if (typeof profile?.avatar_url === 'string' && profile.avatar_url.length > 0) {
+      setAvatarUrl(profile.avatar_url);
+    } else {
+      setAvatarUrl(null);
+    }
 
     const {
       data: {user},
@@ -118,7 +231,8 @@ export default function ProfileScreen({navigation}: any) {
 
   useEffect(() => {
     loadAll();
-  }, [loadAll]);
+    return () => clearPendingAvatarLoad();
+  }, [clearPendingAvatarLoad, loadAll]);
 
   const checkNickname = useCallback(
     async (value: string) => {
@@ -142,7 +256,10 @@ export default function ProfileScreen({navigation}: any) {
 
   const handleSaveName = useCallback(async () => {
     if (nameInput.trim().length < 2) {
-      openGameDialog({title: '알림', message: '닉네임은 2자 이상이어야 합니다.'});
+      openGameDialog({
+        title: '알림',
+        message: '닉네임은 2자 이상이어야 합니다.',
+      });
       return;
     }
 
@@ -160,38 +277,59 @@ export default function ProfileScreen({navigation}: any) {
         setNicknameState(result.nickname);
         setNameChanged(result.nicknameChanged);
         setEditingName(false);
-        openGameDialog({title: '알림', message: '닉네임이 변경되었습니다.'});
+        openGameDialog({
+          title: '알림',
+          message: '닉네임이 변경되었습니다.',
+        });
         return;
       } catch (error) {
         const code = getEconomyErrorCode(error);
         if (code === 'not_enough_diamonds_for_nickname') {
-          openGameDialog({title: '알림', message: '다이아가 부족합니다. (200 다이아 필요)'});
+          openGameDialog({
+            title: '알림',
+            message: '다이아가 부족합니다. (200 다이아 필요)',
+          });
           return;
         }
         if (code === 'nickname_taken') {
-          openGameDialog({title: '알림', message: '이미 사용 중인 닉네임입니다.'});
+          openGameDialog({
+            title: '알림',
+            message: '이미 사용 중인 닉네임입니다.',
+          });
           return;
         }
 
-        openGameDialog({title: '알림', message: '닉네임이 변경되지 않았습니다.'});
+        openGameDialog({
+          title: '알림',
+          message: '닉네임을 변경하지 못했습니다.',
+        });
         return;
       }
     }
 
     if (data && data.length > 0) {
-      openGameDialog({title: '알림', message: '이미 사용 중인 닉네임입니다.'});
+      openGameDialog({
+        title: '알림',
+        message: '이미 사용 중인 닉네임입니다.',
+      });
       return;
     }
 
     if (nameChanged) {
       if (!gameData || gameData.diamonds < 200) {
-        openGameDialog({title: '알림', message: '다이아가 부족합니다. (200 다이아 필요)'});
+        openGameDialog({
+          title: '알림',
+          message: '다이아가 부족합니다. (200 다이아 필요)',
+        });
         return;
       }
 
       const updatedGameData = await spendDiamonds(gameData, 200);
       if (!updatedGameData) {
-        openGameDialog({title: '알림', message: '다이아가 부족합니다.'});
+        openGameDialog({
+          title: '알림',
+          message: '다이아가 부족합니다.',
+        });
         return;
       }
       setGameData(updatedGameData);
@@ -212,8 +350,96 @@ export default function ProfileScreen({navigation}: any) {
 
     setNameChanged(true);
     setEditingName(false);
-    openGameDialog({title: '알림', message: '닉네임이 변경되었습니다.'});
+    openGameDialog({
+      title: '알림',
+      message: '닉네임이 변경되었습니다.',
+    });
   }, [gameData, nameChanged, nameInput, userId]);
+
+  const handlePickAvatar = useCallback(async () => {
+    if (avatarUploading) {
+      return;
+    }
+
+    try {
+      if (!userId) {
+        throw new Error('프로필 사진 업로드는 로그인 후 사용할 수 있습니다.');
+      }
+
+      setAvatarUploading(true);
+      setAvatarStatusText('사진을 선택하는 중...');
+
+      const {launchImageLibrary} = require('react-native-image-picker') as {
+        launchImageLibrary: (options: Record<string, unknown>) => Promise<any>;
+      };
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        selectionLimit: 1,
+        includeBase64: false,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 1,
+        assetRepresentationMode: 'compatible',
+        conversionQuality: 1,
+      });
+
+      if (result.didCancel) {
+        setAvatarStatusText('');
+        setAvatarUploading(false);
+        return;
+      }
+
+      if (result.errorMessage) {
+        throw new Error(result.errorMessage);
+      }
+
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        throw new Error('선택한 이미지를 불러오지 못했습니다.');
+      }
+
+      setAvatarStatusText('사진을 불러오는 중...');
+      setAvatarSourceUri(asset.uri);
+      await waitForAvatarPreviewLoad();
+
+      setAvatarStatusText('사진을 100KB 이하로 최적화하는 중...');
+      const compressed = await compressAvatarFromPreview();
+
+      setAvatarStatusText('프로필에 저장하는 중...');
+      const updatedProfile = await updateOwnProfile({
+        avatar_url: compressed.dataUri,
+      });
+      const nextAvatarUrl =
+        typeof updatedProfile?.avatar_url === 'string'
+          ? updatedProfile.avatar_url
+          : compressed.dataUri;
+      setAvatarUrl(nextAvatarUrl);
+      setAvatarSourceUri(null);
+      setAvatarStatusText('');
+      openGameDialog({
+        title: '알림',
+        message: `프로필 사진이 저장되었습니다. (${Math.ceil(
+          compressed.bytes / 1024,
+        )}KB)`,
+      });
+    } catch (error: any) {
+      setAvatarSourceUri(null);
+      setAvatarStatusText('');
+      openGameDialog({
+        title: '프로필 사진 업로드 실패',
+        message: error?.message ?? '프로필 사진을 저장하지 못했습니다.',
+      });
+    } finally {
+      clearPendingAvatarLoad();
+      setAvatarUploading(false);
+    }
+  }, [
+    avatarUploading,
+    clearPendingAvatarLoad,
+    compressAvatarFromPreview,
+    userId,
+    waitForAvatarPreviewLoad,
+  ]);
 
   if (!gameData) {
     return null;
@@ -222,19 +448,25 @@ export default function ProfileScreen({navigation}: any) {
   return (
     <MenuScreenFrame
       title="프로필"
-      subtitle="내 대표 캐릭터, 자원, 전적을 한 눈에 확인합니다."
+      subtitle="영웅 상태와 기록, 아이템과 프로필 사진을 관리합니다."
       onBack={() => navigation.goBack()}>
       <GamePanel style={styles.heroPanel}>
-        <View style={styles.avatarBadge}>
-          <Text style={styles.avatarText}>
-            {(nickname.charAt(0) || 'P').toUpperCase()}
-          </Text>
-        </View>
+        {avatarUrl ? (
+          <View style={styles.avatarImageFrame}>
+            <Image source={{uri: avatarUrl}} style={styles.avatarImage} />
+          </View>
+        ) : (
+          <View style={styles.avatarBadge}>
+            <Text style={styles.avatarText}>
+              {(nickname.charAt(0) || 'P').toUpperCase()}
+            </Text>
+          </View>
+        )}
         <Text style={styles.nickname}>{nickname}</Text>
         {email ? <Text style={styles.email}>{email}</Text> : null}
         <View style={styles.heroMetaRow}>
           <View style={styles.heroMetaChip}>
-            <Text style={styles.heroMetaLabel}>대표 직업</Text>
+            <Text style={styles.heroMetaLabel}>현재 직업</Text>
             <Text style={styles.heroMetaValue}>
               {selectedCharacterMeta.emoji} {selectedCharacterMeta.name}
             </Text>
@@ -242,28 +474,57 @@ export default function ProfileScreen({navigation}: any) {
           <View style={styles.heroMetaChip}>
             <Text style={styles.heroMetaLabel}>하트 상태</Text>
             <Text style={styles.heroMetaValue}>
-              {formatHeartStatus(gameData.hearts, getConfiguredMaxHearts(MAX_HEARTS))}
+              {formatHeartStatus(
+                gameData.hearts,
+                getConfiguredMaxHearts(MAX_HEARTS),
+              )}
             </Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => {
-            setNameInput(nickname);
-            setNameAvailable(null);
-            setEditingName(true);
-          }}>
-          <Text style={styles.primaryButtonText}>
-            닉네임 변경 {nameChanged ? '(200 다이아)' : '(무료)'}
+        <View style={styles.heroActionRow}>
+          <TouchableOpacity
+            style={[styles.primaryButton, styles.flexButton]}
+            onPress={() => {
+              setNameInput(nickname);
+              setNameAvailable(null);
+              setEditingName(true);
+            }}>
+            <Text style={styles.primaryButtonText}>
+              닉네임 변경 {nameChanged ? '(200 다이아)' : '(무료)'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.secondaryButton,
+              styles.flexButton,
+              avatarUploading && styles.disabledButton,
+            ]}
+            disabled={avatarUploading}
+            onPress={handlePickAvatar}>
+            <Text style={styles.secondaryButtonText}>
+              {avatarUrl ? '프로필 사진 변경' : '프로필 사진 업로드'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {avatarUploading ? (
+          <View style={styles.avatarUploadingRow}>
+            <ActivityIndicator color="#7f5a32" size="small" />
+            <Text style={styles.avatarUploadingText}>
+              {avatarStatusText || '프로필 사진을 처리하는 중...'}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.avatarHint}>
+            큰 사진은 자동으로 고화질을 유지하면서 100KB 이하로 압축해 저장합니다.
           </Text>
-        </TouchableOpacity>
+        )}
       </GamePanel>
 
       {editingName ? (
         <GamePanel>
           <Text style={styles.sectionTitle}>닉네임 변경</Text>
           <Text style={styles.sectionHint}>
-            2~10자까지 사용할 수 있습니다. 중복 확인 후 저장하세요.
+            2~10자까지 사용할 수 있습니다. 저장 전 중복 확인을 해주세요.
           </Text>
           {nameChanged ? (
             <Text style={styles.warningText}>
@@ -347,7 +608,10 @@ export default function ProfileScreen({navigation}: any) {
           <View style={styles.metricCard}>
             <Text style={styles.metricEmoji}>❤️</Text>
             <Text style={styles.metricValue}>
-              {formatHeartStatus(gameData.hearts, getConfiguredMaxHearts(MAX_HEARTS))}
+              {formatHeartStatus(
+                gameData.hearts,
+                getConfiguredMaxHearts(MAX_HEARTS),
+              )}
             </Text>
             <Text style={styles.metricLabel}>하트</Text>
           </View>
@@ -398,6 +662,24 @@ export default function ProfileScreen({navigation}: any) {
           ))}
         </View>
       </GamePanel>
+
+      <View pointerEvents="none" style={styles.hiddenCaptureRoot}>
+        <ViewShot ref={avatarShotRef} style={styles.hiddenCaptureFrame}>
+          {avatarSourceUri ? (
+            <View style={styles.hiddenCaptureInner}>
+              <Image
+                source={{uri: avatarSourceUri}}
+                style={styles.hiddenCaptureImage}
+                resizeMode="cover"
+                onLoad={handleAvatarSourceLoaded}
+                onError={handleAvatarSourceError}
+              />
+            </View>
+          ) : (
+            <View style={styles.hiddenCaptureInner} />
+          )}
+        </ViewShot>
+      </View>
     </MenuScreenFrame>
   );
 }
@@ -416,6 +698,20 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#f7d6a0',
     marginBottom: 12,
+  },
+  avatarImageFrame: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: '#f7d6a0',
+    backgroundColor: '#d3b184',
+    marginBottom: 12,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     color: '#fff7ec',
@@ -461,6 +757,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
   },
+  heroActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  avatarUploadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  avatarUploadingText: {
+    color: '#7b5a39',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  avatarHint: {
+    color: '#856348',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 12,
+  },
   primaryButton: {
     backgroundColor: '#7f5a32',
     borderRadius: 16,
@@ -476,6 +796,7 @@ const styles = StyleSheet.create({
     color: '#fff6ea',
     fontSize: 15,
     fontWeight: '900',
+    textAlign: 'center',
   },
   secondaryButton: {
     backgroundColor: '#f5e8d0',
@@ -492,9 +813,13 @@ const styles = StyleSheet.create({
     color: '#714c29',
     fontSize: 15,
     fontWeight: '900',
+    textAlign: 'center',
   },
   flexButton: {
     flex: 1,
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   sectionTitle: {
     color: '#50321a',
@@ -607,5 +932,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'center',
     marginTop: 5,
+  },
+  hiddenCaptureRoot: {
+    position: 'absolute',
+    left: -9999,
+    top: -9999,
+    width: AVATAR_PREVIEW_SIZE,
+    height: AVATAR_PREVIEW_SIZE,
+  },
+  hiddenCaptureFrame: {
+    width: AVATAR_PREVIEW_SIZE,
+    height: AVATAR_PREVIEW_SIZE,
+  },
+  hiddenCaptureInner: {
+    width: AVATAR_PREVIEW_SIZE,
+    height: AVATAR_PREVIEW_SIZE,
+    backgroundColor: '#0f1728',
+    borderRadius: AVATAR_PREVIEW_SIZE / 2,
+    overflow: 'hidden',
+  },
+  hiddenCaptureImage: {
+    width: '100%',
+    height: '100%',
   },
 });

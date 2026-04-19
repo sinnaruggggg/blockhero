@@ -168,6 +168,7 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { getBoardMetrics } from '../components/Board';
 import { scaleGameplayUnit } from '../game/layoutScale';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
@@ -352,10 +353,9 @@ export default function RaidScreen({ route, navigation }: any) {
   const [gameOver, setGameOver] = useState(false);
   const [bossDefeated, setBossDefeated] = useState(false);
   const [timeExpired, setTimeExpired] = useState(false);
-  const [boardLayout, setBoardLayout] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [boardLayout, setBoardLayout] = useState<MeasuredBoardLayout | null>(
+    null,
+  );
   const [bossDamageHits, setBossDamageHits] = useState<FloatingDamageHit[]>([]);
   const [bossImpactHit, setBossImpactHit] = useState<FloatingDamageHit | null>(
     null,
@@ -1765,17 +1765,21 @@ export default function RaidScreen({ route, navigation }: any) {
 
   const handleBoardLayout = useCallback(() => {
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 100);
   }, []);
 
   useEffect(() => {
     setTimeout(() => {
-      boardRef.current?.measureInWindow((x: number, y: number) => {
-        setBoardLayout({ x, y });
-      });
+      boardRef.current?.measureInWindow(
+        (x: number, y: number, width: number, height: number) => {
+          setBoardLayout({ x, y, width, height });
+        },
+      );
     }, 500);
   }, [round]);
 
@@ -2347,6 +2351,11 @@ export default function RaidScreen({ route, navigation }: any) {
     raidScreenId,
     'combo_gauge',
   );
+  const raidBoardRule = getVisualElementRule(
+    visualManifest,
+    raidScreenId,
+    'board',
+  );
   const renderBoardStatusDock = (compact: boolean) => {
     if (!raidComboGaugeRule.visible) {
       return null;
@@ -2874,6 +2883,9 @@ export default function RaidScreen({ route, navigation }: any) {
               onDragCancel={dragDrop.onDragCancel}
               compact
               boardCompact
+              boardScaleY={
+                raidBoardRule.scale * (raidBoardRule.heightScale ?? 1)
+              }
               viewport={visualViewport}
             />
           </VisualElementView>

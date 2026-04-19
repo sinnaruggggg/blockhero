@@ -119,6 +119,7 @@ interface DraggablePieceProps {
   onDragCancel: () => void;
   compact?: boolean;
   boardCompact?: boolean;
+  boardScaleY?: number;
   viewport?: Partial<VisualViewport>;
 }
 
@@ -130,6 +131,7 @@ export default function DraggablePiece({
   onDragCancel,
   compact = false,
   boardCompact = false,
+  boardScaleY = 1,
   viewport,
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
@@ -141,7 +143,7 @@ export default function DraggablePiece({
     Math.round((compact ? COMPACT_BLOCK_SIZE : BLOCK_SIZE) * layoutScale),
   );
   const dragOffsetY = -Math.round(
-    (boardMetrics.cellSize + boardMetrics.gap) * 2.5,
+    (boardMetrics.cellSize + boardMetrics.gap) * 2.5 * boardScaleY,
   );
   const traySlotSize = Math.max(
     72,
