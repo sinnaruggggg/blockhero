@@ -487,6 +487,7 @@ export default function BattleScreen({ route, navigation }: any) {
   const rematchAcceptedRef = useRef(false);
   const opponentRematchAcceptedRef = useRef(false);
   const rematchStartingRef = useRef(false);
+  const rematchPromptShownRef = useRef(false);
   const isRematchRoundRef = useRef(false);
   const battleResultSubmittedRef = useRef(false);
   const skillEffectsRef = useRef(
@@ -596,12 +597,8 @@ export default function BattleScreen({ route, navigation }: any) {
                 if (row.board) setOpponentBoard(row.board);
                 if (row.nickname) setOpponentName(row.nickname);
                 if (row.game_over && !gameOverRef.current) {
-                  rematchAcceptedRef.current = false;
-                  opponentRematchAcceptedRef.current = false;
                   setResult('win');
                   setGameOver(true);
-                  setRematchAccepted(false);
-                  setOpponentRematchAccepted(false);
                   gameOverRef.current = true;
                 }
               }
@@ -851,6 +848,7 @@ export default function BattleScreen({ route, navigation }: any) {
       rematchAcceptedRef.current = false;
       opponentRematchAcceptedRef.current = false;
       rematchStartingRef.current = false;
+      rematchPromptShownRef.current = false;
       opponentLastSeen.current = Date.now();
 
       if (reconnectTimer.current) {
@@ -930,10 +928,37 @@ export default function BattleScreen({ route, navigation }: any) {
   resetBattleStateRef.current = resetBattleState;
   startRematchRef.current = startRematch;
 
+  const acceptRematchRequest = useCallback(() => {
+    rematchAcceptedRef.current = true;
+    rematchPromptShownRef.current = false;
+    setRematchAccepted(true);
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'rematch_response',
+      payload: { playerId: playerIdRef.current, accepted: true },
+    });
+    if (isHost && opponentRematchAcceptedRef.current) {
+      startRematch().catch(error => {
+        console.warn('BattleScreen local startRematch error:', error);
+      });
+    }
+  }, [isHost, startRematch]);
+
+  const declineRematchRequest = useCallback(() => {
+    rematchPromptShownRef.current = false;
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'rematch_response',
+      payload: { playerId: playerIdRef.current, accepted: false },
+    });
+    navigation.replace('Lobby');
+  }, [navigation]);
+
   const handleGameOver = useCallback(() => {
     if (gameOverRef.current) return;
     rematchAcceptedRef.current = false;
     opponentRematchAcceptedRef.current = false;
+    rematchPromptShownRef.current = false;
     gameOverRef.current = true;
     setGameOver(true);
     setResult('lose');
@@ -958,6 +983,45 @@ export default function BattleScreen({ route, navigation }: any) {
       rematchWin: isRematchRoundRef.current && result === 'win',
     });
   }, [gameOver, result]);
+
+  useEffect(() => {
+    if (
+      !gameOver ||
+      !opponentRematchAccepted ||
+      rematchAccepted ||
+      rematchStarting ||
+      opponentDisconnected ||
+      rematchPromptShownRef.current
+    ) {
+      return;
+    }
+
+    rematchPromptShownRef.current = true;
+    Alert.alert(
+      '재도전 요청',
+      '상대가 재도전을 요청했습니다. 다시 대결하시겠습니까?',
+      [
+        {
+          text: '거절',
+          style: 'destructive',
+          onPress: declineRematchRequest,
+        },
+        {
+          text: '수락',
+          onPress: acceptRematchRequest,
+        },
+      ],
+      { cancelable: false },
+    );
+  }, [
+    acceptRematchRequest,
+    declineRematchRequest,
+    gameOver,
+    opponentDisconnected,
+    opponentRematchAccepted,
+    rematchAccepted,
+    rematchStarting,
+  ]);
 
   const handlePlace = useCallback(
     (pieceIndex: number, row: number, col: number) => {
@@ -1269,37 +1333,14 @@ export default function BattleScreen({ route, navigation }: any) {
           {!opponentDisconnected && !rematchAccepted && !rematchStarting && (
             <TouchableOpacity
               style={[styles.exitBtn, styles.rematchBtn]}
-              onPress={() => {
-                rematchAcceptedRef.current = true;
-                setRematchAccepted(true);
-                channelRef.current?.send({
-                  type: 'broadcast',
-                  event: 'rematch_response',
-                  payload: { playerId: playerIdRef.current, accepted: true },
-                });
-                if (isHost && opponentRematchAcceptedRef.current) {
-                  startRematch().catch(error => {
-                    console.warn(
-                      'BattleScreen local startRematch error:',
-                      error,
-                    );
-                  });
-                }
-              }}
+              onPress={acceptRematchRequest}
             >
               <Text style={styles.exitBtnText}>재도전</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.exitBtn}
-            onPress={() => {
-              channelRef.current?.send({
-                type: 'broadcast',
-                event: 'rematch_response',
-                payload: { playerId: playerIdRef.current, accepted: false },
-              });
-              navigation.replace('Lobby');
-            }}
+            onPress={declineRematchRequest}
           >
             <Text style={styles.exitBtnText}>대전 로비로</Text>
           </TouchableOpacity>
