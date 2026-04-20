@@ -1435,7 +1435,11 @@ export function mulberry32(seed: number): () => number {
 
 // Generate pieces with seed (for battle mode sync)
 // Guarantees 1 of 3 pieces is always a fill-friendly shape
-export function generateSeededPieces(seed: number, round: number): Piece[] {
+function createSeededPieces(
+  seed: number,
+  round: number,
+  assignIds: (index: number) => number,
+): Piece[] {
   const rng = mulberry32(seed + round * 12345);
   const pieces: Piece[] = [];
   const fillFriendlyPool = getFillFriendlyGenerationPool();
@@ -1447,7 +1451,7 @@ export function generateSeededPieces(seed: number, round: number): Piece[] {
   pieces.push({
     shape: PIECE_SHAPES[fillIdx],
     color: COLORS[fillColorIdx],
-    id: ++pieceIdCounter,
+    id: assignIds(0),
   });
 
   // Remaining 2 pieces: random
@@ -1457,10 +1461,18 @@ export function generateSeededPieces(seed: number, round: number): Piece[] {
     pieces.push({
       shape: PIECE_SHAPES[idx],
       color: COLORS[colorIdx],
-      id: ++pieceIdCounter,
+      id: assignIds(i + 1),
     });
   }
   return pieces;
+}
+
+export function generateSeededPieces(seed: number, round: number): Piece[] {
+  return createSeededPieces(seed, round, () => ++pieceIdCounter);
+}
+
+export function previewSeededPieces(seed: number, round: number): Piece[] {
+  return createSeededPieces(seed, round, index => -(round * 10 + index + 1));
 }
 
 function getAttackHardBlockRowChance(attackStage: number): number {

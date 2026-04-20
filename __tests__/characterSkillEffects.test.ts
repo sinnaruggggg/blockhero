@@ -51,12 +51,22 @@ describe('character skill effects', () => {
 
     const mage = makeCharacterData('mage');
     mage.personalAllocations[0] = 5;
+    mage.personalAllocations[4] = 5;
+    mage.personalAllocations[5] = 5;
+    mage.personalAllocations[8] = 5;
+    mage.personalAllocations[9] = 5;
     mage.partyAllocations[1] = 1;
     mage.partyAllocations[2] = 5;
     mage.partyAllocations[3] = 5;
     mage.partyAllocations[6] = 5;
     const mageEffects = getCharacterSkillEffects('mage', mage, {mode: 'raid'});
     expect(mageEffects.previewCountBonus).toBe(3);
+    expect(mageEffects.blockSummonChance).toBeCloseTo(0.1, 5);
+    expect(mageEffects.blockSummonMaxCells).toBe(2);
+    expect(mageEffects.diamondChanceBonus).toBeCloseTo(0.05, 5);
+    expect(mageEffects.magicTransformChance).toBeCloseTo(0.12, 5);
+    expect(mageEffects.magicTransformCellCount).toBe(4);
+    expect(mageEffects.randomLineClearComboThreshold).toBe(4);
     expect(mageEffects.raidTimeBonusMs).toBe(15000);
     expect(mageEffects.lineClearDamageBonus).toBeCloseTo(0.12, 5);
     expect(mageEffects.comboWindowBonusMs).toBe(5000);

@@ -55,8 +55,10 @@ const DETAIL_FIELDS = [
   'itemCapacityPerTypeBonus',
   'adjacentLineClearChance',
   'extraLineClearChance',
-  'fillerCellChance',
-  'fillerCellCount',
+  'blockSummonChance',
+  'blockSummonMaxCells',
+  'magicTransformChance',
+  'magicTransformCellCount',
   'randomLineClearChance',
   'randomLineClearComboThreshold',
   'fastPlacementDamageBonus',
@@ -94,7 +96,7 @@ function getDetailContexts(
     return {
       contexts: [{ context: { mode: 'raid', partySize: 4, bossHpRatio: 0.2 } }],
       contextNote:
-        '레이드 4인 기준, 조건부 효과는 발동 상황 기준으로 표시됩니다.',
+        '레이드 4인 기준이며, 조건부 효과는 발동 가능한 대표 상황으로 표시됩니다.',
     };
   }
 
@@ -148,9 +150,7 @@ function formatEffectDelta(
     }
     case 'raidSkillChargeGainMultiplier': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0
-        ? `레이드 스킬 게이지 획득 +${formatPercent(diff)}`
-        : null;
+      return diff > 0 ? `레이드 스킬 게이지 획득 +${formatPercent(diff)}` : null;
     }
     case 'comboDamageBonus': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -158,11 +158,11 @@ function formatEffectDelta(
     }
     case 'comboWindowBonusMs': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `콤보 유지시간 +${formatSeconds(diff)}` : null;
+      return diff > 0 ? `콤보 유지 시간 +${formatSeconds(diff)}` : null;
     }
     case 'feverRequirementMultiplier': {
       const diff = (previousValue as number) - (currentValue as number);
-      return diff > 0 ? `피버 필요량 ${formatPercent(diff)} 감소` : null;
+      return diff > 0 ? `피버 발동 필요량 ${formatPercent(diff)} 감소` : null;
     }
     case 'feverGaugeGainMultiplier': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -170,7 +170,7 @@ function formatEffectDelta(
     }
     case 'feverDurationBonusMs': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `피버 지속시간 +${formatSeconds(diff)}` : null;
+      return diff > 0 ? `피버 지속 시간 +${formatSeconds(diff)}` : null;
     }
     case 'feverDamageBonus': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -182,7 +182,7 @@ function formatEffectDelta(
     }
     case 'lineClearDamageBonus': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `라인 클리어 피해 +${formatPercent(diff)}` : null;
+      return diff > 0 ? `줄 클리어 피해 +${formatPercent(diff)}` : null;
     }
     case 'smallPieceChanceBonus': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -194,7 +194,7 @@ function formatEffectDelta(
     }
     case 'extraDiamondChance': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `추가 다이아 확률 +${formatPercent(diff)}` : null;
+      return diff > 0 ? `추가 다이아 획득 +${formatPercent(diff)}` : null;
     }
     case 'itemBlockChanceBonus': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -202,9 +202,7 @@ function formatEffectDelta(
     }
     case 'endlessDifficultySlowRate': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0
-        ? `무한 모드 난이도 증가 ${formatPercent(diff)} 완화`
-        : null;
+      return diff > 0 ? `무한 모드 난이도 상승 ${formatPercent(diff)} 완화` : null;
     }
     case 'endlessObstacleSpawnMultiplier': {
       const diff = (previousValue as number) - (currentValue as number);
@@ -219,7 +217,7 @@ function formatEffectDelta(
       return diff > 0 ? `회피 확률 +${formatPercent(diff)}` : null;
     }
     case 'reviveOnce': {
-      return currentValue && !previousValue ? '전투 중 1회 부활 활성' : null;
+      return currentValue && !previousValue ? '전투 중 1회 부활' : null;
     }
     case 'heartCapacityBonus': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -227,11 +225,11 @@ function formatEffectDelta(
     }
     case 'heartRegenMultiplier': {
       const diff = (previousValue as number) - (currentValue as number);
-      return diff > 0 ? `하트 회복 시간 ${formatPercent(diff)} 단축` : null;
+      return diff > 0 ? `하트 재생 시간 ${formatPercent(diff)} 단축` : null;
     }
     case 'healPerLineClearPercent': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `라인 클리어 시 HP ${formatPercent(diff)} 회복` : null;
+      return diff > 0 ? `줄 클리어 시 HP ${formatPercent(diff)} 회복` : null;
     }
     case 'healEveryTwoLinesPercent': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -249,7 +247,7 @@ function formatEffectDelta(
     }
     case 'autoHealPercent': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `자동 회복량 ${formatPercent(diff)}` : null;
+      return diff > 0 ? `자동 회복량 +${formatPercent(diff)}` : null;
     }
     case 'placeHealChance': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -257,7 +255,7 @@ function formatEffectDelta(
     }
     case 'placeHealPercent': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `배치 회복량 ${formatPercent(diff)}` : null;
+      return diff > 0 ? `배치 회복량 +${formatPercent(diff)}` : null;
     }
     case 'itemPreserveChance': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -269,7 +267,7 @@ function formatEffectDelta(
     }
     case 'shopRefreshDiscount': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `새로고침 할인 ${formatPercent(diff)}` : null;
+      return diff > 0 ? `상점 새로고침 할인 ${formatPercent(diff)}` : null;
     }
     case 'rewardGoldMultiplier': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -281,7 +279,7 @@ function formatEffectDelta(
     }
     case 'raidTimeBonusMs': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `레이드 제한시간 +${formatSeconds(diff)}` : null;
+      return diff > 0 ? `레이드 제한 시간 +${formatSeconds(diff)}` : null;
     }
     case 'doubleAttackChance': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -304,16 +302,24 @@ function formatEffectDelta(
     case 'extraLineClearChance': {
       const diff = (currentValue as number) - (previousValue as number);
       return diff > 0
-        ? `클리어 후 추가 줄 정리 확률 +${formatPercent(diff)}`
+        ? `클리어 시 추가 줄 정리 확률 +${formatPercent(diff)}`
         : null;
     }
-    case 'fillerCellChance': {
+    case 'blockSummonChance': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `보조 블록 생성 확률 +${formatPercent(diff)}` : null;
+      return diff > 0 ? `블록 소환 확률 +${formatPercent(diff)}` : null;
     }
-    case 'fillerCellCount': {
+    case 'blockSummonMaxCells': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0 ? `보조 블록 생성 수 +${diff}칸` : null;
+      return diff > 0 ? `블록 소환 최대 칸 수 +${diff}` : null;
+    }
+    case 'magicTransformChance': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `마법 변환 확률 +${formatPercent(diff)}` : null;
+    }
+    case 'magicTransformCellCount': {
+      const diff = (currentValue as number) - (previousValue as number);
+      return diff > 0 ? `마법 변환 최대 칸 수 +${diff}` : null;
     }
     case 'randomLineClearChance': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -365,15 +371,11 @@ function formatEffectDelta(
     }
     case 'raidActiveSkillDamageBonus': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0
-        ? `레이드 액티브 스킬 피해 +${formatPercent(diff)}`
-        : null;
+      return diff > 0 ? `레이드 액티브 스킬 피해 +${formatPercent(diff)}` : null;
     }
     case 'battleExtraAttackLineChance': {
       const diff = (currentValue as number) - (previousValue as number);
-      return diff > 0
-        ? `공격 시 추가 1줄 발사 확률 +${formatPercent(diff)}`
-        : null;
+      return diff > 0 ? `공격 시 추가 1줄 발사 확률 +${formatPercent(diff)}` : null;
     }
     case 'battleCounterAttackChance': {
       const diff = (currentValue as number) - (previousValue as number);
@@ -440,11 +442,7 @@ export function getSkillEffectDetail(
       zeroedData,
       context,
     );
-    const nextEffects = getCharacterSkillEffects(
-      characterId,
-      nextData,
-      context,
-    );
+    const nextEffects = getCharacterSkillEffects(characterId, nextData, context);
 
     if (currentLevel > 0) {
       for (const line of summarizeEffectDelta(currentEffects, zeroedEffects)) {

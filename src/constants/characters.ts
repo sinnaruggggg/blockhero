@@ -160,7 +160,7 @@ const magePersonal: SkillDef[] = [
   {
     id: 'mp3',
     name: '원소 폭발',
-    desc: '줄 클리어 시 추가 줄 정리 효과가 발동합니다.',
+    desc: '고콤보 시 추가 줄 정리 효과가 발동합니다. 콤보판정됨.',
     category: 'personal',
   },
   {
@@ -172,13 +172,13 @@ const magePersonal: SkillDef[] = [
   {
     id: 'mp5',
     name: '블록 소환',
-    desc: '빈칸을 메우는 보조 블록이 떨어질 수 있습니다.',
+    desc: '배치한 블록의 동서남북 빈칸에 보조 블록이 생성되어 줄을 완성할 수 있습니다.',
     category: 'personal',
   },
   {
     id: 'mp6',
     name: '연금술',
-    desc: '배치 중 다이아가 생성될 확률이 생깁니다.',
+    desc: '1포인트당 다이아 생성 확률이 1% 증가하며 최대 5%까지 오릅니다.',
     category: 'personal',
   },
   {
@@ -202,7 +202,7 @@ const magePersonal: SkillDef[] = [
   {
     id: 'mp10',
     name: '마법 변환',
-    desc: '마나 조각이 떨어져 보드를 메울 수 있습니다.',
+    desc: '마나가 응집된 뒤 줄 클리어가 되는 빈칸에 떨어져 여러 줄을 연쇄로 완성합니다.',
     category: 'personal',
   },
 ];

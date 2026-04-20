@@ -25,6 +25,10 @@ import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import BossDisplay from '../components/BossDisplay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
+import BoardSkillCastEffect, {
+  type BoardSkillCastEffectEvent,
+} from '../components/BoardSkillCastEffect';
+import NextPiecePreview from '../components/NextPiecePreview';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
@@ -165,6 +169,7 @@ import {
 import { useCreatorConfig } from '../hooks/useCreatorConfig';
 import { resolveCreatorRaidRuntime } from '../game/creatorManifest';
 import {
+  buildBoardCellEffectCells,
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
@@ -364,9 +369,13 @@ export default function RaidScreen({ route, navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
+    BoardSkillCastEffectEvent[] | null
+  >(null);
   const [playerAttackPulse, setPlayerAttackPulse] = useState(0);
   const [bossPose, setBossPose] = useState<MonsterSpritePose>('idle');
   const [round, setRound] = useState(0);
+  const [nextPieces, setNextPieces] = useState<Piece[]>([]);
   const [attackTimerText, setAttackTimerText] = useState(
     isNormalRaid
       ? '?곸떆 ?꾩쟾'
@@ -462,6 +471,8 @@ export default function RaidScreen({ route, navigation }: any) {
   const raidSkillLevelsRef = useRef<Record<number, number>>({});
   const floatingHitIdRef = useRef(0);
   const placementEffectIdRef = useRef(0);
+  const boardSkillEffectIdRef = useRef(0);
+  const nextPiecesRef = useRef<Piece[]>([]);
   const remoteBoardsRef = useRef<
     Map<string, { board: BoardType; nickname: string }>
   >(new Map());
@@ -472,6 +483,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const chatScrollRef = useRef<ScrollView>(null);
   const gameDataRef = useRef<GameData | null>(null);
   const playerHpAnim = useRef(new Animated.Value(1)).current;
+  const boardShakeAnim = useRef(new Animated.Value(0)).current;
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const allowLeaveRef = useRef(false);
   const {
@@ -532,6 +544,26 @@ export default function RaidScreen({ route, navigation }: any) {
     [getRaidEffects],
   );
 
+  const buildRaidPiecePack = useCallback(
+    (targetBoard: BoardType, targetRound: number) => {
+      const difficulty = getDifficulty(
+        Math.min(bossStage + Math.floor(Math.max(1, targetRound) / 5), 10),
+      );
+      return generatePlaceablePieces(
+        targetBoard,
+        difficulty,
+        getSkinColors(),
+        getCurrentPieceOptions(),
+      );
+    },
+    [bossStage, getCurrentPieceOptions],
+  );
+
+  const updateNextPieces = useCallback((piecesToPreview: Piece[]) => {
+    nextPiecesRef.current = piecesToPreview;
+    setNextPieces(piecesToPreview);
+  }, []);
+
   const showSkillTriggerNotice = useCallback(
     (...events: Parameters<typeof buildSkillTriggerNotice>[1]) => {
       const noticeMessage = buildSkillTriggerNotice(
@@ -578,6 +610,74 @@ export default function RaidScreen({ route, navigation }: any) {
       setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
     [boardLayout, visualViewport],
+  );
+
+  const triggerBoardShake = useCallback(() => {
+    boardShakeAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(boardShakeAnim, {
+        toValue: -8,
+        duration: 38,
+        useNativeDriver: true,
+      }),
+      Animated.timing(boardShakeAnim, {
+        toValue: 8,
+        duration: 42,
+        useNativeDriver: true,
+      }),
+      Animated.timing(boardShakeAnim, {
+        toValue: -5,
+        duration: 34,
+        useNativeDriver: true,
+      }),
+      Animated.timing(boardShakeAnim, {
+        toValue: 0,
+        duration: 48,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [boardShakeAnim]);
+
+  const showBoardSkillCastEffects = useCallback(
+    (
+      animations: Array<{
+        type: 'block_summon' | 'magic_transform';
+        cells: Array<{ row: number; col: number; color: string }>;
+      }>,
+    ) => {
+      if (!boardLayout || animations.length === 0) {
+        return;
+      }
+
+      const events = animations
+        .map(animation => {
+          const cells = buildBoardCellEffectCells(
+            boardLayout,
+            animation.cells,
+            true,
+            visualViewport,
+          );
+          if (cells.length === 0) {
+            return null;
+          }
+
+          boardSkillEffectIdRef.current += 1;
+          return {
+            id: boardSkillEffectIdRef.current,
+            type: animation.type,
+            cells,
+          } satisfies BoardSkillCastEffectEvent;
+        })
+        .filter((event): event is BoardSkillCastEffectEvent => Boolean(event));
+
+      if (events.length > 0) {
+        if (events.some(event => event.type === 'magic_transform')) {
+          triggerBoardShake();
+        }
+        setBoardSkillCastEffect(events);
+      }
+    },
+    [boardLayout, triggerBoardShake, visualViewport],
   );
 
   const triggerBossPose = useCallback(
@@ -641,6 +741,8 @@ export default function RaidScreen({ route, navigation }: any) {
     setBossDamageHits([]);
     setBossImpactHit(null);
     setPlacementEffect(null);
+    setBoardSkillCastEffect(null);
+    updateNextPieces([]);
     setSkillGauge(0);
     setActiveMultiplier(1);
     setRaidSkillLevels({});
@@ -762,16 +864,11 @@ export default function RaidScreen({ route, navigation }: any) {
           }
         } catch {}
 
-        const skinColors = getSkinColors();
-        const difficulty = getDifficulty(Math.min(bossStage, 10));
-        const p = generatePlaceablePieces(
-          createBoard(),
-          difficulty,
-          skinColors,
-          getCurrentPieceOptions(),
-        );
+        const p = buildRaidPiecePack(createBoard(), 1);
+        const previewPack = buildRaidPiecePack(createBoard(), 2);
         if (mounted) {
           setPieces(p);
+          updateNextPieces(previewPack);
           setRound(1);
           setLocalCoreReady(true);
         }
@@ -998,12 +1095,13 @@ export default function RaidScreen({ route, navigation }: any) {
     };
   }, [
     bossStage,
-    getCurrentPieceOptions,
+    buildRaidPiecePack,
     getRaidEffects,
     instanceId,
     isNormalRaid,
     navigation,
     playerHpAnim,
+    updateNextPieces,
   ]);
 
   // 10-minute attack timer
@@ -1456,6 +1554,7 @@ export default function RaidScreen({ route, navigation }: any) {
         effects,
         colors: getSkinColors(),
       });
+      showBoardSkillCastEffects(boardSkillResult.animations);
       newBoard = boardSkillResult.board;
       totalLinesCleared += boardSkillResult.extraLinesCleared;
       totalGemsFound += boardSkillResult.gemsFound;
@@ -1484,6 +1583,7 @@ export default function RaidScreen({ route, navigation }: any) {
         ),
         clearedLines: totalLinesCleared,
         combo: comboRef.current,
+        comboBonus: boardSkillResult.comboChainBonus,
         feverActive: feverActiveRef.current,
         feverGauge: feverGaugeRef.current,
         feverLinesRequired: Math.max(
@@ -1676,19 +1776,15 @@ export default function RaidScreen({ route, navigation }: any) {
       const remaining = newPieces.filter(p => p !== null);
       if (remaining.length === 0) {
         const nextRound = round + 1;
-        const difficulty = getDifficulty(
-          Math.min(bossStage + Math.floor(nextRound / 5), 10),
-        );
-        const fresh = generatePlaceablePieces(
-          newBoard,
-          difficulty,
-          getSkinColors(),
-          getCurrentPieceOptions(),
-        );
+        const fresh =
+          nextPiecesRef.current.length === 3
+            ? nextPiecesRef.current
+            : buildRaidPiecePack(newBoard, nextRound);
         newPieces[0] = fresh[0];
         newPieces[1] = fresh[1];
         newPieces[2] = fresh[2];
         setRound(nextRound);
+        updateNextPieces(buildRaidPiecePack(newBoard, nextRound + 1));
       }
       setPieces(newPieces);
 
@@ -1746,10 +1842,12 @@ export default function RaidScreen({ route, navigation }: any) {
       resetComboTimer,
       round,
       showPlacementEffect,
+      showBoardSkillCastEffects,
       animatePlayerHpBar,
-      getCurrentPieceOptions,
+      buildRaidPiecePack,
       showSkillTriggerNotice,
       triggerBossPose,
+      updateNextPieces,
     ],
   );
 
@@ -2356,6 +2454,10 @@ export default function RaidScreen({ route, navigation }: any) {
     raidScreenId,
     'board',
   );
+  const previewPieces =
+    getRaidEffects().previewCountBonus > 0
+      ? nextPieces.slice(0, Math.min(3, getRaidEffects().previewCountBonus))
+      : [];
   const renderBoardStatusDock = (compact: boolean) => {
     if (!raidComboGaugeRule.visible) {
       return null;
@@ -2760,6 +2862,20 @@ export default function RaidScreen({ route, navigation }: any) {
         </View>
       </VisualElementView>
 
+      {!spectatorMode && (
+        <VisualElementView
+          screenId={raidScreenId}
+          elementId="next_preview"
+          style={styles.visualWrapper}
+        >
+          {previewPieces.length > 0 ? (
+            <NextPiecePreview pieces={previewPieces} viewport={visualViewport} />
+          ) : (
+            <View style={styles.nextPreviewPlaceholder} />
+          )}
+        </VisualElementView>
+      )}
+
       {/* Main content: Board or Spectator view */}
       {spectatorMode ? (
         <KeyboardAvoidingView
@@ -2840,11 +2956,14 @@ export default function RaidScreen({ route, navigation }: any) {
             elementId="board"
             style={styles.visualWrapper}
           >
-            <View
+            <Animated.View
               style={[
                 styles.boardContainer,
                 isNormalRaid && styles.boardContainerCompact,
-                { minHeight: raidBoardMetrics.boardSize + 18 },
+                {
+                  minHeight: raidBoardMetrics.boardSize + 18,
+                  transform: [{ translateX: boardShakeAnim }],
+                },
               ]}
               onLayout={handleBoardLayout}
             >
@@ -2871,7 +2990,7 @@ export default function RaidScreen({ route, navigation }: any) {
                   triggerKey={skillEffectMessageKey}
                 />
               </VisualElementView>
-            </View>
+            </Animated.View>
           </VisualElementView>
 
           <VisualElementView screenId={raidScreenId} elementId="piece_tray">
@@ -2900,6 +3019,13 @@ export default function RaidScreen({ route, navigation }: any) {
               current?.id === placementEffect.id ? null : current,
             )
           }
+        />
+      )}
+
+      {boardSkillCastEffect && (
+        <BoardSkillCastEffect
+          events={boardSkillCastEffect}
+          onDone={() => setBoardSkillCastEffect(null)}
         />
       )}
 
@@ -3375,6 +3501,9 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     fontWeight: '700',
+  },
+  nextPreviewPlaceholder: {
+    height: 72,
   },
   playArea: {
     flex: 1,

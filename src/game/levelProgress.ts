@@ -3,7 +3,7 @@ import type {LevelProgress} from '../stores/gameStore';
 
 const LEVEL_CHARACTER_XP_MULTIPLIER = 8;
 const ADMIN_CHARACTER_XP_MULTIPLIER = 1000;
-const CHARACTER_XP_GLOBAL_MULTIPLIER = 0.5;
+const CHARACTER_XP_GLOBAL_MULTIPLIER = 1 / 6;
 
 export function adjustCharacterXpReward(baseXp: number): number {
   return Math.max(1, Math.round(baseXp * CHARACTER_XP_GLOBAL_MULTIPLIER));

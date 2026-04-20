@@ -18,6 +18,10 @@ import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import { submitBattleLeaderboard } from '../services/rankingService';
 import Board from '../components/Board';
+import BoardSkillCastEffect, {
+  type BoardSkillCastEffectEvent,
+} from '../components/BoardSkillCastEffect';
+import NextPiecePreview from '../components/NextPiecePreview';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
@@ -29,6 +33,7 @@ import {
   createBoard,
   decayLockedAttackBlocks,
   generateSeededPieces,
+  previewSeededPieces,
   placePiece,
   checkAndClearLines,
   countBlocks,
@@ -47,8 +52,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { t } from '../i18n';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
+import { applySkillBoardEffects } from '../game/skillBoardEffects';
 import {CURRENT_VERSION_CODE, CURRENT_VERSION_NAME} from '../constants/appVersion';
 import {
+  buildBoardCellEffectCells,
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
@@ -463,6 +470,9 @@ export default function BattleScreen({ route, navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
+    BoardSkillCastEffectEvent[] | null
+  >(null);
   const [missileEffect, setMissileEffect] = useState<number | null>(null); // number = missile count
   const [rematchAccepted, setRematchAccepted] = useState(false);
   const [opponentRematchAccepted, setOpponentRematchAccepted] = useState(false);
@@ -484,6 +494,7 @@ export default function BattleScreen({ route, navigation }: any) {
   const gameOverRef = useRef(false);
   const opponentDisconnectedRef = useRef(false);
   const placementEffectIdRef = useRef(0);
+  const boardSkillEffectIdRef = useRef(0);
   const rematchAcceptedRef = useRef(false);
   const opponentRematchAcceptedRef = useRef(false);
   const rematchStartingRef = useRef(false);
@@ -836,6 +847,48 @@ export default function BattleScreen({ route, navigation }: any) {
     [boardLayout, visualViewport],
   );
 
+  const showBoardSkillCastEffects = useCallback(
+    (
+      animations: Array<{
+        type: 'block_summon' | 'magic_transform';
+        cells: Array<{ row: number; col: number; color: string }>;
+      }>,
+    ) => {
+      if (!boardLayout || animations.length === 0) {
+        return;
+      }
+
+      const events = animations
+        .map(animation => {
+          const cells = buildBoardCellEffectCells(
+            boardLayout,
+            animation.cells,
+            true,
+            visualViewport,
+          );
+          if (cells.length === 0) {
+            return null;
+          }
+
+          boardSkillEffectIdRef.current += 1;
+          return {
+            id: boardSkillEffectIdRef.current,
+            type: animation.type,
+            cells,
+          } satisfies BoardSkillCastEffectEvent;
+        })
+        .filter((event): event is BoardSkillCastEffectEvent => Boolean(event));
+
+      if (events.length > 0) {
+        if (events.some(event => event.type === 'magic_transform')) {
+          triggerShake();
+        }
+        setBoardSkillCastEffect(events);
+      }
+    },
+    [boardLayout, triggerShake, visualViewport],
+  );
+
   const resetBattleState = useCallback(
     async (nextSeed: number) => {
       const freshBoard = createBoard();
@@ -865,6 +918,7 @@ export default function BattleScreen({ route, navigation }: any) {
       setGameOver(false);
       setResult(null);
       setPlacementEffect(null);
+      setBoardSkillCastEffect(null);
       setMissileEffect(null);
       setOpponentDisconnected(false);
       setReconnectCountdown(60);
@@ -1045,6 +1099,23 @@ export default function BattleScreen({ route, navigation }: any) {
         combo++;
       }
 
+      const boardSkillResult = applySkillBoardEffects({
+        board: newBoard,
+        piece,
+        row,
+        col,
+        didClear: totalLines > 0,
+        combo,
+        effects: skillEffectsRef.current,
+      });
+      showBoardSkillCastEffects(boardSkillResult.animations);
+      newBoard = boardSkillResult.board;
+      totalLines += boardSkillResult.extraLinesCleared;
+      if (boardSkillResult.extraLinesCleared > 0 && combo === 0) {
+        combo = 1;
+      }
+      combo += boardSkillResult.comboChainBonus;
+
       let gained = blockCount * 10 + totalLines * 100;
       if (combo > 1) gained += combo * 50;
       const ap = blockCount + totalLines * 10 + (combo > 1 ? combo * 5 : 0);
@@ -1073,7 +1144,14 @@ export default function BattleScreen({ route, navigation }: any) {
         if (!canPlaceAnyPiece(newBoard, active)) handleGameOver();
       }, 200);
     },
-    [board, pieces, showPlacementEffect, syncBoardState, handleGameOver],
+    [
+      board,
+      pieces,
+      showPlacementEffect,
+      showBoardSkillCastEffects,
+      syncBoardState,
+      handleGameOver,
+    ],
   );
 
   const dragDrop = useDragDrop(
@@ -1135,6 +1213,14 @@ export default function BattleScreen({ route, navigation }: any) {
     },
     [attackPoints, showBattleNotice],
   );
+
+  const previewPieces =
+    seedRef.current > 0 && skillEffectsRef.current.previewCountBonus > 0
+      ? previewSeededPieces(seedRef.current, round + 1).slice(
+          0,
+          Math.min(3, skillEffectsRef.current.previewCountBonus),
+        )
+      : [];
 
   return (
     <SafeAreaView
@@ -1218,6 +1304,18 @@ export default function BattleScreen({ route, navigation }: any) {
         </View>
         </VisualElementView>
 
+        <VisualElementView
+          screenId="battle"
+          elementId="next_preview"
+          style={styles.visualWrapper}
+        >
+          {previewPieces.length > 0 ? (
+            <NextPiecePreview pieces={previewPieces} viewport={visualViewport} />
+          ) : (
+            <View style={styles.nextPreviewPlaceholder} />
+          )}
+        </VisualElementView>
+
         <View style={styles.boardStage}>
           <Animated.View
             style={[
@@ -1286,6 +1384,13 @@ export default function BattleScreen({ route, navigation }: any) {
               current?.id === placementEffect.id ? null : current,
             )
           }
+        />
+      )}
+
+      {boardSkillCastEffect && (
+        <BoardSkillCastEffect
+          events={boardSkillCastEffect}
+          onDone={() => setBoardSkillCastEffect(null)}
         />
       )}
 
@@ -1363,6 +1468,9 @@ const styles = StyleSheet.create({
   },
   visualWrapper: {
     alignSelf: 'stretch',
+  },
+  nextPreviewPlaceholder: {
+    height: 72,
   },
   screenContent: {
     flex: 1,

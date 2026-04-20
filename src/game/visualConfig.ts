@@ -49,6 +49,7 @@ export type BattleElementId =
   | 'back_button'
   | 'opponent_panel'
   | 'attack_bar'
+  | 'next_preview'
   | 'board'
   | 'skill_effect'
   | 'piece_tray';
@@ -57,6 +58,7 @@ export type RaidElementId =
   | 'top_panel'
   | 'skill_bar'
   | 'info_bar'
+  | 'next_preview'
   | 'board'
   | 'skill_effect'
   | 'piece_tray'
@@ -218,6 +220,7 @@ export const VISUAL_ELEMENT_LABELS: Record<
     { id: 'back_button', label: '뒤로 버튼' },
     { id: 'opponent_panel', label: '상대 패널' },
     { id: 'attack_bar', label: '공격 바' },
+    { id: 'next_preview', label: '다음 블록' },
     { id: 'board', label: '블록 보드' },
     { id: 'piece_tray', label: '블록 트레이' },
   ],
@@ -225,6 +228,7 @@ export const VISUAL_ELEMENT_LABELS: Record<
     { id: 'top_panel', label: '상단 패널' },
     { id: 'skill_bar', label: '스킬 바' },
     { id: 'info_bar', label: '정보 바' },
+    { id: 'next_preview', label: '다음 블록' },
     { id: 'board', label: '블록 보드' },
     { id: 'piece_tray', label: '블록 트레이' },
     { id: 'combo_gauge', label: '콤보 게이지' },
@@ -233,6 +237,7 @@ export const VISUAL_ELEMENT_LABELS: Record<
     { id: 'top_panel', label: '상단 패널' },
     { id: 'skill_bar', label: '스킬 바' },
     { id: 'info_bar', label: '정보 바' },
+    { id: 'next_preview', label: '다음 블록' },
     { id: 'board', label: '블록 보드' },
     { id: 'piece_tray', label: '블록 트레이' },
     { id: 'combo_gauge', label: '콤보 게이지' },
@@ -306,6 +311,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'back_button',
         'opponent_panel',
         'attack_bar',
+        'next_preview',
         'board',
         'skill_effect',
         'piece_tray',
@@ -316,6 +322,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'top_panel',
         'skill_bar',
         'info_bar',
+        'next_preview',
         'board',
         'skill_effect',
         'piece_tray',
@@ -330,6 +337,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'top_panel',
         'skill_bar',
         'info_bar',
+        'next_preview',
         'board',
         'skill_effect',
         'piece_tray',

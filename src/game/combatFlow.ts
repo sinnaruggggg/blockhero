@@ -10,6 +10,7 @@ export interface CombatTurnInput {
   attackPower: number;
   clearedLines: number;
   combo: number;
+  comboBonus?: number;
   feverActive: boolean;
   feverGauge: number;
   feverLinesRequired?: number;
@@ -31,13 +32,14 @@ export function resolveCombatTurn({
   attackPower,
   clearedLines,
   combo,
+  comboBonus = 0,
   feverActive,
   feverGauge,
   feverLinesRequired = FEVER_LINES_REQUIRED,
   feverGaugeGainMultiplier = 1,
 }: CombatTurnInput): CombatTurnResult {
   const didClear = clearedLines > 0;
-  const nextCombo = didClear ? combo + 1 : combo;
+  const nextCombo = didClear ? combo + 1 + Math.max(0, comboBonus) : combo;
   const raidBonus = mode === 'raid' ? clearedLines : 0;
   const comboMultiplier = getComboMultiplier(nextCombo);
   const clearMultiplier = getClearBonusMultiplier(clearedLines);

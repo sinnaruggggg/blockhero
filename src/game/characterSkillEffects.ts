@@ -49,8 +49,10 @@ export interface CharacterSkillEffects {
   itemCapacityPerTypeBonus: number;
   adjacentLineClearChance: number;
   extraLineClearChance: number;
-  fillerCellChance: number;
-  fillerCellCount: number;
+  blockSummonChance: number;
+  blockSummonMaxCells: number;
+  magicTransformChance: number;
+  magicTransformCellCount: number;
   randomLineClearChance: number;
   randomLineClearComboThreshold: number;
   fastPlacementDamageBonus: number;
@@ -129,8 +131,10 @@ const DEFAULT_EFFECTS: CharacterSkillEffects = {
   itemCapacityPerTypeBonus: 0,
   adjacentLineClearChance: 0,
   extraLineClearChance: 0,
-  fillerCellChance: 0,
-  fillerCellCount: 0,
+  blockSummonChance: 0,
+  blockSummonMaxCells: 0,
+  magicTransformChance: 0,
+  magicTransformCellCount: 0,
   randomLineClearChance: 0,
   randomLineClearComboThreshold: 0,
   fastPlacementDamageBonus: 0,
@@ -164,6 +168,30 @@ function reductionWithBase(
   }
 
   return base + Math.max(0, points - 1) * perPointAfterFirst;
+}
+
+function getBlockSummonMaxCells(points: number): number {
+  if (points <= 0) {
+    return 0;
+  }
+
+  return points >= 4 ? 2 : 1;
+}
+
+function getMagicTransformCellCount(points: number): number {
+  if (points <= 0) {
+    return 0;
+  }
+
+  if (points >= 5) {
+    return 4;
+  }
+
+  if (points >= 3) {
+    return 2;
+  }
+
+  return 1;
 }
 
 export function getCharacterSkillEffects(
@@ -248,12 +276,12 @@ export function getCharacterSkillEffects(
         effects.placementDamageReductionWindowMs,
         Math.round(scale(personal[3] ?? 0, 4000)),
       );
-      effects.fillerCellChance += scale(personal[4] ?? 0, 0.18);
-      effects.fillerCellCount += Math.max(
-        0,
-        Math.round(scale(personal[4] ?? 0, 2)),
+      effects.blockSummonChance += (personal[4] ?? 0) * 0.02;
+      effects.blockSummonMaxCells = Math.max(
+        effects.blockSummonMaxCells,
+        getBlockSummonMaxCells(personal[4] ?? 0),
       );
-      effects.diamondChanceBonus += scale(personal[5] ?? 0, 0.01);
+      effects.diamondChanceBonus += (personal[5] ?? 0) * 0.01;
       effects.previewCountBonus += Math.round(scale(personal[6] ?? 0, 1));
       effects.feverGaugeGainMultiplier += scale(personal[7] ?? 0, 0.15);
       effects.randomLineClearChance += scale(personal[8] ?? 0, 0.18);
@@ -261,10 +289,10 @@ export function getCharacterSkillEffects(
         effects.randomLineClearComboThreshold,
         (personal[8] ?? 0) > 0 ? 4 : 0,
       );
-      effects.fillerCellChance += scale(personal[9] ?? 0, 0.12);
-      effects.fillerCellCount += Math.max(
-        0,
-        Math.round(scale(personal[9] ?? 0, 1)),
+      effects.magicTransformChance += scale(personal[9] ?? 0, 0.12);
+      effects.magicTransformCellCount = Math.max(
+        effects.magicTransformCellCount,
+        getMagicTransformCellCount(personal[9] ?? 0),
       );
 
       if (mode === 'raid') {

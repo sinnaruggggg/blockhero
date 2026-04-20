@@ -22,6 +22,9 @@ import BackImageButton from '../components/BackImageButton';
 import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import FloatingDamageLabel from '../components/FloatingDamageLabel';
 import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
+import BoardSkillCastEffect, {
+  type BoardSkillCastEffectEvent,
+} from '../components/BoardSkillCastEffect';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView, {
@@ -137,6 +140,7 @@ import {
   type FloatingDamageHit,
 } from '../game/floatingDamage';
 import {
+  buildBoardCellEffectCells,
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
@@ -444,6 +448,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
+    BoardSkillCastEffectEvent[] | null
+  >(null);
   const [playerHit, setPlayerHit] = useState<{
     id: number;
     damage: number;
@@ -461,6 +468,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const boardRef = useRef<View>(null);
   const floatingHitIdRef = useRef(0);
   const placementEffectIdRef = useRef(0);
+  const boardSkillEffectIdRef = useRef(0);
   const gameDataRef = useRef<GameData | null>(null);
   const maxComboRef = useRef(0);
   const monsterHpRef = useRef(maxMonsterHp);
@@ -647,6 +655,45 @@ export default function SingleGameScreen({ route, navigation }: any) {
       }
       placementEffectIdRef.current += 1;
       setPlacementEffect({ id: placementEffectIdRef.current, cells });
+    },
+    [boardLayout, visualViewport],
+  );
+
+  const showBoardSkillCastEffects = useCallback(
+    (
+      animations: Array<{
+        type: 'block_summon' | 'magic_transform';
+        cells: Array<{ row: number; col: number; color: string }>;
+      }>,
+    ) => {
+      if (!boardLayout || animations.length === 0) {
+        return;
+      }
+
+      const events = animations
+        .map(animation => {
+          const cells = buildBoardCellEffectCells(
+            boardLayout,
+            animation.cells,
+            false,
+            visualViewport,
+          );
+          if (cells.length === 0) {
+            return null;
+          }
+
+          boardSkillEffectIdRef.current += 1;
+          return {
+            id: boardSkillEffectIdRef.current,
+            type: animation.type,
+            cells,
+          } satisfies BoardSkillCastEffectEvent;
+        })
+        .filter((event): event is BoardSkillCastEffectEvent => Boolean(event));
+
+      if (events.length > 0) {
+        setBoardSkillCastEffect(events);
+      }
     },
     [boardLayout, visualViewport],
   );
@@ -1581,6 +1628,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         effects,
         colors: getSkinColors(),
       });
+      showBoardSkillCastEffects(boardSkillResult.animations);
       newBoard = boardSkillResult.board;
       totalLines += boardSkillResult.extraLinesCleared;
       totalGemsFound += boardSkillResult.gemsFound;
@@ -1592,6 +1640,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         attackPower,
         clearedLines: totalLines,
         combo: comboRef.current,
+        comboBonus: boardSkillResult.comboChainBonus,
         feverActive: feverActiveRef.current,
         feverGauge: feverGaugeRef.current,
         feverLinesRequired: Math.max(
@@ -1787,6 +1836,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       monsterAvatarShakeX,
       queueMonsterHit,
       showPlacementEffect,
+      showBoardSkillCastEffects,
       triggerMonsterPose,
       showSkillTriggerNotice,
       triggerAvatarShake,
@@ -2641,6 +2691,13 @@ export default function SingleGameScreen({ route, navigation }: any) {
               current?.id === placementEffect.id ? null : current,
             )
           }
+        />
+      )}
+
+      {boardSkillCastEffect && (
+        <BoardSkillCastEffect
+          events={boardSkillCastEffect}
+          onDone={() => setBoardSkillCastEffect(null)}
         />
       )}
 

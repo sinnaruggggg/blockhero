@@ -13,6 +13,12 @@ export interface PiecePlacementEffectCell {
   color: string;
 }
 
+export interface BoardEffectTargetCell {
+  row: number;
+  col: number;
+  color?: string;
+}
+
 export function buildPiecePlacementEffectCells(
   boardLayout: MeasuredBoardLayout,
   piece: Piece,
@@ -50,4 +56,29 @@ export function buildPiecePlacementEffectCells(
       ];
     }),
   );
+}
+
+export function buildBoardCellEffectCells(
+  boardLayout: MeasuredBoardLayout,
+  cells: BoardEffectTargetCell[],
+  compact = false,
+  viewport?: Partial<VisualViewport>,
+): PiecePlacementEffectCell[] {
+  const baseMetrics = getBoardMetrics(viewport, { compact });
+  const metrics = resolveBoardScreenMetrics(baseMetrics, boardLayout);
+
+  return cells.map(cell => ({
+    id: `${cell.row}-${cell.col}`,
+    x:
+      boardLayout.x +
+      metrics.paddingX +
+      cell.col * (metrics.cellWidth + metrics.gapX) +
+      metrics.cellWidth / 2,
+    y:
+      boardLayout.y +
+      metrics.paddingY +
+      cell.row * (metrics.cellHeight + metrics.gapY) +
+      metrics.cellHeight / 2,
+    color: cell.color ?? '#c084fc',
+  }));
 }

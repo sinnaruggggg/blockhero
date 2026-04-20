@@ -56,7 +56,7 @@ export function getLevelEnemyStats(
           LEVEL_ENEMY_EXTRA_MULTIPLIER,
       ),
     ),
-    attackIntervalMs: (tier === 'boss' ? 3 : tier === 'elite' ? 4 : 5) * 1000,
+    attackIntervalMs: (tier === 'boss' ? 1500 : tier === 'elite' ? 2000 : 2500),
     tier,
   };
 }
@@ -70,7 +70,7 @@ export function getAdjustedLevelMonsterHp(baseHp: number): number {
 export function getNormalRaidAttackStats(stage: number): EnemyAttackStats {
   return {
     attack: getBaseRaidAttack(stage),
-    attackIntervalMs: 3000,
+    attackIntervalMs: 1500,
     tier: 'boss',
   };
 }
@@ -78,7 +78,7 @@ export function getNormalRaidAttackStats(stage: number): EnemyAttackStats {
 export function getRaidBossAttackStats(stage: number): EnemyAttackStats {
   return {
     attack: getNormalRaidAttackStats(stage).attack * 2,
-    attackIntervalMs: 3000,
+    attackIntervalMs: 1500,
     tier: 'boss',
   };
 }

@@ -104,6 +104,10 @@ function getBattleAttackBarHeight() {
   return 44;
 }
 
+function getBattleNextPreviewHeight() {
+  return 80;
+}
+
 function getRaidTopPanelHeight(screenId: VisualScreenId) {
   return screenId === 'raidNormal' ? 186 : 176;
 }
@@ -114,6 +118,10 @@ function getRaidSkillBarHeight() {
 
 function getRaidInfoBarHeight() {
   return 20;
+}
+
+function getRaidNextPreviewHeight() {
+  return 80;
 }
 
 function buildLevelLayout(viewport: VisualViewport): VisualRuntimeLayout {
@@ -230,8 +238,10 @@ function buildBattleLayout(viewport: VisualViewport): VisualRuntimeLayout {
   const backSize = 42;
   const opponentPanelHeight = getBattleOpponentPanelHeight(viewport);
   const attackBarHeight = getBattleAttackBarHeight();
+  const nextPreviewHeight = getBattleNextPreviewHeight();
   const pieceTrayHeight = getPieceTrayHeight(viewport, true);
-  const boardTop = content.top + opponentPanelHeight + attackBarHeight;
+  const boardTop =
+    content.top + opponentPanelHeight + attackBarHeight + nextPreviewHeight;
   const pieceTrayTop = content.bottom - pieceTrayHeight;
   const boardStageRect = makeRect(
     0,
@@ -260,6 +270,12 @@ function buildBattleLayout(viewport: VisualViewport): VisualRuntimeLayout {
       viewport.width,
       attackBarHeight,
     ),
+    next_preview: makeRect(
+      0,
+      content.top + opponentPanelHeight + attackBarHeight,
+      viewport.width,
+      nextPreviewHeight,
+    ),
     board: boardRect,
     skill_effect: skillEffectRect,
     piece_tray: makeRect(0, pieceTrayTop, viewport.width, pieceTrayHeight),
@@ -274,10 +290,15 @@ function buildRaidLayout(
   const topPanelHeight = getRaidTopPanelHeight(screenId);
   const skillBarHeight = getRaidSkillBarHeight();
   const infoBarHeight = getRaidInfoBarHeight();
+  const nextPreviewHeight = getRaidNextPreviewHeight();
   const pieceTrayHeight = getPieceTrayHeight(viewport, true);
   const boardMetrics = getBoardMetrics(viewport, { compact: true });
   const boardTop =
-    content.top + topPanelHeight + skillBarHeight + infoBarHeight;
+    content.top +
+    topPanelHeight +
+    skillBarHeight +
+    infoBarHeight +
+    nextPreviewHeight;
   const pieceTrayTop = content.bottom - pieceTrayHeight;
   const boardHeight = Math.max(
     boardMetrics.boardSize + 18,
@@ -304,6 +325,12 @@ function buildRaidLayout(
       content.top + topPanelHeight + skillBarHeight,
       viewport.width,
       infoBarHeight,
+    ),
+    next_preview: makeRect(
+      0,
+      content.top + topPanelHeight + skillBarHeight + infoBarHeight,
+      viewport.width,
+      nextPreviewHeight,
     ),
     board: boardRect,
     skill_effect: skillEffectRect,

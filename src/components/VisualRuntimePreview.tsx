@@ -807,6 +807,22 @@ export default function VisualRuntimePreview({
       </EditorFrame>
 
       <EditorFrame
+        label="다음 블록"
+        selected={selectedElementId === 'next_preview'}
+        elementId="next_preview"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="battle"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportBattleMeasure}
+        style={styles.sectionGapSmall}
+      >
+        <NextPiecePreview pieces={SAMPLE_NEXT_PIECES} viewport={viewport} />
+      </EditorFrame>
+
+      <EditorFrame
         label="블록 보드"
         selected={selectedElementId === 'board'}
         elementId="board"
@@ -937,6 +953,23 @@ export default function VisualRuntimePreview({
           <Text style={styles.statusBarText}>? ?? ??? 1,242</Text>
           <Text style={styles.statusBarSub}>??? 0</Text>
         </View>
+      </EditorFrame>
+
+      <EditorFrame
+        label="다음 블록"
+        selected={selectedElementId === 'next_preview'}
+        elementId="next_preview"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidNormal"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidNormalMeasure}
+        onInteractionChange={onInteractionChange}
+        style={styles.sectionGapSmall}
+      >
+        <NextPiecePreview pieces={SAMPLE_NEXT_PIECES} viewport={viewport} />
       </EditorFrame>
 
       <EditorFrame
@@ -1072,6 +1105,23 @@ export default function VisualRuntimePreview({
           <Text style={styles.statusBarText}>? ?? ??? 8,420</Text>
           <Text style={styles.statusBarSub}>??? 17</Text>
         </View>
+      </EditorFrame>
+
+      <EditorFrame
+        label="다음 블록"
+        selected={selectedElementId === 'next_preview'}
+        elementId="next_preview"
+        viewport={viewport}
+        displayScale={displayScale}
+        manifest={manifest}
+        screenId="raidBoss"
+        onSelect={onSelectElement}
+        onMove={onMoveElement}
+        onMeasure={reportRaidBossMeasure}
+        onInteractionChange={onInteractionChange}
+        style={styles.sectionGapSmall}
+      >
+        <NextPiecePreview pieces={SAMPLE_NEXT_PIECES} viewport={viewport} />
       </EditorFrame>
 
       <EditorFrame

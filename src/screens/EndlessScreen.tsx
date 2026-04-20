@@ -18,6 +18,9 @@ import BattleNoticeOverlay from '../components/BattleNoticeOverlay';
 import ComboGaugeOverlay from '../components/ComboGaugeOverlay';
 import GameHeader from '../components/GameHeader';
 import NextPiecePreview from '../components/NextPiecePreview';
+import BoardSkillCastEffect, {
+  type BoardSkillCastEffectEvent,
+} from '../components/BoardSkillCastEffect';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView, {
@@ -96,6 +99,7 @@ import {
   type SkillTriggerNoticeMode,
 } from '../stores/gameSettings';
 import {
+  buildBoardCellEffectCells,
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
@@ -151,9 +155,13 @@ export default function EndlessScreen({ navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
+    BoardSkillCastEffectEvent[] | null
+  >(null);
 
   const boardRef = useRef<View>(null);
   const placementEffectIdRef = useRef(0);
+  const boardSkillEffectIdRef = useRef(0);
   const maxComboRef = useRef(0);
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feverTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -191,6 +199,7 @@ export default function EndlessScreen({ navigation }: any) {
   } = useBattleNotice(1600);
 
   const milestoneAnim = useRef(new Animated.Value(0)).current;
+  const boardShakeAnim = useRef(new Animated.Value(0)).current;
 
   const getCurrentPieceOptions = useCallback(
     () => ({
@@ -261,6 +270,81 @@ export default function EndlessScreen({ navigation }: any) {
       setPlacementEffect({ id: placementEffectIdRef.current, cells });
     },
     [boardLayout, shouldUseCompactEndlessLayout, visualViewport],
+  );
+
+  const triggerBoardShake = useCallback(() => {
+    boardShakeAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(boardShakeAnim, {
+        toValue: -8,
+        duration: 38,
+        useNativeDriver: true,
+      }),
+      Animated.timing(boardShakeAnim, {
+        toValue: 8,
+        duration: 42,
+        useNativeDriver: true,
+      }),
+      Animated.timing(boardShakeAnim, {
+        toValue: -5,
+        duration: 34,
+        useNativeDriver: true,
+      }),
+      Animated.timing(boardShakeAnim, {
+        toValue: 0,
+        duration: 48,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [boardShakeAnim]);
+
+  const showBoardSkillCastEffects = useCallback(
+    (
+      animations: Array<{
+        type: 'block_summon' | 'magic_transform';
+        cells: Array<{ row: number; col: number; color: string }>;
+      }>,
+    ) => {
+      if (!boardLayout || animations.length === 0) {
+        return;
+      }
+
+      const compactLayout = shouldUseCompactEndlessLayout();
+      const events = animations
+        .map(animation => {
+          const cells = buildBoardCellEffectCells(
+            boardLayout,
+            animation.cells,
+            compactLayout,
+            visualViewport,
+          );
+          if (cells.length === 0) {
+            return null;
+          }
+
+          boardSkillEffectIdRef.current += 1;
+          return {
+            id: boardSkillEffectIdRef.current,
+            type: animation.type,
+            cells,
+          } satisfies BoardSkillCastEffectEvent;
+        })
+        .filter((event): event is BoardSkillCastEffectEvent => Boolean(event));
+
+      if (events.length > 0) {
+        if (events.some(event => event.type === 'magic_transform')) {
+          triggerBoardShake();
+        }
+        setBoardSkillCastEffect(events);
+      }
+    },
+    [
+      boardLayout,
+      boardShakeAnim,
+      shouldUseCompactEndlessLayout,
+      triggerBoardShake,
+      visualViewport,
+    ],
   );
 
   const showSkillTriggerNotice = useCallback(
@@ -663,6 +747,7 @@ export default function EndlessScreen({ navigation }: any) {
         effects,
         colors: getSkinColors(),
       });
+      showBoardSkillCastEffects(boardSkillResult.animations);
       newBoard = boardSkillResult.board;
       totalLines += boardSkillResult.extraLinesCleared;
       totalGemsFound += boardSkillResult.gemsFound;
@@ -674,6 +759,7 @@ export default function EndlessScreen({ navigation }: any) {
         attackPower,
         clearedLines: totalLines,
         combo: comboRef.current,
+        comboBonus: boardSkillResult.comboChainBonus,
         feverActive: feverActiveRef.current,
         feverGauge,
         feverLinesRequired: Math.max(
@@ -814,6 +900,7 @@ export default function EndlessScreen({ navigation }: any) {
       resetComboTimer,
       score,
       showPlacementEffect,
+      showBoardSkillCastEffects,
       showSkillTriggerNotice,
       updateNextPieces,
     ],
@@ -1014,6 +1101,13 @@ export default function EndlessScreen({ navigation }: any) {
         />
       )}
 
+      {boardSkillCastEffect && (
+        <BoardSkillCastEffect
+          events={boardSkillCastEffect}
+          onDone={() => setBoardSkillCastEffect(null)}
+        />
+      )}
+
       <BattleNoticeOverlay
         message={battleNoticeMessage}
         messageKey={battleNoticeKey}
@@ -1055,7 +1149,12 @@ export default function EndlessScreen({ navigation }: any) {
         ) : null}
       </VisualElementView>
       <View style={styles.boardStage}>
-        <View style={styles.boardContainer}>
+        <Animated.View
+          style={[
+            styles.boardContainer,
+            { transform: [{ translateX: boardShakeAnim }] },
+          ]}
+        >
           <VisualElementView
             screenId="endless"
             elementId="board"
@@ -1104,7 +1203,7 @@ export default function EndlessScreen({ navigation }: any) {
               />
             </VisualElementView>
           </VisualElementView>
-        </View>
+        </Animated.View>
       </View>
 
       <VisualElementView
