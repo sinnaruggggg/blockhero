@@ -76,7 +76,7 @@ export const FEVER_DURATION = 10000;
 export const FEVER_LINES_REQUIRED = 20; // lines to clear to trigger fever
 
 // Combo timeout
-export const COMBO_TIMEOUT_MS = 7000; // 7 seconds to maintain combo
+export const COMBO_TIMEOUT_MS = 5000; // 5 seconds to maintain combo
 
 // Hearts — 10 max, 1 per 5 minutes
 export const MAX_HEARTS = 20;

@@ -11,6 +11,9 @@ const LEVEL_ENEMY_ATTACK_MULTIPLIER = 0.5;
 const ENEMY_ATTACK_GLOBAL_MULTIPLIER = 0.5;
 const ENEMY_HP_GLOBAL_MULTIPLIER = 2;
 const LEVEL_ENEMY_EXTRA_MULTIPLIER = 1.5;
+const LEVEL_STAGE_GROWTH_MULTIPLIER = 5;
+const BASE_LEVEL_STAGE_ATTACK = 9;
+const RAID_BOSS_ATTACK_MULTIPLIER = 5;
 
 export function adjustEnemyAttackValue(baseAttack: number): number {
   return Math.max(
@@ -29,6 +32,13 @@ function getBaseRaidAttack(stage: number): number {
   );
 }
 
+function amplifyLevelStageProgression(value: number, baseValue: number): number {
+  return Math.max(
+    1,
+    baseValue + (value - baseValue) * LEVEL_STAGE_GROWTH_MULTIPLIER,
+  );
+}
+
 export function getLevelEnemyStats(
   levelId: number,
   world: number,
@@ -44,17 +54,22 @@ export function getLevelEnemyStats(
     tier = 'elite';
   }
 
+  const currentAttack = adjustEnemyAttackValue(
+    Math.round(
+      (12 +
+        world * 5 +
+        chapterIndex * 4 +
+        stageNumberInChapter * (tier === 'boss' ? 2 : 1)) *
+        ENEMY_ATTACK_BUFF_MULTIPLIER *
+        LEVEL_ENEMY_ATTACK_MULTIPLIER *
+        LEVEL_ENEMY_EXTRA_MULTIPLIER,
+    ),
+  );
+
   return {
-    attack: adjustEnemyAttackValue(
-      Math.round(
-        (12 +
-          world * 5 +
-          chapterIndex * 4 +
-          stageNumberInChapter * (tier === 'boss' ? 2 : 1)) *
-          ENEMY_ATTACK_BUFF_MULTIPLIER *
-          LEVEL_ENEMY_ATTACK_MULTIPLIER *
-          LEVEL_ENEMY_EXTRA_MULTIPLIER,
-      ),
+    attack: amplifyLevelStageProgression(
+      currentAttack,
+      BASE_LEVEL_STAGE_ATTACK,
     ),
     attackIntervalMs: (tier === 'boss' ? 1500 : tier === 'elite' ? 2000 : 2500),
     tier,
@@ -62,14 +77,18 @@ export function getLevelEnemyStats(
 }
 
 export function getAdjustedLevelMonsterHp(baseHp: number): number {
+  const amplifiedBaseHp = amplifyLevelStageProgression(baseHp, 800);
   return adjustEnemyHpValue(
-    Math.max(1, Math.round(baseHp * 2 * LEVEL_ENEMY_EXTRA_MULTIPLIER)),
+    Math.max(
+      1,
+      Math.round(amplifiedBaseHp * 2 * LEVEL_ENEMY_EXTRA_MULTIPLIER),
+    ),
   );
 }
 
 export function getNormalRaidAttackStats(stage: number): EnemyAttackStats {
   return {
-    attack: getBaseRaidAttack(stage),
+    attack: getBaseRaidAttack(stage) * RAID_BOSS_ATTACK_MULTIPLIER,
     attackIntervalMs: 1500,
     tier: 'boss',
   };
