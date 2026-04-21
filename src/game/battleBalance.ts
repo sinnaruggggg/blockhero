@@ -11,8 +11,7 @@ const LEVEL_ENEMY_ATTACK_MULTIPLIER = 0.5;
 const ENEMY_ATTACK_GLOBAL_MULTIPLIER = 0.5;
 const ENEMY_HP_GLOBAL_MULTIPLIER = 2;
 const LEVEL_ENEMY_EXTRA_MULTIPLIER = 1.5;
-const LEVEL_STAGE_GROWTH_MULTIPLIER = 5;
-const BASE_LEVEL_STAGE_ATTACK = 9;
+const LEVEL_WORLD_BONUS_STEP = 0.1;
 const RAID_BOSS_ATTACK_MULTIPLIER = 5;
 
 export function adjustEnemyAttackValue(baseAttack: number): number {
@@ -32,11 +31,15 @@ function getBaseRaidAttack(stage: number): number {
   );
 }
 
-function amplifyLevelStageProgression(value: number, baseValue: number): number {
-  return Math.max(
-    1,
-    baseValue + (value - baseValue) * LEVEL_STAGE_GROWTH_MULTIPLIER,
-  );
+export function getLevelWorldBonusMultiplier(world: number): number {
+  const normalizedWorld = Number.isFinite(world)
+    ? Math.max(1, Math.round(world))
+    : 1;
+  return 1 + (normalizedWorld - 1) * LEVEL_WORLD_BONUS_STEP;
+}
+
+function applyLevelWorldBonus(value: number, world: number): number {
+  return Math.max(1, Math.round(value * getLevelWorldBonusMultiplier(world)));
 }
 
 export function getLevelEnemyStats(
@@ -54,35 +57,35 @@ export function getLevelEnemyStats(
     tier = 'elite';
   }
 
-  const currentAttack = adjustEnemyAttackValue(
-    Math.round(
-      (12 +
-        world * 5 +
-        chapterIndex * 4 +
-        stageNumberInChapter * (tier === 'boss' ? 2 : 1)) *
-        ENEMY_ATTACK_BUFF_MULTIPLIER *
-        LEVEL_ENEMY_ATTACK_MULTIPLIER *
-        LEVEL_ENEMY_EXTRA_MULTIPLIER,
-    ),
-  );
-
   return {
-    attack: amplifyLevelStageProgression(
-      currentAttack,
-      BASE_LEVEL_STAGE_ATTACK,
+    attack: applyLevelWorldBonus(
+      adjustEnemyAttackValue(
+        Math.round(
+          (12 +
+            world * 5 +
+            chapterIndex * 4 +
+            stageNumberInChapter * (tier === 'boss' ? 2 : 1)) *
+            ENEMY_ATTACK_BUFF_MULTIPLIER *
+            LEVEL_ENEMY_ATTACK_MULTIPLIER *
+            LEVEL_ENEMY_EXTRA_MULTIPLIER,
+        ),
+      ),
+      world,
     ),
     attackIntervalMs: (tier === 'boss' ? 1500 : tier === 'elite' ? 2000 : 2500),
     tier,
   };
 }
 
-export function getAdjustedLevelMonsterHp(baseHp: number): number {
-  const amplifiedBaseHp = amplifyLevelStageProgression(baseHp, 800);
-  return adjustEnemyHpValue(
-    Math.max(
-      1,
-      Math.round(amplifiedBaseHp * 2 * LEVEL_ENEMY_EXTRA_MULTIPLIER),
+export function getAdjustedLevelMonsterHp(
+  baseHp: number,
+  world = 1,
+): number {
+  return applyLevelWorldBonus(
+    adjustEnemyHpValue(
+      Math.max(1, Math.round(baseHp * 2 * LEVEL_ENEMY_EXTRA_MULTIPLIER)),
     ),
+    world,
   );
 }
 

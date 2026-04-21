@@ -395,7 +395,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
         monsterColor: creatorLevelRuntime.monsterColor,
       }
     : activeLevel.goal;
-  const maxMonsterHp = getAdjustedLevelMonsterHp(monster.monsterHp);
+  const maxMonsterHp = getAdjustedLevelMonsterHp(
+    monster.monsterHp,
+    activeWorldId,
+  );
   const enemyStats = creatorLevelRuntime
     ? {
         attack: adjustEnemyAttackValue(creatorLevelRuntime.enemyAttack),
