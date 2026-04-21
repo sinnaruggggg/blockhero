@@ -20,6 +20,14 @@
 8. Verify that `releases/latest` now points to the new tag and that an `.apk` asset exists.
 9. Only after step 8 say that auto update is live.
 
+## Progress Reporting Rule
+Do not block on a long GitHub Actions watch without reporting back.
+
+- After starting a release workflow, check status with `gh run view` or `gh run list`.
+- If the workflow is still running after 5 minutes, stop waiting and report the current step, elapsed time, and whether it is still progressing.
+- Continue in short status-check loops instead of one long silent wait.
+- Never leave the user without an update while an APK build is still in progress.
+
 ## Commands
 ```powershell
 git push origin main
