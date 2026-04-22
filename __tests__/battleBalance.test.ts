@@ -33,8 +33,8 @@ describe('battleBalance', () => {
 
     expect(getLevelEnemyStats(31, 2)).toMatchObject({ attack: 12 });
     expect(getLevelEnemyStats(91, 4)).toMatchObject({ attack: 21 });
-    expect(getAdjustedLevelMonsterHp(800, 4)).toBe(6240);
-    expect(getAdjustedLevelMonsterHp(800, 10)).toBe(9120);
+    expect(getAdjustedLevelMonsterHp(800, 4)).toBe(2080);
+    expect(getAdjustedLevelMonsterHp(800, 10)).toBe(3040);
   });
 
   it('calculates raid boss attack stats from stage', () => {

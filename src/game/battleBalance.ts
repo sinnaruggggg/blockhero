@@ -11,6 +11,7 @@ const LEVEL_ENEMY_ATTACK_MULTIPLIER = 0.5;
 const ENEMY_ATTACK_GLOBAL_MULTIPLIER = 0.5;
 const ENEMY_HP_GLOBAL_MULTIPLIER = 2;
 const LEVEL_ENEMY_EXTRA_MULTIPLIER = 1.5;
+const LEVEL_MONSTER_HP_REDUCTION_DIVISOR = 3;
 const LEVEL_WORLD_BONUS_STEP = 0.1;
 const RAID_BOSS_ATTACK_MULTIPLIER = 5;
 
@@ -81,11 +82,15 @@ export function getAdjustedLevelMonsterHp(
   baseHp: number,
   world = 1,
 ): number {
-  return applyLevelWorldBonus(
+  const currentHp = applyLevelWorldBonus(
     adjustEnemyHpValue(
       Math.max(1, Math.round(baseHp * 2 * LEVEL_ENEMY_EXTRA_MULTIPLIER)),
     ),
     world,
+  );
+  return Math.max(
+    1,
+    Math.round(currentHp / LEVEL_MONSTER_HP_REDUCTION_DIVISOR),
   );
 }
 
