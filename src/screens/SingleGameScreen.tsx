@@ -67,6 +67,7 @@ import {
 } from '../game/battleBalance';
 import { resolveCombatTurn } from '../game/combatFlow';
 import {
+  applyCharacterXpGainMultiplier,
   adjustCharacterXpReward,
   getLevelClearRewards,
 } from '../game/levelProgress';
@@ -1216,7 +1217,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         );
 
         const world = activeWorldId;
-        const reward = creatorLevelRuntime
+        const baseReward = creatorLevelRuntime
           ? {
               gold:
                 creatorLevelRuntime.reward.repeatGold +
@@ -1230,6 +1231,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
           : getLevelClearRewards(world, levelId, !wasFirstClear, {
               isAdmin: isAdminRef.current,
             });
+        const reward = {
+          ...baseReward,
+          xp: applyCharacterXpGainMultiplier(baseReward.xp),
+        };
         const rewardTotals = applyRewardMultipliers(
           reward.gold,
           0,

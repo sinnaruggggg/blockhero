@@ -1,5 +1,6 @@
 import {LEVELS, WORLDS} from '../src/constants';
 import {
+  applyCharacterXpGainMultiplier,
   getLevelClearRewards,
   getNextUnlockedLevel,
   getUnlockedBossRaidStages,
@@ -54,5 +55,10 @@ describe('level mode progression', () => {
       gold: 97,
       xp: 233333,
     });
+  });
+
+  it('multiplies actual character XP gains by five', () => {
+    expect(applyCharacterXpGainMultiplier(233)).toBe(1165);
+    expect(applyCharacterXpGainMultiplier(0)).toBe(0);
   });
 });

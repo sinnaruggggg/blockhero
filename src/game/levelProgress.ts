@@ -4,9 +4,14 @@ import type {LevelProgress} from '../stores/gameStore';
 const LEVEL_CHARACTER_XP_MULTIPLIER = 8;
 const ADMIN_CHARACTER_XP_MULTIPLIER = 1000;
 const CHARACTER_XP_GLOBAL_MULTIPLIER = 1 / 6;
+const CHARACTER_XP_GAIN_MULTIPLIER = 5;
 
 export function adjustCharacterXpReward(baseXp: number): number {
   return Math.max(1, Math.round(baseXp * CHARACTER_XP_GLOBAL_MULTIPLIER));
+}
+
+export function applyCharacterXpGainMultiplier(xpAmount: number): number {
+  return Math.max(0, Math.round(xpAmount * CHARACTER_XP_GAIN_MULTIPLIER));
 }
 
 export function getNextUnlockedLevel(progress: LevelProgress): number {
