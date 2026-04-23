@@ -24427,14 +24427,14 @@ ${suffix}`;
   };
   var DEFAULT_GAMEPLAY_SFX_RULE = {
     assetKey: null,
-    volume: 1,
+    volume: 3,
     cooldownMs: 40,
     allowOverlap: true,
     enabled: true
   };
   var DEFAULT_GAMEPLAY_BGM_RULE = {
     assetKey: null,
-    volume: 0.7,
+    volume: 1.5,
     loop: true,
     fadeInMs: 800,
     fadeOutMs: 500,
@@ -24443,7 +24443,7 @@ ${suffix}`;
   var DEFAULT_GAMEPLAY_AUDIO_CONFIG = {
     masterVolume: 1,
     sfxVolume: 1,
-    bgmVolume: 0.7,
+    bgmVolume: 1,
     muted: false,
     sfx: Object.fromEntries(GAMEPLAY_SFX_EVENT_IDS.map((id) => [id, { ...DEFAULT_GAMEPLAY_SFX_RULE }])),
     bgm: Object.fromEntries(GAMEPLAY_BGM_TRACK_IDS.map((id) => [id, { ...DEFAULT_GAMEPLAY_BGM_RULE }]))
@@ -24680,17 +24680,17 @@ ${suffix}`;
       masterVolume: clamp(
         numberOr(merged.masterVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.masterVolume),
         0,
-        1
+        3
       ),
       sfxVolume: clamp(
         numberOr(merged.sfxVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.sfxVolume),
         0,
-        1
+        3
       ),
       bgmVolume: clamp(
         numberOr(merged.bgmVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.bgmVolume),
         0,
-        1
+        3
       ),
       muted: merged.muted === true,
       sfx: Object.fromEntries(GAMEPLAY_SFX_EVENT_IDS.map((id) => {
@@ -24699,7 +24699,7 @@ ${suffix}`;
           id,
           {
             assetKey: sanitizeAssetKey(rule.assetKey),
-            volume: clamp(numberOr(rule.volume, DEFAULT_GAMEPLAY_SFX_RULE.volume), 0, 1),
+            volume: clamp(numberOr(rule.volume, DEFAULT_GAMEPLAY_SFX_RULE.volume), 0, 3),
             cooldownMs: Math.round(clamp(numberOr(rule.cooldownMs, DEFAULT_GAMEPLAY_SFX_RULE.cooldownMs), 0, 2e3)),
             allowOverlap: rule.allowOverlap !== false,
             enabled: rule.enabled !== false
@@ -24712,7 +24712,7 @@ ${suffix}`;
           id,
           {
             assetKey: sanitizeAssetKey(rule.assetKey),
-            volume: clamp(numberOr(rule.volume, DEFAULT_GAMEPLAY_BGM_RULE.volume), 0, 1),
+            volume: clamp(numberOr(rule.volume, DEFAULT_GAMEPLAY_BGM_RULE.volume), 0, 3),
             loop: rule.loop !== false,
             fadeInMs: Math.round(clamp(numberOr(rule.fadeInMs, DEFAULT_GAMEPLAY_BGM_RULE.fadeInMs), 0, 1e4)),
             fadeOutMs: Math.round(clamp(numberOr(rule.fadeOutMs, DEFAULT_GAMEPLAY_BGM_RULE.fadeOutMs), 0, 1e4)),

@@ -436,9 +436,11 @@ export const GAMEPLAY_BGM_LABELS: Record<GameplayBgmTrackId, string> = {
   lobby: '로비/매칭',
 };
 
+export const MAX_GAMEPLAY_AUDIO_VOLUME = 3;
+
 export const DEFAULT_GAMEPLAY_SFX_RULE: GameplaySfxRule = {
   assetKey: null,
-  volume: 1,
+  volume: 3,
   cooldownMs: 40,
   allowOverlap: true,
   enabled: true,
@@ -446,7 +448,7 @@ export const DEFAULT_GAMEPLAY_SFX_RULE: GameplaySfxRule = {
 
 export const DEFAULT_GAMEPLAY_BGM_RULE: GameplayBgmRule = {
   assetKey: null,
-  volume: 0.7,
+  volume: 1.5,
   loop: true,
   fadeInMs: 800,
   fadeOutMs: 500,
@@ -476,7 +478,7 @@ function createDefaultGameplayBgmMap(): Record<GameplayBgmTrackId, GameplayBgmRu
 export const DEFAULT_GAMEPLAY_AUDIO_CONFIG: GameplayAudioConfig = {
   masterVolume: 1,
   sfxVolume: 1,
-  bgmVolume: 0.7,
+  bgmVolume: 1,
   muted: false,
   sfx: createDefaultGameplaySfxMap(),
   bgm: createDefaultGameplayBgmMap(),
@@ -681,7 +683,11 @@ function sanitizeGameplaySfxRule(
 
   return {
     assetKey: sanitizeAssetKey(merged.assetKey),
-    volume: clamp(numberOr(merged.volume, DEFAULT_GAMEPLAY_SFX_RULE.volume), 0, 1),
+    volume: clamp(
+      numberOr(merged.volume, DEFAULT_GAMEPLAY_SFX_RULE.volume),
+      0,
+      MAX_GAMEPLAY_AUDIO_VOLUME,
+    ),
     cooldownMs: Math.round(
       clamp(
         numberOr(merged.cooldownMs, DEFAULT_GAMEPLAY_SFX_RULE.cooldownMs),
@@ -704,7 +710,11 @@ function sanitizeGameplayBgmRule(
 
   return {
     assetKey: sanitizeAssetKey(merged.assetKey),
-    volume: clamp(numberOr(merged.volume, DEFAULT_GAMEPLAY_BGM_RULE.volume), 0, 1),
+    volume: clamp(
+      numberOr(merged.volume, DEFAULT_GAMEPLAY_BGM_RULE.volume),
+      0,
+      MAX_GAMEPLAY_AUDIO_VOLUME,
+    ),
     loop: merged.loop !== false,
     fadeInMs: Math.round(
       clamp(
@@ -756,17 +766,17 @@ function sanitizeGameplayAudioConfig(
     masterVolume: clamp(
       numberOr(merged.masterVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.masterVolume),
       0,
-      1,
+      MAX_GAMEPLAY_AUDIO_VOLUME,
     ),
     sfxVolume: clamp(
       numberOr(merged.sfxVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.sfxVolume),
       0,
-      1,
+      MAX_GAMEPLAY_AUDIO_VOLUME,
     ),
     bgmVolume: clamp(
       numberOr(merged.bgmVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.bgmVolume),
       0,
-      1,
+      MAX_GAMEPLAY_AUDIO_VOLUME,
     ),
     muted: merged.muted === true,
     sfx,

@@ -73,7 +73,7 @@ describe('visualConfig helpers', () => {
         audio: {
           masterVolume: 1,
           sfxVolume: 1,
-          bgmVolume: 0.7,
+          bgmVolume: 1,
           muted: false,
           sfx: {
             blockPlace: {
@@ -87,7 +87,7 @@ describe('visualConfig helpers', () => {
           bgm: {
             level: {
               assetKey: 'level-bgm',
-              volume: 0.7,
+              volume: 1.5,
               loop: true,
               fadeInMs: 800,
               fadeOutMs: 500,
@@ -335,12 +335,12 @@ describe('visualConfig helpers', () => {
       stickyThresholdCells: 0.8,
       snapSearchRadius: 2,
     });
-    expect(manifest.gameplay.audio.masterVolume).toBe(1);
+    expect(manifest.gameplay.audio.masterVolume).toBe(2);
     expect(manifest.gameplay.audio.sfxVolume).toBe(0);
     expect(manifest.gameplay.audio.muted).toBe(true);
     expect(manifest.gameplay.audio.sfx.blockPlace).toEqual({
       assetKey: 'block-place',
-      volume: 1,
+      volume: 2,
       cooldownMs: 2000,
       allowOverlap: false,
       enabled: false,

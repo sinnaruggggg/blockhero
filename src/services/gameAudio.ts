@@ -39,6 +39,7 @@ let cachedSettings: GameSettings = {...DEFAULT_GAME_SETTINGS};
 let settingsLoaded = false;
 let settingsLoadInFlight: Promise<GameSettings> | null = null;
 let currentBgmTrack: GameplayBgmTrackId | null = null;
+const MAX_AUDIO_VOLUME = 3;
 
 function ensureSettingsLoaded() {
   if (settingsLoaded || settingsLoadInFlight) {
@@ -78,7 +79,11 @@ function getAssetUri(assetKey: string | null, snapshot: VisualConfigSnapshot) {
 }
 
 function getVolume(...values: number[]) {
-  return values.reduce((acc, value) => acc * Math.max(0, Math.min(1, value)), 1);
+  const multiplied = values.reduce(
+    (acc, value) => acc * Math.max(0, Math.min(MAX_AUDIO_VOLUME, value)),
+    1,
+  );
+  return Math.min(MAX_AUDIO_VOLUME, multiplied);
 }
 
 export function playGameAudioEvent(eventId: GameplaySfxEventId) {
