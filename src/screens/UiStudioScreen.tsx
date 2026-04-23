@@ -24,14 +24,19 @@ import {
   DEFAULT_VISUAL_ELEMENT_RULE,
   DEFAULT_VISUAL_REFERENCE_VIEWPORT,
   getVisualDeviceProfile,
+  getVisualElementRule,
+  hasVisualElementCharacterOverride,
   sanitizeVisualConfigManifest,
   type VisualBackgroundOverride,
+  type VisualCharacterId,
   type VisualConfigManifest,
   type VisualElementFrame,
   type VisualElementId,
   type VisualScreenId,
   type VisualElementRule,
   type VisualViewport,
+  VISUAL_CHARACTER_IDS,
+  VISUAL_CHARACTER_LABELS,
   VISUAL_DEVICE_PROFILES,
   VISUAL_ELEMENT_LABELS,
   VISUAL_SCREEN_LABELS,
@@ -55,6 +60,8 @@ type ReleaseHistoryEntry = {
   created_at: string;
   notes: string | null;
 };
+
+type VisualCharacterVariant = 'base' | VisualCharacterId;
 
 function clampInteger(value: string, fallback: number, min: number, max: number) {
   const parsed = Number.parseInt(value, 10);
@@ -80,6 +87,8 @@ export default function UiStudioScreen({navigation}: any) {
   const [showFullPreview, setShowFullPreview] = useState(false);
   const [previewInteracting, setPreviewInteracting] = useState(false);
   const [activeScreen, setActiveScreen] = useState<VisualScreenId>('level');
+  const [activeCharacterVariant, setActiveCharacterVariant] =
+    useState<VisualCharacterVariant>('base');
   const [selectedElementId, setSelectedElementId] = useState<VisualElementId>('header');
   const [previewProfileId, setPreviewProfileId] = useState('current');
   const [draftManifest, setDraftManifest] = useState<VisualConfigManifest>(
@@ -232,12 +241,39 @@ export default function UiStudioScreen({navigation}: any) {
     }
   }, [activeScreen, selectedElementId]);
 
+  const selectedCharacterIdForEdit =
+    activeCharacterVariant === 'base' ? null : activeCharacterVariant;
+
   const selectedRule = useMemo(() => {
-    const screen = draftManifest.screens[activeScreen] as {
-      elements: Record<string, typeof DEFAULT_VISUAL_ELEMENT_RULE>;
-    };
-    return screen.elements[selectedElementId] ?? DEFAULT_VISUAL_ELEMENT_RULE;
-  }, [activeScreen, draftManifest, selectedElementId]);
+    return getVisualElementRule(
+      draftManifest,
+      activeScreen,
+      selectedElementId,
+      selectedCharacterIdForEdit,
+    );
+  }, [
+    activeScreen,
+    draftManifest,
+    selectedCharacterIdForEdit,
+    selectedElementId,
+  ]);
+
+  const hasSelectedCharacterOverride = useMemo(() => {
+    if (!selectedCharacterIdForEdit) {
+      return false;
+    }
+    return hasVisualElementCharacterOverride(
+      draftManifest,
+      activeScreen,
+      selectedElementId,
+      selectedCharacterIdForEdit,
+    );
+  }, [
+    activeScreen,
+    draftManifest,
+    selectedCharacterIdForEdit,
+    selectedElementId,
+  ]);
 
   const numericPreviewWorld = Math.max(1, Number.parseInt(previewWorld, 10) || 1);
   const numericPreviewLevelId = Math.max(1, Number.parseInt(previewLevelId, 10) || 1);
@@ -351,15 +387,84 @@ export default function UiStudioScreen({navigation}: any) {
       screenId: VisualScreenId,
       elementId: VisualElementId,
       patch: Partial<typeof DEFAULT_VISUAL_ELEMENT_RULE>,
+      characterVariant: VisualCharacterVariant = 'base',
     ) => {
       mutateDraft(next => {
         const screen = next.screens[screenId] as {
           elements: Record<string, typeof DEFAULT_VISUAL_ELEMENT_RULE>;
+          characterElements?: Partial<
+            Record<
+              VisualCharacterId,
+              Record<string, typeof DEFAULT_VISUAL_ELEMENT_RULE>
+            >
+          >;
         };
-        screen.elements[elementId] = {
-          ...screen.elements[elementId],
-          ...patch,
+        if (characterVariant === 'base') {
+          screen.elements[elementId] = {
+            ...screen.elements[elementId],
+            ...patch,
+          };
+          return;
+        }
+
+        const currentRule = getVisualElementRule(
+          next,
+          screenId,
+          elementId,
+          characterVariant,
+        );
+        const nextCharacterElements = {
+          ...(screen.characterElements ?? {}),
         };
+        nextCharacterElements[characterVariant] = {
+          ...(nextCharacterElements[characterVariant] ?? {}),
+          [elementId]: {
+            ...currentRule,
+            ...patch,
+          },
+        };
+        screen.characterElements = nextCharacterElements;
+      });
+    },
+    [mutateDraft],
+  );
+
+  const resetElementRule = useCallback(
+    (
+      screenId: VisualScreenId,
+      elementId: VisualElementId,
+      characterVariant: VisualCharacterVariant = 'base',
+    ) => {
+      mutateDraft(next => {
+        const screen = next.screens[screenId] as {
+          elements: Record<string, typeof DEFAULT_VISUAL_ELEMENT_RULE>;
+          characterElements?: Partial<
+            Record<
+              VisualCharacterId,
+              Record<string, typeof DEFAULT_VISUAL_ELEMENT_RULE>
+            >
+          >;
+        };
+        if (characterVariant === 'base') {
+          screen.elements[elementId] = {
+            ...DEFAULT_VISUAL_ELEMENT_RULE,
+          };
+          return;
+        }
+
+        const currentCharacterElements = {
+          ...(screen.characterElements ?? {}),
+        };
+        const currentOverrides = {
+          ...(currentCharacterElements[characterVariant] ?? {}),
+        };
+        delete currentOverrides[elementId];
+        if (Object.keys(currentOverrides).length === 0) {
+          delete currentCharacterElements[characterVariant];
+        } else {
+          currentCharacterElements[characterVariant] = currentOverrides;
+        }
+        screen.characterElements = currentCharacterElements;
       });
     },
     [mutateDraft],
@@ -641,7 +746,47 @@ export default function UiStudioScreen({navigation}: any) {
         </GamePanel>
 
         <GamePanel>
-          <Text style={styles.sectionTitle}>프리뷰 기준 기기</Text>
+          <Text style={styles.sectionTitle}>직업별 오버라이드</Text>
+          <Text style={styles.supportText}>
+            공통 값을 기본으로 두고, 직업별로 필요한 요소만 따로 조정할 수 있습니다.
+          </Text>
+          <View style={styles.chipRow}>
+            <TouchableOpacity
+              style={[
+                styles.chip,
+                activeCharacterVariant === 'base' && styles.chipActive,
+              ]}
+              onPress={() => setActiveCharacterVariant('base')}>
+              <Text
+                style={[
+                  styles.chipText,
+                  activeCharacterVariant === 'base' && styles.chipTextActive,
+                ]}>
+                공통
+              </Text>
+            </TouchableOpacity>
+            {VISUAL_CHARACTER_IDS.map(characterId => (
+              <TouchableOpacity
+                key={characterId}
+                style={[
+                  styles.chip,
+                  activeCharacterVariant === characterId && styles.chipActive,
+                ]}
+                onPress={() => setActiveCharacterVariant(characterId)}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    activeCharacterVariant === characterId && styles.chipTextActive,
+                  ]}>
+                  {VISUAL_CHARACTER_LABELS[characterId]}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </GamePanel>
+
+        <GamePanel>
+          <Text style={styles.sectionTitle}>프리뷰 기기 선택</Text>
           <Text style={styles.supportText}>
             현재 기기 프리뷰는 안전영역까지 포함한 실기기 비율로 그려집니다. 다른
             해상도는 시뮬레이션이고, 최종 검수는 현재 기기 전체화면 프리뷰 기준으로
@@ -735,6 +880,20 @@ export default function UiStudioScreen({navigation}: any) {
 
           <View style={styles.metricsCard}>
             <Text style={styles.metricTitle}>현재 프리뷰 기준</Text>
+            <Text style={styles.metricValue}>
+              편집 대상:{' '}
+              {selectedCharacterIdForEdit
+                ? VISUAL_CHARACTER_LABELS[selectedCharacterIdForEdit]
+                : '공통'}
+            </Text>
+            <Text style={styles.metricValue}>
+              값 출처:{' '}
+              {selectedCharacterIdForEdit
+                ? hasSelectedCharacterOverride
+                  ? '직업 전용 오버라이드'
+                  : '공통값 상속'
+                : '공통값'}
+            </Text>
             <Text style={styles.metricValue}>{formatViewport(activePreviewViewport)}</Text>
             <Text style={styles.metricValue}>
               저장 기준 viewport: {formatViewport(draftManifest.referenceViewport)}
@@ -768,6 +927,7 @@ export default function UiStudioScreen({navigation}: any) {
               screenId={activeScreen}
               manifest={draftManifest}
               assetUris={assetUris}
+              characterId={selectedCharacterIdForEdit}
               selectedElementId={selectedElementId}
               previewWorld={numericPreviewWorld}
               previewLevelId={numericPreviewLevelId}
@@ -776,10 +936,15 @@ export default function UiStudioScreen({navigation}: any) {
               displayScale={previewScale}
               onSelectElement={setSelectedElementId}
               onMoveElement={(elementId, nextOffsetX, nextOffsetY) =>
-                patchElementRule(activeScreen, elementId, {
-                  offsetX: nextOffsetX,
-                  offsetY: nextOffsetY,
-                })
+                patchElementRule(
+                  activeScreen,
+                  elementId,
+                  {
+                    offsetX: nextOffsetX,
+                    offsetY: nextOffsetY,
+                  },
+                  activeCharacterVariant,
+                )
               }
               onMeasureElement={handleMeasureElement}
               onInteractionChange={setPreviewInteracting}
@@ -812,6 +977,20 @@ export default function UiStudioScreen({navigation}: any) {
           <View style={styles.metricsCard}>
             <Text style={styles.metricTitle}>현재 값</Text>
             <Text style={styles.metricValue}>
+              편집 대상:{' '}
+              {selectedCharacterIdForEdit
+                ? VISUAL_CHARACTER_LABELS[selectedCharacterIdForEdit]
+                : '공통'}
+            </Text>
+            <Text style={styles.metricValue}>
+              값 출처:{' '}
+              {selectedCharacterIdForEdit
+                ? hasSelectedCharacterOverride
+                  ? '직업 전용 오버라이드'
+                  : '공통값 상속'
+                : '공통값'}
+            </Text>
+            <Text style={styles.metricValue}>
               X {selectedRule.offsetX} / Y {selectedRule.offsetY}
             </Text>
             <Text style={styles.metricValue}>
@@ -839,9 +1018,14 @@ export default function UiStudioScreen({navigation}: any) {
                   key={item.label}
                   style={styles.smallActionButton}
                   onPress={() =>
-                    patchElementRule(activeScreen, selectedElementId, {
-                      offsetX: selectedRule.offsetX + item.dx,
-                    })
+                    patchElementRule(
+                      activeScreen,
+                      selectedElementId,
+                      {
+                        offsetX: selectedRule.offsetX + item.dx,
+                      },
+                      activeCharacterVariant,
+                    )
                   }>
                   <Text style={styles.smallActionText}>{item.label}</Text>
                 </TouchableOpacity>
@@ -858,9 +1042,14 @@ export default function UiStudioScreen({navigation}: any) {
                   key={item.label}
                   style={styles.smallActionButton}
                   onPress={() =>
-                    patchElementRule(activeScreen, selectedElementId, {
-                      offsetY: selectedRule.offsetY + item.dy,
-                    })
+                    patchElementRule(
+                      activeScreen,
+                      selectedElementId,
+                      {
+                        offsetY: selectedRule.offsetY + item.dy,
+                      },
+                      activeCharacterVariant,
+                    )
                   }>
                   <Text style={styles.smallActionText}>{item.label}</Text>
                 </TouchableOpacity>
@@ -874,36 +1063,56 @@ export default function UiStudioScreen({navigation}: any) {
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    scale: selectedRule.scale - 0.05,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      scale: selectedRule.scale - 0.05,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>Scale -</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    scale: selectedRule.scale + 0.05,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      scale: selectedRule.scale + 0.05,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>Scale +</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    opacity: selectedRule.opacity - 0.05,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      opacity: selectedRule.opacity - 0.05,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>Opacity -</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    opacity: selectedRule.opacity + 0.05,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      opacity: selectedRule.opacity + 0.05,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>Opacity +</Text>
               </TouchableOpacity>
@@ -913,27 +1122,42 @@ export default function UiStudioScreen({navigation}: any) {
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    zIndex: selectedRule.zIndex - 1,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      zIndex: selectedRule.zIndex - 1,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>Z -</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    zIndex: selectedRule.zIndex + 1,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      zIndex: selectedRule.zIndex + 1,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>Z +</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    safeAreaAware: !selectedRule.safeAreaAware,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      safeAreaAware: !selectedRule.safeAreaAware,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>
                   {selectedRule.safeAreaAware ? 'Safe off' : 'Safe on'}
@@ -942,9 +1166,14 @@ export default function UiStudioScreen({navigation}: any) {
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(activeScreen, selectedElementId, {
-                    visible: !selectedRule.visible,
-                  })
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {
+                      visible: !selectedRule.visible,
+                    },
+                    activeCharacterVariant,
+                  )
                 }>
                 <Text style={styles.smallActionText}>
                   {selectedRule.visible ? '숨기기' : '보이기'}
@@ -953,10 +1182,10 @@ export default function UiStudioScreen({navigation}: any) {
               <TouchableOpacity
                 style={styles.smallActionButton}
                 onPress={() =>
-                  patchElementRule(
+                  resetElementRule(
                     activeScreen,
                     selectedElementId,
-                    DEFAULT_VISUAL_ELEMENT_RULE,
+                    activeCharacterVariant,
                   )
                 }>
                 <Text style={styles.smallActionText}>요소 초기화</Text>
@@ -1165,6 +1394,7 @@ export default function UiStudioScreen({navigation}: any) {
             screenId={activeScreen}
             manifest={draftManifest}
             assetUris={assetUris}
+            characterId={selectedCharacterIdForEdit}
             selectedElementId={selectedElementId}
             previewWorld={numericPreviewWorld}
             previewLevelId={numericPreviewLevelId}
@@ -1173,10 +1403,15 @@ export default function UiStudioScreen({navigation}: any) {
             displayScale={fullPreviewScale}
             onSelectElement={setSelectedElementId}
             onMoveElement={(elementId, nextOffsetX, nextOffsetY) =>
-              patchElementRule(activeScreen, elementId, {
-                offsetX: nextOffsetX,
-                offsetY: nextOffsetY,
-              })
+              patchElementRule(
+                activeScreen,
+                elementId,
+                {
+                  offsetX: nextOffsetX,
+                  offsetY: nextOffsetY,
+                },
+                activeCharacterVariant,
+              )
             }
             onMeasureElement={handleMeasureElement}
             onInteractionChange={setPreviewInteracting}

@@ -1,5 +1,12 @@
-import React, { useRef, forwardRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import React, { useEffect, useRef, forwardRef } from 'react';
+import {
+  Animated,
+  Easing,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Text,
+} from 'react-native';
 import { ROWS, COLS } from '../constants';
 import { Board as BoardType, CellValue } from '../game/engine';
 import { type VisualViewport } from '../game/visualConfig';
@@ -67,6 +74,8 @@ interface BoardProps {
   backgroundColor?: string;
   viewportWidth?: number;
   viewport?: Partial<VisualViewport>;
+  placementEffectCells?: { row: number; col: number }[];
+  placementEffectId?: number | null;
 }
 
 const Cell = React.memo(function Cell({
@@ -78,6 +87,7 @@ const Cell = React.memo(function Cell({
   previewItemType,
   isInvalid,
   size,
+  placementVfxKey,
 }: {
   cell: CellValue;
   isPreview: boolean;
@@ -87,7 +97,34 @@ const Cell = React.memo(function Cell({
   previewItemType?: string;
   isInvalid: boolean;
   size: number;
+  placementVfxKey?: number | null;
 }) {
+  const placementFlash = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (placementVfxKey == null || !cell) {
+      return;
+    }
+
+    placementFlash.stopAnimation();
+    placementFlash.setValue(0);
+    Animated.timing(placementFlash, {
+      toValue: 1,
+      duration: 520,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [cell, placementFlash, placementVfxKey]);
+
+  const placementFlashOpacity = placementFlash.interpolate({
+    inputRange: [0, 0.14, 0.58, 1],
+    outputRange: [0, 0.9, 0.28, 0],
+  });
+  const placementGlowOpacity = placementFlash.interpolate({
+    inputRange: [0, 0.18, 0.72, 1],
+    outputRange: [0, 0.62, 0.2, 0],
+  });
+
   if (!cell && !isPreview) {
     return (
       <View
@@ -167,6 +204,31 @@ const Cell = React.memo(function Cell({
             backgroundColor: '#6b7280',
           }}
         />
+        {placementVfxKey != null && (
+          <>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.placementCellGlow,
+                {
+                  borderRadius: 3,
+                  opacity: placementGlowOpacity,
+                  transform: [{ scale: 1.18 }],
+                },
+              ]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.placementCellFlash,
+                {
+                  borderRadius: 3,
+                  opacity: placementFlashOpacity,
+                },
+              ]}
+            />
+          </>
+        )}
       </View>
     );
   }
@@ -221,6 +283,35 @@ const Cell = React.memo(function Cell({
           backgroundColor: 'rgba(255,255,255,0.3)',
         }}
       />
+      {placementVfxKey != null && (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.placementCellGlow,
+              {
+                borderRadius: 4,
+                opacity: placementGlowOpacity,
+                transform: [{ scale: 1.18 }],
+              },
+            ]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.placementCellFlash,
+              {
+                top: bevel,
+                left: bevel,
+                right: bevel,
+                bottom: bevel,
+                borderRadius: 2,
+                opacity: placementFlashOpacity,
+              },
+            ]}
+          />
+        </>
+      )}
       <SpecialBlockBadge
         isGem={cell?.isGem}
         isItem={cell?.isItem}
@@ -248,6 +339,8 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
     backgroundColor = '#0a0820',
     viewportWidth,
     viewport,
+    placementEffectCells = [],
+    placementEffectId = null,
   },
   ref,
 ) {
@@ -290,6 +383,12 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
     clearGuideMap.current.add(`${g.row},${g.col}`);
   }
 
+  const placementEffectMap = useRef(new Set<string>());
+  placementEffectMap.current.clear();
+  for (const p of placementEffectCells) {
+    placementEffectMap.current.add(`${p.row},${p.col}`);
+  }
+
   return (
     <View
       ref={ref}
@@ -316,6 +415,9 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
             const previewCell = previewMap.current.get(key);
             const isPreview = previewCell !== undefined;
             const isClearGuide = clearGuideMap.current.has(key);
+            const placementVfxKey = placementEffectMap.current.has(key)
+              ? placementEffectId
+              : null;
             const cellNode = (
               <View key={c} style={{ width: cellSize, height: cellSize }}>
                 <Cell
@@ -327,6 +429,7 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
                   previewItemType={previewCell?.itemType}
                   isInvalid={invalidPreview && isPreview}
                   size={cellSize}
+                  placementVfxKey={placementVfxKey}
                 />
                 {isClearGuide && (
                   <View
@@ -408,6 +511,18 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(191, 132, 74, 0.9)',
     backgroundColor: 'rgba(21, 16, 44, 0.08)',
+  },
+  placementCellGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(210,255,150,0.3)',
+    shadowColor: '#d9ff8f',
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  placementCellFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,220,0.72)',
   },
   corner: {
     position: 'absolute',

@@ -1,5 +1,12 @@
 import React, { useRef, useMemo, useEffect } from 'react';
-import { View, StyleSheet, PanResponder, Animated } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  PanResponder,
+  Animated,
+  type GestureResponderEvent,
+  type PanResponderGestureState,
+} from 'react-native';
 import { Piece, getPieceRewardMarkerCell } from '../game/engine';
 import { getBoardMetrics } from './Board';
 import { getGameplayLayoutScale } from '../game/layoutScale';
@@ -136,6 +143,7 @@ export default function DraggablePiece({
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const dragCenterOffsetRef = useRef({ x: 0, y: 0 });
   const layoutScale = getGameplayLayoutScale(viewport);
   const boardMetrics = getBoardMetrics(viewport, { compact: boardCompact });
   const blockSize = Math.max(
@@ -168,6 +176,30 @@ export default function DraggablePiece({
     pieceRef.current = piece;
   });
 
+  const getLiftedPieceCenter = useMemo(
+    () =>
+      (evt: GestureResponderEvent, gs: Partial<PanResponderGestureState>) => {
+        const pageX =
+          typeof gs.moveX === 'number' && gs.moveX !== 0
+            ? gs.moveX
+            : typeof evt.nativeEvent.pageX === 'number'
+              ? evt.nativeEvent.pageX
+              : gs.x0 ?? 0;
+        const pageY =
+          typeof gs.moveY === 'number' && gs.moveY !== 0
+            ? gs.moveY
+            : typeof evt.nativeEvent.pageY === 'number'
+              ? evt.nativeEvent.pageY
+              : gs.y0 ?? 0;
+
+        return {
+          x: pageX + dragCenterOffsetRef.current.x,
+          y: pageY + dragCenterOffsetRef.current.y + dragOffsetY,
+        };
+      },
+    [dragOffsetY],
+  );
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -176,7 +208,20 @@ export default function DraggablePiece({
           !!pieceRef.current && (Math.abs(gs.dx) > 5 || Math.abs(gs.dy) > 5),
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
-        onPanResponderGrant: () => {
+        onPanResponderGrant: evt => {
+          const locationX =
+            typeof evt.nativeEvent.locationX === 'number'
+              ? evt.nativeEvent.locationX
+              : traySlotSize / 2;
+          const locationY =
+            typeof evt.nativeEvent.locationY === 'number'
+              ? evt.nativeEvent.locationY
+              : traySlotSize / 2;
+          dragCenterOffsetRef.current = {
+            x: traySlotSize / 2 - locationX,
+            y: traySlotSize / 2 - locationY,
+          };
+
           pan.setValue({ x: 0, y: dragOffsetY });
           Animated.spring(scale, {
             toValue: 1.5,
@@ -184,20 +229,22 @@ export default function DraggablePiece({
             friction: 8,
           }).start();
           callbacksRef.current.onDragStart();
+          const liftedCenter = getLiftedPieceCenter(evt, {
+            moveX: evt.nativeEvent.pageX,
+            moveY: evt.nativeEvent.pageY,
+          });
+          callbacksRef.current.onDragMove(liftedCenter.x, liftedCenter.y);
         },
         onPanResponderMove: (evt, gs) => {
           pan.setValue({
             x: gs.dx,
             y: gs.dy + dragOffsetY,
           });
-          callbacksRef.current.onDragMove(
-            gs.moveX || evt.nativeEvent.pageX,
-            (gs.moveY || evt.nativeEvent.pageY) + dragOffsetY,
-          );
+          const liftedCenter = getLiftedPieceCenter(evt, gs);
+          callbacksRef.current.onDragMove(liftedCenter.x, liftedCenter.y);
         },
         onPanResponderRelease: (evt, gs) => {
-          const finalX = gs.moveX || evt.nativeEvent.pageX;
-          const finalY = (gs.moveY || evt.nativeEvent.pageY) + dragOffsetY;
+          const liftedCenter = getLiftedPieceCenter(evt, gs);
           Animated.spring(scale, {
             toValue: 1,
             useNativeDriver: false,
@@ -208,7 +255,7 @@ export default function DraggablePiece({
             useNativeDriver: false,
             friction: 6,
           }).start();
-          callbacksRef.current.onDragEnd(finalX, finalY);
+          callbacksRef.current.onDragEnd(liftedCenter.x, liftedCenter.y);
         },
         onPanResponderTerminate: () => {
           Animated.spring(scale, {
@@ -222,7 +269,7 @@ export default function DraggablePiece({
           callbacksRef.current.onDragCancel();
         },
       }),
-    [dragOffsetY, pan, scale],
+    [dragOffsetY, getLiftedPieceCenter, pan, scale, traySlotSize],
   );
 
   if (!piece) {

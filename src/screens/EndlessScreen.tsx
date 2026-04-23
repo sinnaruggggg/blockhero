@@ -23,7 +23,7 @@ import BoardSkillCastEffect, {
 } from '../components/BoardSkillCastEffect';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
-import VisualElementView, {
+import BaseVisualElementView, {
   buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
@@ -48,6 +48,7 @@ import {
   placePiece,
   checkAndClearLines,
   countBlocks,
+  canPlacePiece,
   canPlaceAnyPiece,
   getDifficulty,
   getEndlessLevel,
@@ -141,6 +142,7 @@ export default function EndlessScreen({ navigation }: any) {
   );
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [gameOver, setGameOver] = useState(false);
+  const [selectedCharacterId, setSelectedCharacterId] = useState('knight');
   const [boardLayout, setBoardLayout] = useState<MeasuredBoardLayout | null>(
     null,
   );
@@ -245,9 +247,10 @@ export default function EndlessScreen({ navigation }: any) {
       visualManifest,
       'endless',
       'next_preview',
+      selectedCharacterId,
     );
     return nextPreviewRule.visible;
-  }, [visualManifest]);
+  }, [selectedCharacterId, visualManifest]);
 
   const showPlacementEffect = useCallback(
     (piece: Piece, row: number, col: number) => {
@@ -416,6 +419,7 @@ export default function EndlessScreen({ navigation }: any) {
       gameDataRef.current = loadedGameData;
       setRunItemLoadout(buildRunItemLoadout(loadedGameData));
       skillNoticeModeRef.current = noticeMode;
+      setSelectedCharacterId(charId ?? 'knight');
 
       setActiveSkin(skinData.activeSkinId);
       setSkinBoardBg(getSkinBoardBg());
@@ -699,6 +703,9 @@ export default function EndlessScreen({ navigation }: any) {
       if (!piece) {
         return;
       }
+      if (!canPlacePiece(board, piece.shape, row, col)) {
+        return;
+      }
 
       let newBoard = placePiece(board, piece, row, col);
       showPlacementEffect(piece, row, col);
@@ -910,8 +917,14 @@ export default function EndlessScreen({ navigation }: any) {
     visualManifest,
     'endless',
     'next_preview',
+    selectedCharacterId,
   );
-  const boardRule = getVisualElementRule(visualManifest, 'endless', 'board');
+  const boardRule = getVisualElementRule(
+    visualManifest,
+    'endless',
+    'board',
+    selectedCharacterId,
+  );
   const useCompactLayout = shouldUseCompactEndlessLayout();
   const dragDrop = useDragDrop(
     board,
@@ -1031,6 +1044,21 @@ export default function EndlessScreen({ navigation }: any) {
     visualManifest,
     'endless',
     'combo_gauge',
+    selectedCharacterId,
+  );
+  const VisualElementView = React.useMemo(
+    () =>
+      function CharacterVisualElementView(
+        props: React.ComponentProps<typeof BaseVisualElementView>,
+      ) {
+        return (
+          <BaseVisualElementView
+            characterId={selectedCharacterId}
+            {...props}
+          />
+        );
+      },
+    [selectedCharacterId],
   );
   const feverDurationMs =
     FEVER_DURATION +
@@ -1089,17 +1117,6 @@ export default function EndlessScreen({ navigation }: any) {
       >
         <Text style={styles.milestoneBannerText}>{milestoneText}</Text>
       </Animated.View>
-
-      {placementEffect && (
-        <PiecePlacementEffect
-          cells={placementEffect.cells}
-          onDone={() =>
-            setPlacementEffect(current =>
-              current?.id === placementEffect.id ? null : current,
-            )
-          }
-        />
-      )}
 
       {boardSkillCastEffect && (
         <BoardSkillCastEffect
@@ -1180,16 +1197,30 @@ export default function EndlessScreen({ navigation }: any) {
                 )}
               />
             )}
-            <Board
-              ref={boardRef}
-              board={board}
-              viewport={visualViewport}
-              backgroundColor={skinBoardBg}
-              compact={useCompactLayout}
-              previewCells={dragDrop.previewCells}
-              invalidPreview={dragDrop.invalidPreview}
-              clearGuideCells={dragDrop.clearGuideCells}
-            />
+            <View style={styles.boardSurface}>
+              <Board
+                ref={boardRef}
+                board={board}
+                viewport={visualViewport}
+                backgroundColor={skinBoardBg}
+                compact={useCompactLayout}
+                previewCells={dragDrop.previewCells}
+                invalidPreview={dragDrop.invalidPreview}
+                clearGuideCells={dragDrop.clearGuideCells}
+                placementEffectCells={placementEffect?.cells}
+                placementEffectId={placementEffect?.id ?? null}
+              />
+              {placementEffect && (
+                <PiecePlacementEffect
+                  cells={placementEffect.cells}
+                  onDone={() =>
+                    setPlacementEffect(current =>
+                      current?.id === placementEffect.id ? null : current,
+                    )
+                  }
+                />
+              )}
+            </View>
             <VisualElementView
               screenId="endless"
               elementId="skill_effect"
@@ -1279,6 +1310,11 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   boardVisualAnchor: {
+    position: 'relative',
+    alignSelf: 'center',
+  },
+  boardSurface: {
+    position: 'relative',
     alignSelf: 'center',
   },
   pieceTraySection: {

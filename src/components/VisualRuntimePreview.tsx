@@ -24,6 +24,7 @@ import {
   getRaidBackgroundOverride,
   getVisualElementRule,
   resolveVisualOffset,
+  type VisualCharacterId,
   type VisualConfigManifest,
   type VisualElementFrame,
   type VisualElementId,
@@ -143,7 +144,7 @@ function buildSmallPreviewBoard() {
   return board;
 }
 
-function EditorFrame({
+function BaseEditorFrame({
   label,
   selected,
   elementId,
@@ -151,6 +152,7 @@ function EditorFrame({
   displayScale,
   manifest,
   screenId,
+  characterId,
   onSelect,
   onMove,
   onMeasure,
@@ -165,6 +167,7 @@ function EditorFrame({
   displayScale: number;
   manifest: VisualConfigManifest;
   screenId: VisualScreenId;
+  characterId?: VisualCharacterId | string | null;
   onSelect: (elementId: VisualElementId) => void;
   onMove: (elementId: VisualElementId, nextX: number, nextY: number) => void;
   onMeasure?: (
@@ -178,7 +181,7 @@ function EditorFrame({
   style?: any;
   children: React.ReactNode;
 }) {
-  const rule = getVisualElementRule(manifest, screenId, elementId);
+  const rule = getVisualElementRule(manifest, screenId, elementId, characterId);
   const resolvedOffset = resolveVisualOffset(
     rule.offsetX,
     rule.offsetY,
@@ -315,6 +318,7 @@ export default function VisualRuntimePreview({
   onMoveElement,
   onMeasureElement,
   onInteractionChange,
+  characterId,
 }: {
   screenId: VisualScreenId;
   manifest: VisualConfigManifest;
@@ -340,6 +344,7 @@ export default function VisualRuntimePreview({
     },
   ) => void;
   onInteractionChange?: (active: boolean) => void;
+  characterId?: VisualCharacterId | string | null;
 }) {
   const board = useMemo(() => buildPreviewBoard(), []);
   const enemyBoard = useMemo(() => buildSmallPreviewBoard(), []);
@@ -410,30 +415,41 @@ export default function VisualRuntimePreview({
     paddingBottom: viewport.safeBottom + scaleGameplayUnit(46, viewport, 16),
   };
 
+  const editorCharacterId = characterId ?? null;
+
+  const EditorFrame = (
+    props: Omit<React.ComponentProps<typeof BaseEditorFrame>, 'characterId'>,
+  ) => <BaseEditorFrame characterId={editorCharacterId} {...props} />;
+
   const comboGaugeLevel = getVisualElementRule(
     manifest,
     'level',
     'combo_gauge',
+    editorCharacterId,
   );
   const comboGaugeEndless = getVisualElementRule(
     manifest,
     'endless',
     'combo_gauge',
+    editorCharacterId,
   );
   const endlessCompactLayout = getVisualElementRule(
     manifest,
     'endless',
     'next_preview',
+    editorCharacterId,
   ).visible;
   const comboGaugeRaidNormal = getVisualElementRule(
     manifest,
     'raidNormal',
     'combo_gauge',
+    editorCharacterId,
   );
   const comboGaugeRaidBoss = getVisualElementRule(
     manifest,
     'raidBoss',
     'combo_gauge',
+    editorCharacterId,
   );
   const reportLevelMeasure = useMemo(
     () =>

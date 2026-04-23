@@ -1,9 +1,16 @@
-﻿export type VisualScreenId =
+export type VisualScreenId =
   | 'level'
   | 'endless'
   | 'battle'
   | 'raidNormal'
   | 'raidBoss';
+
+export type VisualCharacterId =
+  | 'knight'
+  | 'mage'
+  | 'archer'
+  | 'rogue'
+  | 'healer';
 
 export type VisualViewport = {
   width: number;
@@ -82,6 +89,10 @@ export type VisualElementRule = {
   safeAreaAware: boolean;
 };
 
+export type VisualCharacterElementOverrides<T extends string> = Partial<
+  Record<VisualCharacterId, Partial<Record<T, VisualElementRule>>>
+>;
+
 export type VisualBackgroundOverride = {
   assetKey: string | null;
   tintColor: string;
@@ -91,6 +102,7 @@ export type VisualBackgroundOverride = {
 
 export type LevelScreenVisualConfig = {
   elements: Record<LevelElementId, VisualElementRule>;
+  characterElements: VisualCharacterElementOverrides<LevelElementId>;
   backgrounds: {
     byWorld: Record<string, VisualBackgroundOverride>;
     byLevel: Record<string, VisualBackgroundOverride>;
@@ -99,14 +111,17 @@ export type LevelScreenVisualConfig = {
 
 export type EndlessScreenVisualConfig = {
   elements: Record<EndlessElementId, VisualElementRule>;
+  characterElements: VisualCharacterElementOverrides<EndlessElementId>;
 };
 
 export type BattleScreenVisualConfig = {
   elements: Record<BattleElementId, VisualElementRule>;
+  characterElements: VisualCharacterElementOverrides<BattleElementId>;
 };
 
 export type RaidScreenVisualConfig = {
   elements: Record<RaidElementId, VisualElementRule>;
+  characterElements: VisualCharacterElementOverrides<RaidElementId>;
   backgrounds: {
     byBossStage: Record<string, VisualBackgroundOverride>;
   };
@@ -143,6 +158,22 @@ export const VISUAL_SCREEN_LABELS: Record<VisualScreenId, string> = {
   battle: '대전 모드',
   raidNormal: '일반 레이드',
   raidBoss: '보스 레이드',
+};
+
+export const VISUAL_CHARACTER_IDS: VisualCharacterId[] = [
+  'knight',
+  'mage',
+  'archer',
+  'rogue',
+  'healer',
+];
+
+export const VISUAL_CHARACTER_LABELS: Record<VisualCharacterId, string> = {
+  knight: '기사',
+  mage: '마법사',
+  archer: '궁수',
+  rogue: '도적',
+  healer: '힐러',
 };
 
 export const DEFAULT_VISUAL_REFERENCE_VIEWPORT: VisualViewport = {
@@ -288,6 +319,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'item_bar',
         'combo_gauge',
       ]),
+      characterElements: {},
       backgrounds: {
         byWorld: {},
         byLevel: {},
@@ -305,6 +337,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'item_bar',
         'combo_gauge',
       ]),
+      characterElements: {},
     },
     battle: {
       elements: createRules<BattleElementId>([
@@ -316,6 +349,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'skill_effect',
         'piece_tray',
       ]),
+      characterElements: {},
     },
     raidNormal: {
       elements: createRules<RaidElementId>([
@@ -328,6 +362,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'piece_tray',
         'combo_gauge',
       ]),
+      characterElements: {},
       backgrounds: {
         byBossStage: {},
       },
@@ -343,6 +378,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
         'piece_tray',
         'combo_gauge',
       ]),
+      characterElements: {},
       backgrounds: {
         byBossStage: {},
       },
@@ -551,6 +587,34 @@ function sanitizeElementMap<T extends string>(
   return result;
 }
 
+function sanitizeCharacterElementMap<T extends string>(
+  defaults: Record<T, VisualElementRule>,
+  values?: VisualCharacterElementOverrides<T> | null,
+): VisualCharacterElementOverrides<T> {
+  const result: VisualCharacterElementOverrides<T> = {};
+
+  VISUAL_CHARACTER_IDS.forEach(characterId => {
+    const source = values?.[characterId];
+    if (!source) {
+      return;
+    }
+
+    const entries = {} as Partial<Record<T, VisualElementRule>>;
+    (Object.keys(source) as T[]).forEach(key => {
+      if (!Object.prototype.hasOwnProperty.call(defaults, key)) {
+        return;
+      }
+      entries[key] = sanitizeElementRule(source[key]);
+    });
+
+    if (Object.keys(entries).length > 0) {
+      result[characterId] = entries;
+    }
+  });
+
+  return result;
+}
+
 function sanitizeBackgroundMap(
   values?: Record<string, Partial<VisualBackgroundOverride>> | null,
 ) {
@@ -582,6 +646,12 @@ export function sanitizeVisualConfigManifest(
             | Partial<Record<LevelElementId, Partial<VisualElementRule>>>
             | undefined,
         ),
+        characterElements: sanitizeCharacterElementMap(
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.level.elements,
+          value?.screens?.level?.characterElements as
+            | VisualCharacterElementOverrides<LevelElementId>
+            | undefined,
+        ),
         backgrounds: {
           byWorld: sanitizeBackgroundMap(
             value?.screens?.level?.backgrounds?.byWorld,
@@ -598,12 +668,24 @@ export function sanitizeVisualConfigManifest(
             | Partial<Record<EndlessElementId, Partial<VisualElementRule>>>
             | undefined,
         ),
+        characterElements: sanitizeCharacterElementMap(
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.endless.elements,
+          value?.screens?.endless?.characterElements as
+            | VisualCharacterElementOverrides<EndlessElementId>
+            | undefined,
+        ),
       },
       battle: {
         elements: sanitizeElementMap(
           DEFAULT_VISUAL_CONFIG_MANIFEST.screens.battle.elements,
           value?.screens?.battle?.elements as
             | Partial<Record<BattleElementId, Partial<VisualElementRule>>>
+            | undefined,
+        ),
+        characterElements: sanitizeCharacterElementMap(
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.battle.elements,
+          value?.screens?.battle?.characterElements as
+            | VisualCharacterElementOverrides<BattleElementId>
             | undefined,
         ),
       },
@@ -613,6 +695,13 @@ export function sanitizeVisualConfigManifest(
           (value?.screens?.raidNormal?.elements ??
             legacyRaidScreen?.elements) as
             | Partial<Record<RaidElementId, Partial<VisualElementRule>>>
+            | undefined,
+        ),
+        characterElements: sanitizeCharacterElementMap(
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidNormal.elements,
+          (value?.screens?.raidNormal?.characterElements ??
+            legacyRaidScreen?.characterElements) as
+            | VisualCharacterElementOverrides<RaidElementId>
             | undefined,
         ),
         backgrounds: {
@@ -627,6 +716,13 @@ export function sanitizeVisualConfigManifest(
           DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidBoss.elements,
           (value?.screens?.raidBoss?.elements ?? legacyRaidScreen?.elements) as
             | Partial<Record<RaidElementId, Partial<VisualElementRule>>>
+            | undefined,
+        ),
+        characterElements: sanitizeCharacterElementMap(
+          DEFAULT_VISUAL_CONFIG_MANIFEST.screens.raidBoss.elements,
+          (value?.screens?.raidBoss?.characterElements ??
+            legacyRaidScreen?.characterElements) as
+            | VisualCharacterElementOverrides<RaidElementId>
             | undefined,
         ),
         backgrounds: {
@@ -705,15 +801,58 @@ export function collectReferencedVisualAssetKeys(
   return Array.from(keys);
 }
 
+export function normalizeVisualCharacterId(
+  value?: string | null,
+): VisualCharacterId | null {
+  if (!value) {
+    return null;
+  }
+  return VISUAL_CHARACTER_IDS.includes(value as VisualCharacterId)
+    ? (value as VisualCharacterId)
+    : null;
+}
+
 export function getVisualElementRule(
   manifest: VisualConfigManifest,
   screenId: VisualScreenId,
   elementId: VisualElementId,
+  characterId?: string | null,
 ): VisualElementRule {
   const screen = manifest.screens[screenId] as {
     elements: Record<string, VisualElementRule>;
+    characterElements?: Partial<
+      Record<string, Partial<Record<string, VisualElementRule>>>
+    >;
   };
+  const normalizedCharacterId = normalizeVisualCharacterId(characterId);
+  if (normalizedCharacterId) {
+    const overrideRule =
+      screen?.characterElements?.[normalizedCharacterId]?.[elementId];
+    if (overrideRule) {
+      return overrideRule;
+    }
+  }
   return screen?.elements?.[elementId] ?? DEFAULT_VISUAL_ELEMENT_RULE;
+}
+
+export function hasVisualElementCharacterOverride(
+  manifest: VisualConfigManifest,
+  screenId: VisualScreenId,
+  elementId: VisualElementId,
+  characterId?: string | null,
+) {
+  const normalizedCharacterId = normalizeVisualCharacterId(characterId);
+  if (!normalizedCharacterId) {
+    return false;
+  }
+  const screen = manifest.screens[screenId] as {
+    characterElements?: Partial<
+      Record<string, Partial<Record<string, VisualElementRule>>>
+    >;
+  };
+  return Boolean(
+    screen?.characterElements?.[normalizedCharacterId]?.[elementId],
+  );
 }
 
 export function buildVisualTintColor(color: string, opacity: number) {

@@ -25,7 +25,7 @@ import NextPiecePreview from '../components/NextPiecePreview';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
-import VisualElementView from '../components/VisualElementView';
+import BaseVisualElementView from '../components/VisualElementView';
 import { useBattleNotice } from '../hooks/useBattleNotice';
 import { useDragDrop } from '../game/useDragDrop';
 import { ATTACKS } from '../constants';
@@ -37,6 +37,7 @@ import {
   placePiece,
   checkAndClearLines,
   countBlocks,
+  canPlacePiece,
   canPlaceAnyPiece,
   generateAttackLines,
   Piece,
@@ -458,6 +459,7 @@ export default function BattleScreen({ route, navigation }: any) {
   const [attackPoints, setAttackPoints] = useState(0);
   const [round, setRound] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [selectedCharacterId, setSelectedCharacterId] = useState('knight');
   const [opponentName, setOpponentName] = useState(t('battle.opponent'));
   const [result, setResult] = useState<'win' | 'lose' | null>(null);
   const [boardLayout, setBoardLayout] = useState<MeasuredBoardLayout | null>(
@@ -545,18 +547,19 @@ export default function BattleScreen({ route, navigation }: any) {
     battleResultSubmittedRef.current = false;
     (async () => {
       try {
-        const [playerId, nickname, selectedCharacterId] = await Promise.all([
+        const [playerId, nickname, loadedCharacterId] = await Promise.all([
           getPlayerId(),
           getNickname(),
           getSelectedCharacter(),
         ]);
         playerIdRef.current = playerId;
         nicknameRef.current = nickname;
-        const characterData = selectedCharacterId
-          ? await loadCharacterData(selectedCharacterId)
+        setSelectedCharacterId(loadedCharacterId ?? 'knight');
+        const characterData = loadedCharacterId
+          ? await loadCharacterData(loadedCharacterId)
           : null;
         skillEffectsRef.current = getCharacterSkillEffects(
-          selectedCharacterId,
+          loadedCharacterId,
           characterData,
           { mode: 'battle' },
         );
@@ -1082,6 +1085,7 @@ export default function BattleScreen({ route, navigation }: any) {
       if (gameOverRef.current) return;
       const piece = pieces[pieceIndex];
       if (!piece) return;
+      if (!canPlacePiece(board, piece.shape, row, col)) return;
 
       let newBoard = placePiece(board, piece, row, col);
       showPlacementEffect(piece, row, col);
@@ -1221,6 +1225,20 @@ export default function BattleScreen({ route, navigation }: any) {
           Math.min(3, skillEffectsRef.current.previewCountBonus),
         )
       : [];
+  const VisualElementView = React.useMemo(
+    () =>
+      function CharacterVisualElementView(
+        props: React.ComponentProps<typeof BaseVisualElementView>,
+      ) {
+        return (
+          <BaseVisualElementView
+            characterId={selectedCharacterId}
+            {...props}
+          />
+        );
+      },
+    [selectedCharacterId],
+  );
 
   return (
     <SafeAreaView
@@ -1331,15 +1349,29 @@ export default function BattleScreen({ route, navigation }: any) {
               style={styles.boardVisualAnchor}
               onLayout={handleBoardLayout}
             >
-              <Board
-                ref={boardRef}
-                board={board}
-                viewport={visualViewport}
-                compact
-                previewCells={dragDrop.previewCells}
-                invalidPreview={dragDrop.invalidPreview}
-                clearGuideCells={dragDrop.clearGuideCells}
-              />
+              <View style={styles.boardSurface}>
+                <Board
+                  ref={boardRef}
+                  board={board}
+                  viewport={visualViewport}
+                  compact
+                  previewCells={dragDrop.previewCells}
+                  invalidPreview={dragDrop.invalidPreview}
+                  clearGuideCells={dragDrop.clearGuideCells}
+                  placementEffectCells={placementEffect?.cells}
+                  placementEffectId={placementEffect?.id ?? null}
+                />
+                {placementEffect && (
+                  <PiecePlacementEffect
+                    cells={placementEffect.cells}
+                    onDone={() =>
+                      setPlacementEffect(current =>
+                        current?.id === placementEffect.id ? null : current,
+                      )
+                    }
+                  />
+                )}
+              </View>
               <VisualElementView
                 screenId="battle"
                 elementId="skill_effect"
@@ -1375,17 +1407,6 @@ export default function BattleScreen({ route, navigation }: any) {
         </View>
         </VisualElementView>
       </View>
-
-      {placementEffect && (
-        <PiecePlacementEffect
-          cells={placementEffect.cells}
-          onDone={() =>
-            setPlacementEffect(current =>
-              current?.id === placementEffect.id ? null : current,
-            )
-          }
-        />
-      )}
 
       {boardSkillCastEffect && (
         <BoardSkillCastEffect
@@ -1538,6 +1559,11 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   boardVisualAnchor: {
+    position: 'relative',
+    alignSelf: 'center',
+  },
+  boardSurface: {
+    position: 'relative',
     alignSelf: 'center',
   },
   pieceTraySection: {

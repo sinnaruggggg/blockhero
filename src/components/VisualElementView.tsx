@@ -11,6 +11,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
   getVisualElementRule,
   resolveVisualOffset,
+  type VisualCharacterId,
   type VisualElementId,
   type VisualScreenId,
   type VisualViewport,
@@ -65,6 +66,7 @@ export default function VisualElementView({
   style,
   children,
   viewport,
+  characterId,
   ...rest
 }: {
   screenId: VisualScreenId;
@@ -72,11 +74,12 @@ export default function VisualElementView({
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
   viewport?: VisualViewport;
+  characterId?: VisualCharacterId | string | null;
 } & ViewProps) {
   const windowDimensions = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const {manifest} = useVisualConfig();
-  const rule = getVisualElementRule(manifest, screenId, elementId);
+  const rule = getVisualElementRule(manifest, screenId, elementId, characterId);
   const currentViewport =
     viewport ??
     ({

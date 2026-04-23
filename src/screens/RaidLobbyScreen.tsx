@@ -753,10 +753,17 @@ export default function RaidLobbyScreen({ navigation }: any) {
           safeLoad('partyMembers', () => getPartyMembers(nextPartyId), {
             data: [],
           } as any),
-          safeLoad('partyActiveRaid', () => getPartyActiveRaid(nextPartyId), {
-            data: null,
-            error: null,
-          } as any),
+          safeLoad(
+            'partyActiveRaid',
+            () =>
+              getPartyActiveRaid(nextPartyId, undefined, {
+                bypassBossWindow: isAdmin,
+              }),
+            {
+              data: null,
+              error: null,
+            } as any,
+          ),
         ]);
 
         if (!isCurrentRequest()) {
@@ -944,7 +951,6 @@ export default function RaidLobbyScreen({ navigation }: any) {
           partyResult,
           raidProgress,
           levelProgress,
-          activeRaidResult,
           adminStatus,
         ] = await Promise.all([
           safeLoad('party', () => getMyParty(playerId), {
@@ -957,11 +963,16 @@ export default function RaidLobbyScreen({ navigation }: any) {
             {} as any,
           ),
           safeLoad('levelProgress', () => loadLevelProgress(), {} as any),
-          safeLoad('activeRaids', () => getActiveInstances(), {
-            data: [],
-          } as any),
           getAdminStatus().catch(() => false),
         ]);
+
+        const activeRaidResult = await safeLoad(
+          'activeRaids',
+          () => getActiveInstances(undefined, {bypassBossWindow: adminStatus}),
+          {
+            data: [],
+          } as any,
+        );
 
         if (!isCurrentRequest()) {
           return;
@@ -971,7 +982,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
         const filteredRaids = (activeRaidResult?.data ?? []).filter(
           (raid: any) => {
             const remainingMs = new Date(raid.expires_at).getTime() - now;
-            return remainingMs > 0 && remainingMs <= BOSS_RAID_WINDOW_MS;
+            return adminStatus
+              ? remainingMs > 0
+              : remainingMs > 0 && remainingMs <= BOSS_RAID_WINDOW_MS;
           },
         );
         const nextUnlockedBossStages = adminStatus
@@ -1430,7 +1443,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
   const handleChallengeBoss = useCallback(
     async (bossStage: number) => {
-      if (!bossWindowInfo.isOpen) {
+      if (!isAdmin && !bossWindowInfo.isOpen) {
         Alert.alert(
           '보스 레이드',
           '보스 레이드는 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수 있습니다.',
@@ -1463,6 +1476,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           reuseOpenInstance: true,
           skipCooldown: true,
           partyId,
+          bypassBossWindow: isAdmin,
         },
       );
 
@@ -1524,6 +1538,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         raid.id,
         playerIdRef.current,
         nicknameRef.current,
+        {bypassBossWindow: isAdmin},
       );
 
       if (error) {
@@ -1873,7 +1888,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
                         ]}
                       >
                         {unlocked
-                          ? bossWindowInfo.isOpen
+                          ? isAdmin
+                            ? '관리자 입장 가능'
+                            : bossWindowInfo.isOpen
                             ? '입장 가능'
                             : '개방 대기'
                           : '월드 클리어 필요'}

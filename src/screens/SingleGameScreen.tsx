@@ -54,6 +54,7 @@ import {
   placePiece,
   checkAndClearLines,
   countBlocks,
+  canPlacePiece,
   canPlaceAnyPiece,
   addObstacles,
   resetPieceGenerationHistory,
@@ -517,6 +518,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const comboBurstAnim = useRef(new Animated.Value(0)).current;
   const screenShakeX = useRef(new Animated.Value(0)).current;
   const screenShakeY = useRef(new Animated.Value(0)).current;
+  const comboShakeAnimationRef =
+    useRef<Animated.CompositeAnimation | null>(null);
   const victoryXpAnim = useRef(new Animated.Value(0)).current;
   const playerAvatarShakeX = useRef(new Animated.Value(0)).current;
   const monsterAvatarShakeX = useRef(new Animated.Value(0)).current;
@@ -554,6 +557,18 @@ export default function SingleGameScreen({ route, navigation }: any) {
       })),
     [],
   );
+
+  const stopComboShakeAnimation = useCallback(() => {
+    const activeAnimation = comboShakeAnimationRef.current;
+    comboShakeAnimationRef.current = null;
+    activeAnimation?.stop();
+    comboBurstAnim.stopAnimation();
+    screenShakeX.stopAnimation();
+    screenShakeY.stopAnimation();
+    comboBurstAnim.setValue(0);
+    screenShakeX.setValue(0);
+    screenShakeY.setValue(0);
+  }, [comboBurstAnim, screenShakeX, screenShakeY]);
 
   useEffect(() => {
     let active = true;
@@ -750,6 +765,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     setSummonRemainingMs(0);
     setComboRemainingMs(0);
     setLevelUpState(null);
+    stopComboShakeAnimation();
     setComboBurstValue(0);
     setMonsterHits([]);
     setMonsterImpactHit(null);
@@ -898,6 +914,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       if (enemyAttackRef.current) {
         clearInterval(enemyAttackRef.current);
       }
+      stopComboShakeAnimation();
       clearNotice();
     };
   }, [
@@ -909,6 +926,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     maxMonsterHp,
     monsterHpAnim,
     playerHpAnim,
+    stopComboShakeAnimation,
     updateAttackPowerWithPotion,
     updateNextPieces,
   ]);
@@ -1017,12 +1035,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
       const intensity = Math.min(18, 4 + nextCombo * 1.6);
       const verticalIntensity = Math.min(10, 2 + nextCombo * 0.85);
 
+      stopComboShakeAnimation();
       setComboBurstValue(nextCombo);
-      comboBurstAnim.setValue(0);
-      screenShakeX.setValue(0);
-      screenShakeY.setValue(0);
 
-      Animated.parallel([
+      const comboShakeAnimation = Animated.parallel([
         Animated.timing(comboBurstAnim, {
           toValue: 1,
           duration: 1000,
@@ -1077,14 +1093,21 @@ export default function SingleGameScreen({ route, navigation }: any) {
             useNativeDriver: true,
           }),
         ]),
-      ]).start(() => {
+      ]);
+
+      comboShakeAnimationRef.current = comboShakeAnimation;
+      comboShakeAnimation.start(() => {
+        if (comboShakeAnimationRef.current !== comboShakeAnimation) {
+          return;
+        }
+        comboShakeAnimationRef.current = null;
         comboBurstAnim.setValue(0);
         screenShakeX.setValue(0);
         screenShakeY.setValue(0);
         setComboBurstValue(0);
       });
     },
-    [comboBurstAnim, screenShakeX, screenShakeY],
+    [comboBurstAnim, screenShakeX, screenShakeY, stopComboShakeAnimation],
   );
 
   const activateFever = useCallback(() => {
@@ -1179,6 +1202,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
       }
       comboExpireAtRef.current = null;
       setComboRemainingMs(0);
+      stopComboShakeAnimation();
+      setComboBurstValue(0);
       if (feverTimerRef.current) {
         clearTimeout(feverTimerRef.current);
       }
@@ -1326,6 +1351,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       maxPlayerHp,
       selectedCharacterId,
       showLevelUpCelebration,
+      stopComboShakeAnimation,
     ],
   );
 
@@ -1578,6 +1604,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
       const piece = pieces[pieceIndex];
       if (!piece) {
+        return;
+      }
+      if (!canPlacePiece(board, piece.shape, row, col)) {
         return;
       }
 
@@ -2109,8 +2138,14 @@ export default function SingleGameScreen({ route, navigation }: any) {
     visualManifest,
     'level',
     'combo_gauge',
+    selectedCharacterId,
   );
-  const boardRule = getVisualElementRule(visualManifest, 'level', 'board');
+  const boardRule = getVisualElementRule(
+    visualManifest,
+    'level',
+    'board',
+    selectedCharacterId,
+  );
   useEffect(() => {
     setMonsterPose('idle');
   }, [activeWorldId, monster.monsterName]);
@@ -2440,6 +2475,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
               <VisualElementView
                 screenId="level"
                 elementId="header"
+                characterId={selectedCharacterId}
                 style={styles.header}
               >
                 <TouchableOpacity onPress={() => setShowExitConfirm(true)}>
@@ -2455,6 +2491,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
               <VisualElementView
                 screenId="level"
                 elementId="battle_lane"
+                characterId={selectedCharacterId}
                 style={styles.visualWrapper}
               >
                 {renderBattleLane()}
@@ -2464,6 +2501,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 <VisualElementView
                   screenId="level"
                   elementId="board"
+                  characterId={selectedCharacterId}
                   style={styles.boardVisualAnchor}
                   onLayout={handleBoardLayout}
                 >
@@ -2483,18 +2521,33 @@ export default function SingleGameScreen({ route, navigation }: any) {
                       )}
                     />
                   )}
-                  <Board
-                    ref={boardRef}
-                    board={board}
-                    viewport={visualViewport}
-                    backgroundColor={skinBoardBg}
-                    previewCells={dragDrop.previewCells}
-                    invalidPreview={dragDrop.invalidPreview}
-                    clearGuideCells={dragDrop.clearGuideCells}
-                  />
+                  <View style={styles.boardSurface}>
+                    <Board
+                      ref={boardRef}
+                      board={board}
+                      viewport={visualViewport}
+                      backgroundColor={skinBoardBg}
+                      previewCells={dragDrop.previewCells}
+                      invalidPreview={dragDrop.invalidPreview}
+                      clearGuideCells={dragDrop.clearGuideCells}
+                      placementEffectCells={placementEffect?.cells}
+                      placementEffectId={placementEffect?.id ?? null}
+                    />
+                    {placementEffect && (
+                      <PiecePlacementEffect
+                        cells={placementEffect.cells}
+                        onDone={() =>
+                          setPlacementEffect(current =>
+                            current?.id === placementEffect.id ? null : current,
+                          )
+                        }
+                      />
+                    )}
+                  </View>
                   <VisualElementView
                     screenId="level"
                     elementId="skill_effect"
+                    characterId={selectedCharacterId}
                     style={styles.boardSkillEffectLayer}
                     pointerEvents="none"
                     viewport={visualViewport}
@@ -2512,6 +2565,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                   <VisualElementView
                     screenId="level"
                     elementId="piece_tray"
+                    characterId={selectedCharacterId}
                     style={styles.visualWrapper}
                   >
                     <PieceSelector
@@ -2540,6 +2594,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 <VisualElementView
                   screenId="level"
                   elementId="item_bar"
+                  characterId={selectedCharacterId}
                   style={styles.visualWrapper}
                 >
                   <ItemBar
@@ -2575,6 +2630,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
             <VisualElementView
               screenId="level"
               elementId="header"
+              characterId={selectedCharacterId}
               style={styles.header}
             >
               <TouchableOpacity onPress={() => setShowExitConfirm(true)}>
@@ -2590,6 +2646,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
             <VisualElementView
               screenId="level"
               elementId="battle_lane"
+              characterId={selectedCharacterId}
               style={styles.visualWrapper}
             >
               {renderBattleLane()}
@@ -2599,6 +2656,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
               <VisualElementView
                 screenId="level"
                 elementId="board"
+                characterId={selectedCharacterId}
                 style={styles.boardVisualAnchor}
                 onLayout={handleBoardLayout}
               >
@@ -2618,18 +2676,33 @@ export default function SingleGameScreen({ route, navigation }: any) {
                     )}
                   />
                 )}
-                <Board
-                  ref={boardRef}
-                  board={board}
-                  viewport={visualViewport}
-                  backgroundColor={skinBoardBg}
-                  previewCells={dragDrop.previewCells}
-                  invalidPreview={dragDrop.invalidPreview}
-                  clearGuideCells={dragDrop.clearGuideCells}
-                />
+                <View style={styles.boardSurface}>
+                  <Board
+                    ref={boardRef}
+                    board={board}
+                    viewport={visualViewport}
+                    backgroundColor={skinBoardBg}
+                    previewCells={dragDrop.previewCells}
+                    invalidPreview={dragDrop.invalidPreview}
+                    clearGuideCells={dragDrop.clearGuideCells}
+                    placementEffectCells={placementEffect?.cells}
+                    placementEffectId={placementEffect?.id ?? null}
+                  />
+                  {placementEffect && (
+                    <PiecePlacementEffect
+                      cells={placementEffect.cells}
+                      onDone={() =>
+                        setPlacementEffect(current =>
+                          current?.id === placementEffect.id ? null : current,
+                        )
+                      }
+                    />
+                  )}
+                </View>
                 <VisualElementView
                   screenId="level"
                   elementId="skill_effect"
+                  characterId={selectedCharacterId}
                   style={styles.boardSkillEffectLayer}
                   pointerEvents="none"
                   viewport={visualViewport}
@@ -2647,6 +2720,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 <VisualElementView
                   screenId="level"
                   elementId="piece_tray"
+                  characterId={selectedCharacterId}
                   style={styles.visualWrapper}
                 >
                   <PieceSelector
@@ -2675,6 +2749,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
               <VisualElementView
                 screenId="level"
                 elementId="item_bar"
+                characterId={selectedCharacterId}
                 style={styles.visualWrapper}
               >
                 <ItemBar
@@ -2689,17 +2764,6 @@ export default function SingleGameScreen({ route, navigation }: any) {
             )}
           </Animated.View>
         </View>
-      )}
-
-      {placementEffect && (
-        <PiecePlacementEffect
-          cells={placementEffect.cells}
-          onDone={() =>
-            setPlacementEffect(current =>
-              current?.id === placementEffect.id ? null : current,
-            )
-          }
-        />
       )}
 
       {boardSkillCastEffect && (
@@ -3427,6 +3491,11 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   boardVisualAnchor: {
+    position: 'relative',
+    alignSelf: 'center',
+  },
+  boardSurface: {
+    position: 'relative',
     alignSelf: 'center',
   },
   bottomActionRow: {

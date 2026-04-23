@@ -34,7 +34,7 @@ import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import SkillBar from '../components/SkillBar';
 import KnightSprite from '../components/KnightSprite';
-import VisualElementView, {
+import BaseVisualElementView, {
   buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
@@ -63,6 +63,7 @@ import {
   placePiece,
   checkAndClearLines,
   countBlocks,
+  canPlacePiece,
   canPlaceAnyPiece,
   Piece,
   Board as BoardType,
@@ -106,6 +107,7 @@ import {
   readRaidScreenCache,
   writeRaidScreenCache,
 } from '../services/raidRuntimeCache';
+import { getAdminStatus } from '../services/adminSync';
 import { upsertCodexEntry } from '../services/codexService';
 import { calculateRewards, RewardResult } from '../constants/raidRewards';
 import { checkNewTitles } from '../constants/titles';
@@ -352,6 +354,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const [participants, setParticipants] = useState<RaidParticipant[]>(
     cachedRaidSnapshot?.participants ?? [],
   );
+  const [selectedCharacterId, setSelectedCharacterId] = useState('knight');
   const [skillGauge, setSkillGauge] = useState(0);
   const [activeMultiplier, setActiveMultiplier] = useState(1);
   const [myTotalDamage, setMyTotalDamage] = useState(0);
@@ -775,6 +778,7 @@ export default function RaidScreen({ route, navigation }: any) {
           skinData,
           selectedCharacter,
           rawSettings,
+          isAdmin,
         ] = await withTimeout(
           Promise.all([
             getPlayerId(),
@@ -784,6 +788,7 @@ export default function RaidScreen({ route, navigation }: any) {
             loadSkinData(),
             getSelectedCharacter(),
             AsyncStorage.getItem('gameSettings'),
+            getAdminStatus().catch(() => false),
           ]),
           'raid_local_bootstrap',
         );
@@ -819,6 +824,7 @@ export default function RaidScreen({ route, navigation }: any) {
             instanceId,
             playerIdRef.current,
             nicknameRef.current,
+            { bypassBossWindow: isAdmin },
           ),
           'raid_join',
         ).catch(error => ({ data: null, error }));
@@ -828,6 +834,7 @@ export default function RaidScreen({ route, navigation }: any) {
             loadCharacterData(selectedCharacter),
             'raid_character_data',
           );
+          setSelectedCharacterId(selectedCharacter);
           selectedCharacterRef.current = selectedCharacter;
           selectedCharacterDataRef.current = characterData;
           baseAttackPowerRef.current = getCharacterAtk(
@@ -853,6 +860,8 @@ export default function RaidScreen({ route, navigation }: any) {
             setMaxPlayerHp(resolvedHp);
             playerHpAnim.setValue(1);
           }
+        } else {
+          setSelectedCharacterId('knight');
         }
 
         try {
@@ -1504,6 +1513,7 @@ export default function RaidScreen({ route, navigation }: any) {
       if (gameOverRef.current || spectatorRef.current) return;
       const piece = pieces[pieceIndex];
       if (!piece) return;
+      if (!canPlacePiece(board, piece.shape, row, col)) return;
 
       let newBoard = placePiece(board, piece, row, col);
       showPlacementEffect(piece, row, col);
@@ -2448,16 +2458,32 @@ export default function RaidScreen({ route, navigation }: any) {
     visualManifest,
     raidScreenId,
     'combo_gauge',
+    selectedCharacterId,
   );
   const raidBoardRule = getVisualElementRule(
     visualManifest,
     raidScreenId,
     'board',
+    selectedCharacterId,
   );
   const previewPieces =
     getRaidEffects().previewCountBonus > 0
       ? nextPieces.slice(0, Math.min(3, getRaidEffects().previewCountBonus))
       : [];
+  const VisualElementView = React.useMemo(
+    () =>
+      function CharacterVisualElementView(
+        props: React.ComponentProps<typeof BaseVisualElementView>,
+      ) {
+        return (
+          <BaseVisualElementView
+            characterId={selectedCharacterId}
+            {...props}
+          />
+        );
+      },
+    [selectedCharacterId],
+  );
   const renderBoardStatusDock = (compact: boolean) => {
     if (!raidComboGaugeRule.visible) {
       return null;
@@ -2968,16 +2994,30 @@ export default function RaidScreen({ route, navigation }: any) {
               onLayout={handleBoardLayout}
             >
               {renderBoardStatusDock(isNormalRaid)}
-              <Board
-                ref={boardRef}
-                board={board}
-                viewport={visualViewport}
-                backgroundColor={skinBoardBg}
-                compact
-                previewCells={dragDrop.previewCells}
-                invalidPreview={dragDrop.invalidPreview}
-                clearGuideCells={dragDrop.clearGuideCells}
-              />
+              <View style={styles.boardSurface}>
+                <Board
+                  ref={boardRef}
+                  board={board}
+                  viewport={visualViewport}
+                  backgroundColor={skinBoardBg}
+                  compact
+                  previewCells={dragDrop.previewCells}
+                  invalidPreview={dragDrop.invalidPreview}
+                  clearGuideCells={dragDrop.clearGuideCells}
+                  placementEffectCells={placementEffect?.cells}
+                  placementEffectId={placementEffect?.id ?? null}
+                />
+                {placementEffect && (
+                  <PiecePlacementEffect
+                    cells={placementEffect.cells}
+                    onDone={() =>
+                      setPlacementEffect(current =>
+                        current?.id === placementEffect.id ? null : current,
+                      )
+                    }
+                  />
+                )}
+              </View>
               <VisualElementView
                 screenId={raidScreenId}
                 elementId="skill_effect"
@@ -3009,17 +3049,6 @@ export default function RaidScreen({ route, navigation }: any) {
             />
           </VisualElementView>
         </View>
-      )}
-
-      {placementEffect && (
-        <PiecePlacementEffect
-          cells={placementEffect.cells}
-          onDone={() =>
-            setPlacementEffect(current =>
-              current?.id === placementEffect.id ? null : current,
-            )
-          }
-        />
       )}
 
       {boardSkillCastEffect && (
@@ -3521,6 +3550,10 @@ const styles = StyleSheet.create({
   boardContainerCompact: {
     paddingTop: 6,
     paddingBottom: 6,
+  },
+  boardSurface: {
+    position: 'relative',
+    alignSelf: 'center',
   },
   boardSkillEffectLayer: {
     ...StyleSheet.absoluteFillObject,

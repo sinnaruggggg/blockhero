@@ -36,23 +36,26 @@ export interface DragDropState {
   clearGuideCells: ClearGuideCell[];
 }
 
-// Magnet snap: search nearby cells for a valid placement
-const SNAP_RADIUS = 1;
+// Magnet snap: keep correction close so preview does not jump to distant cells.
+const SNAP_SEARCH_RADIUS = 1;
+const SNAP_MAX_DISTANCE_CELLS = 0.62;
 // Sticky threshold: once snapped, must move this many cells away to re-snap elsewhere
-const STICKY_THRESHOLD = 0.7;
+const STICKY_THRESHOLD = 0.28;
 
 function findNearestValid(
   board: Board,
   shape: PieceShape,
   centerR: number,
   centerC: number,
+  rawR: number = centerR,
+  rawC: number = centerC,
 ): { r: number; c: number } | null {
   // Check exact position first
   if (canPlacePiece(board, shape, centerR, centerC)) {
     return { r: centerR, c: centerC };
   }
   // Search expanding radius
-  for (let radius = 1; radius <= SNAP_RADIUS; radius++) {
+  for (let radius = 1; radius <= SNAP_SEARCH_RADIUS; radius++) {
     let bestDist = Infinity;
     let bestPos: { r: number; c: number } | null = null;
     for (let dr = -radius; dr <= radius; dr++) {
@@ -61,7 +64,12 @@ function findNearestValid(
         const nr = centerR + dr;
         const nc = centerC + dc;
         if (canPlacePiece(board, shape, nr, nc)) {
-          const dist = dr * dr + dc * dc;
+          const rowDistance = Math.abs(nr - rawR);
+          const colDistance = Math.abs(nc - rawC);
+          if (Math.max(rowDistance, colDistance) > SNAP_MAX_DISTANCE_CELLS) {
+            continue;
+          }
+          const dist = rowDistance * rowDistance + colDistance * colDistance;
           if (dist < bestDist) {
             bestDist = dist;
             bestPos = { r: nr, c: nc };
@@ -139,9 +147,11 @@ export function useDragDrop(
       const centerR = (minR + maxR) / 2;
       const centerC = (minC + maxC) / 2;
       // Round the final origin (not the center) for precise centering
-      const r = Math.round(boardRow - centerR);
-      const c = Math.round(boardCol - centerC);
-      return { r, c };
+      const rawR = boardRow - centerR;
+      const rawC = boardCol - centerC;
+      const r = Math.round(rawR);
+      const c = Math.round(rawC);
+      return { r, c, rawR, rawC };
     },
     [],
   );
@@ -206,17 +216,28 @@ export function useDragDrop(
         screenMetrics,
       );
 
-      const { r, c } = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
+      const { r, c, rawR, rawC } = getPieceOrigin(
+        piece.shape,
+        floatPos.row,
+        floatPos.col,
+      );
 
       // Find nearest valid placement (magnet snap)
-      const snapResult = findNearestValid(board, piece.shape, r, c);
+      const snapResult = findNearestValid(
+        board,
+        piece.shape,
+        r,
+        c,
+        rawR,
+        rawC,
+      );
 
       if (snapResult) {
         // Sticky snap: if already snapped somewhere, only move if raw position
         // has moved far enough from current snap position
         if (lastPreviewPos.current && lastRawPos.current) {
-          const dR = Math.abs(r - lastRawPos.current.r);
-          const dC = Math.abs(c - lastRawPos.current.c);
+          const dR = Math.abs(rawR - lastRawPos.current.r);
+          const dC = Math.abs(rawC - lastRawPos.current.c);
           const moved = Math.max(dR, dC);
           // If haven't moved enough AND current snap is still valid, keep it
           if (
@@ -238,11 +259,11 @@ export function useDragDrop(
           lastPreviewPos.current.row === snapResult.r &&
           lastPreviewPos.current.col === snapResult.c
         ) {
-          lastRawPos.current = { r, c };
+          lastRawPos.current = { r: rawR, c: rawC };
           return;
         }
         lastPreviewPos.current = { row: snapResult.r, col: snapResult.c };
-        lastRawPos.current = { r, c };
+        lastRawPos.current = { r: rawR, c: rawC };
         const cells = getPreviewCells(
           piece,
           snapResult.r,
@@ -279,6 +300,7 @@ export function useDragDrop(
           setInvalidPreview(false);
           setClearGuideCells([]);
           lastPreviewPos.current = null;
+          lastRawPos.current = null;
         }
       }
     },
@@ -332,9 +354,20 @@ export function useDragDrop(
         boardLayout.y,
         screenMetrics,
       );
-      const { r, c } = getPieceOrigin(piece.shape, floatPos.row, floatPos.col);
+      const { r, c, rawR, rawC } = getPieceOrigin(
+        piece.shape,
+        floatPos.row,
+        floatPos.col,
+      );
 
-      const snapResult = findNearestValid(board, piece.shape, r, c);
+      const snapResult = findNearestValid(
+        board,
+        piece.shape,
+        r,
+        c,
+        rawR,
+        rawC,
+      );
       if (snapResult) {
         onPlace(index, snapResult.r, snapResult.c);
       }

@@ -11,6 +11,11 @@ interface StartRaidOptions {
   reuseOpenInstance?: boolean;
   skipCooldown?: boolean;
   partyId?: string | null;
+  bypassBossWindow?: boolean;
+}
+
+interface RaidAccessOptions {
+  bypassBossWindow?: boolean;
 }
 
 interface RaidInstanceRecord {
@@ -58,9 +63,14 @@ function isCurrentBossWindowInstance(
 function isUsableActiveRaidInstance(
   instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
   now = Date.now(),
+  bypassBossWindow = false,
 ) {
   if (isNormalRaidInstance(instance)) {
     return true;
+  }
+  if (bypassBossWindow) {
+    const expiresAt = Date.parse(instance.expires_at ?? '');
+    return Number.isFinite(expiresAt) && expiresAt > now;
   }
   return isCurrentBossWindowInstance(instance, now);
 }
@@ -110,6 +120,7 @@ export async function createRaidInstance(
 export async function findJoinableRaidInstance(
   bossStage: number,
   partyId?: string | null,
+  options: RaidAccessOptions = {},
 ) {
   let query = supabase
     .from('raid_instances')
@@ -129,7 +140,11 @@ export async function findJoinableRaidInstance(
   }
 
   const usableInstances = instances.filter(instance =>
-    isUsableActiveRaidInstance(instance),
+    isUsableActiveRaidInstance(
+      instance,
+      Date.now(),
+      options.bypassBossWindow,
+    ),
   );
 
   for (const instance of usableInstances) {
@@ -146,7 +161,11 @@ export async function findJoinableRaidInstance(
   return { data: null, error: null };
 }
 
-export async function getPartyActiveRaid(partyId: string, bossStage?: number) {
+export async function getPartyActiveRaid(
+  partyId: string,
+  bossStage?: number,
+  options: RaidAccessOptions = {},
+) {
   let query = supabase
     .from('raid_instances')
     .select('*')
@@ -165,7 +184,13 @@ export async function getPartyActiveRaid(partyId: string, bossStage?: number) {
     return { data: null, error };
   }
 
-  const usableInstance = data.find(instance => isUsableActiveRaidInstance(instance));
+  const usableInstance = data.find(instance =>
+    isUsableActiveRaidInstance(
+      instance,
+      Date.now(),
+      options.bypassBossWindow,
+    ),
+  );
   return { data: usableInstance ?? null, error: null };
 }
 
@@ -177,7 +202,10 @@ export async function getRaidInstance(instanceId: string) {
     .single();
 }
 
-export async function getActiveInstances(friendIds?: string[]) {
+export async function getActiveInstances(
+  friendIds?: string[],
+  options: RaidAccessOptions = {},
+) {
   let query = supabase
     .from('raid_instances')
     .select('*')
@@ -196,7 +224,13 @@ export async function getActiveInstances(friendIds?: string[]) {
   }
 
   return {
-    data: data.filter(instance => isUsableActiveRaidInstance(instance)),
+    data: data.filter(instance =>
+      isUsableActiveRaidInstance(
+        instance,
+        Date.now(),
+        options.bypassBossWindow,
+      ),
+    ),
     error: null,
   };
 }
@@ -205,6 +239,7 @@ export async function joinRaidInstance(
   instanceId: string,
   playerId: string,
   nickname: string,
+  options: RaidAccessOptions = {},
 ) {
   const { data: instance, error: instanceError } = await supabase
     .from('raid_instances')
@@ -220,7 +255,11 @@ export async function joinRaidInstance(
     !instance ||
     instance.status !== 'active' ||
     new Date(instance.expires_at).getTime() <= Date.now() ||
-    !isUsableActiveRaidInstance(instance)
+    !isUsableActiveRaidInstance(
+      instance,
+      Date.now(),
+      options.bypassBossWindow,
+    )
   ) {
     return { data: null, error: { message: 'raid_expired' } };
   }
@@ -377,6 +416,7 @@ export async function startRaid(
     const { data: partyInstance, error: partyError } = await getPartyActiveRaid(
       partyId,
       bossStage,
+      { bypassBossWindow: options.bypassBossWindow },
     );
     if (partyError) {
       return { data: null, error: partyError };
@@ -387,6 +427,7 @@ export async function startRaid(
         partyInstance.id,
         playerId,
         nickname,
+        { bypassBossWindow: options.bypassBossWindow },
       );
       if (joinError) {
         return { data: null, error: joinError };
@@ -398,7 +439,9 @@ export async function startRaid(
 
   if (options.reuseOpenInstance || partyId) {
     const { data: reusableInstance, error: reusableError } =
-      await findJoinableRaidInstance(bossStage, partyId);
+      await findJoinableRaidInstance(bossStage, partyId, {
+        bypassBossWindow: options.bypassBossWindow,
+      });
     if (reusableError) {
       return { data: null, error: reusableError };
     }
@@ -408,6 +451,7 @@ export async function startRaid(
         reusableInstance.id,
         playerId,
         nickname,
+        { bypassBossWindow: options.bypassBossWindow },
       );
       if (joinError) {
         return { data: null, error: joinError };
@@ -439,6 +483,7 @@ export async function startRaid(
     instance.id,
     playerId,
     nickname,
+    { bypassBossWindow: options.bypassBossWindow },
   );
   if (joinError) {
     return { data: null, error: joinError };
