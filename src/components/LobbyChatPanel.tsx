@@ -33,6 +33,7 @@ interface LobbyChatPanelProps {
   onSwitchChannel: (channelId: number) => void;
   onRandomizeChannel: () => void;
   onPressUser?: (userId: string, nickname: string) => void;
+  onJoinParty?: (partyId: string, message: LobbyChatMessage) => void;
   bottom?: number;
 }
 
@@ -53,6 +54,7 @@ export default function LobbyChatPanel({
   onSwitchChannel,
   onRandomizeChannel,
   onPressUser,
+  onJoinParty,
   bottom = 22,
 }: LobbyChatPanelProps) {
   const scrollRef = useRef<ScrollView>(null);
@@ -198,6 +200,22 @@ export default function LobbyChatPanel({
                     </TouchableOpacity>
                   ) : null}
                   <Text style={styles.messageText}>{message.text}</Text>
+                  {message.partyRecruitment && onJoinParty ? (
+                    <TouchableOpacity
+                      style={[
+                        styles.partyJoinButton,
+                        message.self && styles.partyJoinButtonDisabled,
+                      ]}
+                      disabled={message.self}
+                      onPress={() =>
+                        onJoinParty(message.partyRecruitment!.partyId, message)
+                      }
+                    >
+                      <Text style={styles.partyJoinButtonText}>
+                        {message.self ? '내 파티 모집글' : '파티 참가'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               ))
             )}
@@ -367,6 +385,22 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 12,
     lineHeight: 18,
+  },
+  partyJoinButton: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    borderRadius: 10,
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  partyJoinButtonDisabled: {
+    backgroundColor: '#334155',
+  },
+  partyJoinButtonText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
   },
   messageUserId: {
     color: '#93c5fd',

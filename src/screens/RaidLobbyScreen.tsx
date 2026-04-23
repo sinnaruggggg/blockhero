@@ -48,26 +48,29 @@ import {
   getPartyActiveRaid,
 } from '../services/raidService';
 import { supabase } from '../services/supabase';
-import {
-  getFriendList,
-  searchOnlinePlayers,
-} from '../services/friendService';
+import { getFriendList, searchOnlinePlayers } from '../services/friendService';
 import {
   acceptPartyInvite,
-  createParty,
+  createRaidParty,
   createPartyInvite,
   declinePartyInvite,
+  joinParty,
+  listOpenPartiesForRaid,
   leaveParty,
   disbandParty,
   getIncomingPartyInvites,
   getMyParty,
   getPartyMembers,
+  updatePartyRaidTarget,
+  type RaidPartyListing,
 } from '../services/partyService';
-import PartyPanel from '../components/PartyPanel';
 import FriendInviteModal, {
   type InviteCandidate,
 } from '../components/FriendInviteModal';
 import LobbyChatPanel from '../components/LobbyChatPanel';
+import RaidPartyManagerModal, {
+  type RaidPartyModalTarget,
+} from '../components/RaidPartyManagerModal';
 import MenuFloatingBlocks from '../components/MenuFloatingBlocks';
 import {
   formatBossRaidCountdownLabel,
@@ -90,6 +93,10 @@ import {
   writeRaidLobbyPartyCache,
   writeRaidLobbySocialCache,
 } from '../services/raidRuntimeCache';
+import {
+  buildRaidPartyRecruitmentMessage,
+  fetchRaidPartyRecruitmentMessages,
+} from '../services/lobbyChatService';
 
 interface ActiveRaid {
   id: string;
@@ -377,6 +384,14 @@ export default function RaidLobbyScreen({ navigation }: any) {
     InviteCandidate[]
   >([]);
   const [inviteSearching, setInviteSearching] = useState(false);
+  const [partyModalTarget, setPartyModalTarget] =
+    useState<RaidPartyModalTarget | null>(null);
+  const [raidPartyListings, setRaidPartyListings] = useState<
+    RaidPartyListing[]
+  >([]);
+  const [raidPartyLoading, setRaidPartyLoading] = useState(false);
+  const [partyActionLoading, setPartyActionLoading] = useState(false);
+  const [partyJoinCode, setPartyJoinCode] = useState('');
   const [chatPlayerId, setChatPlayerId] = useState(cachedCore?.playerId ?? '');
   const [chatNickname, setChatNickname] = useState(cachedCore?.nickname ?? '');
   const [chatSessionKey, setChatSessionKey] = useState(cachedCore ? 1 : 0);
@@ -483,6 +498,43 @@ export default function RaidLobbyScreen({ navigation }: any) {
   });
 
   const bossWindowInfo = getBossRaidWindowInfo(Date.now());
+  const visibleRaidPartyListings = useMemo(() => {
+    if (!partyModalTarget) {
+      return raidPartyListings;
+    }
+
+    const merged = new Map<string, RaidPartyListing>();
+    raidPartyListings.forEach(listing => {
+      merged.set(listing.id, listing);
+    });
+
+    lobbyChat.messages.forEach(message => {
+      const recruitment = message.partyRecruitment;
+      if (
+        !recruitment ||
+        recruitment.raidType !== partyModalTarget.raidType ||
+        recruitment.bossStage !== partyModalTarget.bossStage ||
+        recruitment.partyId === partyId
+      ) {
+        return;
+      }
+
+      if (!merged.has(recruitment.partyId)) {
+        merged.set(recruitment.partyId, {
+          id: recruitment.partyId,
+          leaderId: message.userId ?? '',
+          leaderNickname:
+            recruitment.leaderNickname || message.nickname || '파티장',
+          raidType: recruitment.raidType,
+          bossStage: recruitment.bossStage,
+          memberCount: 1,
+        });
+      }
+    });
+
+    return Array.from(merged.values());
+  }, [lobbyChat.messages, partyId, partyModalTarget, raidPartyListings]);
+
   const resolveRaidDisplay = useCallback(
     (raidType: 'normal' | 'boss', stage: number) => {
       const creatorRaid = resolveCreatorRaidRuntime(
@@ -497,10 +549,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
       );
       const staticBoss =
         RAID_BOSSES.find(entry => entry.stage === stage) ?? RAID_BOSSES[0];
-      const normalRaidMaxHp =
-        creatorNormalRaid
-          ? adjustEnemyHpValue(creatorNormalRaid.maxHp)
-          : getNormalRaidMaxHp(stage);
+      const normalRaidMaxHp = creatorNormalRaid
+        ? adjustEnemyHpValue(creatorNormalRaid.maxHp)
+        : getNormalRaidMaxHp(stage);
       return {
         name: creatorRaid?.name ?? t(staticBoss.nameKey),
         color: creatorRaid?.monsterColor ?? staticBoss.color,
@@ -616,7 +667,13 @@ export default function RaidLobbyScreen({ navigation }: any) {
           unlockedBossStages.length > 0 ||
           partyId,
       ),
-    [activeRaids.length, chatPlayerId, normalRaidProgress, partyId, unlockedBossStages.length],
+    [
+      activeRaids.length,
+      chatPlayerId,
+      normalRaidProgress,
+      partyId,
+      unlockedBossStages.length,
+    ],
   );
 
   const applyPlayerProfile = useCallback(
@@ -770,10 +827,12 @@ export default function RaidLobbyScreen({ navigation }: any) {
           return;
         }
 
-        const nextPartyMembers = (membersResult.data || []).map((member: any) => ({
-          playerId: member.player_id,
-          nickname: member.nickname,
-        }));
+        const nextPartyMembers = (membersResult.data || []).map(
+          (member: any) => ({
+            playerId: member.player_id,
+            nickname: member.nickname,
+          }),
+        );
 
         setPartyMembers(nextPartyMembers);
         writeRaidLobbyPartyCache({
@@ -947,28 +1006,25 @@ export default function RaidLobbyScreen({ navigation }: any) {
           }
         };
 
-        const [
-          partyResult,
-          raidProgress,
-          levelProgress,
-          adminStatus,
-        ] = await Promise.all([
-          safeLoad('party', () => getMyParty(playerId), {
-            data: null,
-            error: null,
-          } as any),
-          safeLoad(
-            'normalRaidProgress',
-            () => loadNormalRaidProgress(),
-            {} as any,
-          ),
-          safeLoad('levelProgress', () => loadLevelProgress(), {} as any),
-          getAdminStatus().catch(() => false),
-        ]);
+        const [partyResult, raidProgress, levelProgress, adminStatus] =
+          await Promise.all([
+            safeLoad('party', () => getMyParty(playerId), {
+              data: null,
+              error: null,
+            } as any),
+            safeLoad(
+              'normalRaidProgress',
+              () => loadNormalRaidProgress(),
+              {} as any,
+            ),
+            safeLoad('levelProgress', () => loadLevelProgress(), {} as any),
+            getAdminStatus().catch(() => false),
+          ]);
 
         const activeRaidResult = await safeLoad(
           'activeRaids',
-          () => getActiveInstances(undefined, {bypassBossWindow: adminStatus}),
+          () =>
+            getActiveInstances(undefined, { bypassBossWindow: adminStatus }),
           {
             data: [],
           } as any,
@@ -1149,49 +1205,217 @@ export default function RaidLobbyScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, []);
 
+  const loadRaidPartyListings = useCallback(
+    async (target: RaidPartyModalTarget) => {
+      setRaidPartyLoading(true);
+      try {
+        const [partyListResult, recruitmentResult] = await Promise.all([
+          listOpenPartiesForRaid(
+            {
+              raidType: target.raidType,
+              bossStage: target.bossStage,
+            },
+            playerIdRef.current,
+          ),
+          fetchRaidPartyRecruitmentMessages(),
+        ]);
+
+        if (partyListResult.error) {
+          console.warn(
+            'RaidLobbyScreen listOpenPartiesForRaid error:',
+            partyListResult.error,
+          );
+        }
+        if (recruitmentResult.error) {
+          console.warn(
+            'RaidLobbyScreen fetchRaidPartyRecruitmentMessages error:',
+            recruitmentResult.error,
+          );
+        }
+
+        const merged = new Map<string, RaidPartyListing>();
+        (partyListResult.data ?? []).forEach(listing => {
+          merged.set(listing.id, listing);
+        });
+        (recruitmentResult.data ?? []).forEach(message => {
+          const recruitment = message.partyRecruitment;
+          if (
+            !recruitment ||
+            recruitment.raidType !== target.raidType ||
+            recruitment.bossStage !== target.bossStage ||
+            recruitment.partyId === partyId
+          ) {
+            return;
+          }
+
+          if (!merged.has(recruitment.partyId)) {
+            merged.set(recruitment.partyId, {
+              id: recruitment.partyId,
+              leaderId: message.userId,
+              leaderNickname:
+                recruitment.leaderNickname || message.nickname || '파티장',
+              raidType: recruitment.raidType,
+              bossStage: recruitment.bossStage,
+              memberCount: 1,
+              createdAt: message.createdAt,
+              updatedAt: message.createdAt,
+            });
+          }
+        });
+
+        setRaidPartyListings(Array.from(merged.values()));
+      } finally {
+        setRaidPartyLoading(false);
+      }
+    },
+    [partyId],
+  );
+
+  const openPartyManager = useCallback(
+    (target: RaidPartyModalTarget) => {
+      setPartyModalTarget(target);
+      setPartyJoinCode('');
+      setRaidPartyListings([]);
+      void loadRaidPartyListings(target);
+    },
+    [loadRaidPartyListings],
+  );
+
+  const closePartyManager = useCallback(() => {
+    setPartyModalTarget(null);
+    setPartyJoinCode('');
+    setRaidPartyListings([]);
+  }, []);
+
   const resetInviteModal = useCallback(() => {
     setShowInviteModal(false);
     setInviteSearchQuery('');
     setInviteSearchResults([]);
   }, []);
 
+  const postPartyRecruitment = useCallback(
+    async (
+      target: RaidPartyModalTarget,
+      nextPartyId: string,
+      memberCount = partyMembers.length || 1,
+    ) => {
+      const rawMessage = buildRaidPartyRecruitmentMessage(
+        `${target.name} 파티 모집 중입니다. (${memberCount}/${MAX_PARTY_SIZE})`,
+        {
+          partyId: nextPartyId,
+          raidType: target.raidType,
+          bossStage: target.bossStage,
+          raidName: target.name,
+          leaderNickname: nicknameRef.current,
+        },
+      );
+
+      const sent = await lobbyChat.sendTextMessage(rawMessage);
+      if (!sent) {
+        Alert.alert(
+          '파티 모집',
+          `채팅 채널 연결 전이라 모집글은 올리지 못했습니다. 파티 코드 ${nextPartyId}로 직접 참가할 수 있습니다.`,
+        );
+        return false;
+      }
+
+      Alert.alert(
+        '파티 모집',
+        '채팅창에 파티 참가 버튼이 있는 모집글을 올렸습니다.',
+      );
+      return true;
+    },
+    [lobbyChat, partyMembers.length],
+  );
+
   const handleCreateParty = useCallback(async () => {
-    const { data, error } = await createParty(
-      playerIdRef.current,
-      nicknameRef.current,
-    );
-    if (error || !data) {
-      Alert.alert('오류', error?.message || '파티를 만들 수 없습니다.');
+    if (!partyModalTarget) {
       return;
     }
 
-    setPartyId(data.id);
-    setIsLeader(true);
-    setPartyMembers([
-      { playerId: playerIdRef.current, nickname: nicknameRef.current },
-    ]);
-    writeRaidLobbyCoreCache({
-      playerId: playerIdRef.current,
-      nickname: nicknameRef.current,
-      activeRaids,
-      normalRaidProgress,
-      unlockedBossStages,
-      isAdmin,
-      partyId: data.id,
-      isLeader: true,
-    });
-    writeRaidLobbyPartyCache({
-      partyMembers: [
+    if (partyId && !isLeader) {
+      Alert.alert(
+        '파티',
+        '이미 파티에 참가 중입니다. 파티장만 모집글을 올릴 수 있습니다.',
+      );
+      return;
+    }
+
+    setPartyActionLoading(true);
+    try {
+      if (partyId && isLeader) {
+        const { error } = await updatePartyRaidTarget(
+          partyId,
+          playerIdRef.current,
+          {
+            raidType: partyModalTarget.raidType,
+            bossStage: partyModalTarget.bossStage,
+          },
+        );
+        if (error) {
+          Alert.alert('파티', getPartyInviteErrorMessage(error.message));
+          return;
+        }
+        await postPartyRecruitment(
+          partyModalTarget,
+          partyId,
+          partyMembers.length || 1,
+        );
+        await loadRaidPartyListings(partyModalTarget);
+        return;
+      }
+
+      const { data, error } = await createRaidParty(
+        playerIdRef.current,
+        nicknameRef.current,
+        {
+          raidType: partyModalTarget.raidType,
+          bossStage: partyModalTarget.bossStage,
+        },
+      );
+      if (error || !data) {
+        Alert.alert('오류', error?.message || '파티를 만들 수 없습니다.');
+        return;
+      }
+
+      setPartyId(data.id);
+      setIsLeader(true);
+      setPartyMembers([
         { playerId: playerIdRef.current, nickname: nicknameRef.current },
-      ],
-    });
-    setupPartyChannel(data.id);
-    void loadPartyData(data.id);
+      ]);
+      writeRaidLobbyCoreCache({
+        playerId: playerIdRef.current,
+        nickname: nicknameRef.current,
+        activeRaids,
+        normalRaidProgress,
+        unlockedBossStages,
+        isAdmin,
+        partyId: data.id,
+        isLeader: true,
+      });
+      writeRaidLobbyPartyCache({
+        partyMembers: [
+          { playerId: playerIdRef.current, nickname: nicknameRef.current },
+        ],
+      });
+      setupPartyChannel(data.id);
+      void loadPartyData(data.id);
+      await postPartyRecruitment(partyModalTarget, data.id, 1);
+      await loadRaidPartyListings(partyModalTarget);
+    } finally {
+      setPartyActionLoading(false);
+    }
   }, [
     activeRaids,
     isAdmin,
+    isLeader,
     loadPartyData,
+    loadRaidPartyListings,
     normalRaidProgress,
+    partyId,
+    partyMembers.length,
+    partyModalTarget,
+    postPartyRecruitment,
     setupPartyChannel,
     unlockedBossStages,
   ]);
@@ -1258,6 +1482,108 @@ export default function RaidLobbyScreen({ navigation }: any) {
     partyId,
     resetInviteModal,
     unlockedBossStages,
+  ]);
+
+  const handleJoinPartyById = useCallback(
+    async (targetPartyId: string, closeAfterJoin = false) => {
+      const trimmed = targetPartyId.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      const resolvedPartyId =
+        visibleRaidPartyListings.find(listing => listing.id.startsWith(trimmed))
+          ?.id ?? trimmed;
+
+      setPartyActionLoading(true);
+      try {
+        const { error } = await joinParty(
+          resolvedPartyId,
+          playerIdRef.current,
+          nicknameRef.current,
+        );
+        if (error) {
+          Alert.alert('파티 참가', getPartyInviteErrorMessage(error.message));
+          return;
+        }
+
+        await refreshPartyState();
+        void loadSocialData(playerIdRef.current);
+        if (partyModalTarget) {
+          await loadRaidPartyListings(partyModalTarget);
+        }
+        if (closeAfterJoin) {
+          closePartyManager();
+        }
+      } finally {
+        setPartyActionLoading(false);
+      }
+    },
+    [
+      closePartyManager,
+      loadRaidPartyListings,
+      loadSocialData,
+      partyModalTarget,
+      refreshPartyState,
+      visibleRaidPartyListings,
+    ],
+  );
+
+  const handleJoinPartyFromCode = useCallback(() => {
+    void handleJoinPartyById(partyJoinCode);
+  }, [handleJoinPartyById, partyJoinCode]);
+
+  const handleRandomPartyJoin = useCallback(() => {
+    if (visibleRaidPartyListings.length === 0) {
+      Alert.alert('랜덤 참가', '현재 참가 가능한 파티가 없습니다.');
+      return;
+    }
+
+    const index = Math.floor(Math.random() * visibleRaidPartyListings.length);
+    void handleJoinPartyById(visibleRaidPartyListings[index].id);
+  }, [handleJoinPartyById, visibleRaidPartyListings]);
+
+  const handlePostRecruitment = useCallback(async () => {
+    if (!partyModalTarget || !partyId) {
+      Alert.alert('파티 모집', '먼저 파티를 만들어 주세요.');
+      return;
+    }
+    if (!isLeader) {
+      Alert.alert('파티 모집', '파티장만 모집글을 올릴 수 있습니다.');
+      return;
+    }
+
+    setPartyActionLoading(true);
+    try {
+      const { error } = await updatePartyRaidTarget(
+        partyId,
+        playerIdRef.current,
+        {
+          raidType: partyModalTarget.raidType,
+          bossStage: partyModalTarget.bossStage,
+        },
+      );
+      if (error) {
+        Alert.alert('파티 모집', getPartyInviteErrorMessage(error.message));
+        return;
+      }
+
+      await postPartyRecruitment(
+        partyModalTarget,
+        partyId,
+        partyMembers.length || 1,
+      );
+      await loadRaidPartyListings(partyModalTarget);
+    } finally {
+      setPartyActionLoading(false);
+    }
+  }, [
+    isLeader,
+    loadRaidPartyListings,
+    partyId,
+    partyMembers.length,
+    partyModalTarget,
+    postPartyRecruitment,
   ]);
 
   const handleSearchInviteTargets = useCallback(async () => {
@@ -1329,30 +1655,36 @@ export default function RaidLobbyScreen({ navigation }: any) {
     [isLeader, loadSocialData, partyId, resetInviteModal],
   );
 
-  const handleAcceptInvite = useCallback(async (inviteId: string) => {
-    const { error } = await acceptPartyInvite(
-      inviteId,
-      playerIdRef.current,
-      nicknameRef.current,
-    );
-    if (error) {
-      Alert.alert('파티 초대', getPartyInviteErrorMessage(error.message));
-      return;
-    }
+  const handleAcceptInvite = useCallback(
+    async (inviteId: string) => {
+      const { error } = await acceptPartyInvite(
+        inviteId,
+        playerIdRef.current,
+        nicknameRef.current,
+      );
+      if (error) {
+        Alert.alert('파티 초대', getPartyInviteErrorMessage(error.message));
+        return;
+      }
 
-    await refreshPartyState();
-    void loadSocialData(playerIdRef.current);
-  }, [loadSocialData, refreshPartyState]);
+      await refreshPartyState();
+      void loadSocialData(playerIdRef.current);
+    },
+    [loadSocialData, refreshPartyState],
+  );
 
-  const handleDeclineInvite = useCallback(async (inviteId: string) => {
-    const { error } = await declinePartyInvite(inviteId, playerIdRef.current);
-    if (error) {
-      Alert.alert('파티 초대', getPartyInviteErrorMessage(error.message));
-      return;
-    }
+  const handleDeclineInvite = useCallback(
+    async (inviteId: string) => {
+      const { error } = await declinePartyInvite(inviteId, playerIdRef.current);
+      if (error) {
+        Alert.alert('파티 초대', getPartyInviteErrorMessage(error.message));
+        return;
+      }
 
-    await loadSocialData(playerIdRef.current);
-  }, [loadSocialData]);
+      await loadSocialData(playerIdRef.current);
+    },
+    [loadSocialData],
+  );
 
   const handleInviteFromChat = useCallback(
     (inviteeId: string, inviteeNickname: string) => {
@@ -1538,7 +1870,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         raid.id,
         playerIdRef.current,
         nicknameRef.current,
-        {bypassBossWindow: isAdmin},
+        { bypassBossWindow: isAdmin },
       );
 
       if (error) {
@@ -1592,7 +1924,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="light-content"
+      />
       <Image source={IMG_BG} style={styles.bgImage} resizeMode="cover" />
       <MenuFloatingBlocks />
       <SafeAreaView style={styles.safeArea}>
@@ -1625,7 +1961,10 @@ export default function RaidLobbyScreen({ navigation }: any) {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.modeTab, raidMode === 'boss' && styles.modeTabActive]}
+            style={[
+              styles.modeTab,
+              raidMode === 'boss' && styles.modeTabActive,
+            ]}
             onPress={() => setRaidMode('boss')}
           >
             <Text
@@ -1642,335 +1981,391 @@ export default function RaidLobbyScreen({ navigation }: any) {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
-        {loadSummary && (
-          <View
-            style={styles.loadErrorCard}
-            testID={
-              loadSummary.blocking
-                ? 'raid-load-error-blocking'
-                : 'raid-load-error-partial'
-            }
-          >
-            <Text style={styles.loadErrorText}>{loadSummary.message}</Text>
-            {loadSummary.detail ? (
-              <Text style={styles.loadErrorDetail}>{loadSummary.detail}</Text>
-            ) : null}
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={() => loadData()}
+          {loadSummary && (
+            <View
+              style={styles.loadErrorCard}
+              testID={
+                loadSummary.blocking
+                  ? 'raid-load-error-blocking'
+                  : 'raid-load-error-partial'
+              }
             >
-              <Text style={styles.retryBtnText}>다시 시도</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {(socialLoading || partyLoading) && (
-          <View style={styles.sectionLoadingCard}>
-            <Text style={styles.sectionLoadingText}>
-              {partyLoading
-                ? '파티 정보를 불러오는 중입니다.'
-                : '친구와 초대 정보를 불러오는 중입니다.'}
-            </Text>
-          </View>
-        )}
-        {raidMode === 'normal' ? (
-          <>
-            {false && (
-              <>
-                <Text style={styles.modeDesc}>
-                  일반 레이드는 상시 도전할 수 있습니다. 제한 시간 동안 최대한
-                  많은 피해를 넣고 누적 처치 수를 올려 보상을 챙기세요.
-                </Text>
-                <Text style={styles.skinHint}>
-                  일반 레이드 10회 누적 처치 시 스킨 관련 보상을 받을 수
-                  있습니다.
-                </Text>
-              </>
-            )}
-            {normalRaidEntries.map(entry => {
-              const stageProgress = normalRaidProgress[entry.stage];
-              const killCount = stageProgress?.killCount ?? 0;
-              const skinEarned = hasSkinFromRaid(
-                normalRaidProgress,
-                entry.stage,
-              );
+              <Text style={styles.loadErrorText}>{loadSummary.message}</Text>
+              {loadSummary.detail ? (
+                <Text style={styles.loadErrorDetail}>{loadSummary.detail}</Text>
+              ) : null}
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => loadData()}
+              >
+                <Text style={styles.retryBtnText}>다시 시도</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {(socialLoading || partyLoading) && (
+            <View style={styles.sectionLoadingCard}>
+              <Text style={styles.sectionLoadingText}>
+                {partyLoading
+                  ? '파티 정보를 불러오는 중입니다.'
+                  : '친구와 초대 정보를 불러오는 중입니다.'}
+              </Text>
+            </View>
+          )}
+          {raidMode === 'normal' ? (
+            <>
+              {false && (
+                <>
+                  <Text style={styles.modeDesc}>
+                    일반 레이드는 상시 도전할 수 있습니다. 제한 시간 동안 최대한
+                    많은 피해를 넣고 누적 처치 수를 올려 보상을 챙기세요.
+                  </Text>
+                  <Text style={styles.skinHint}>
+                    일반 레이드 10회 누적 처치 시 스킨 관련 보상을 받을 수
+                    있습니다.
+                  </Text>
+                </>
+              )}
+              {normalRaidEntries.map(entry => {
+                const stageProgress = normalRaidProgress[entry.stage];
+                const killCount = stageProgress?.killCount ?? 0;
+                const skinEarned = hasSkinFromRaid(
+                  normalRaidProgress,
+                  entry.stage,
+                );
 
-              return (
-                <View
-                  key={entry.stage}
-                  style={[
-                    styles.normalRaidCard,
-                    { borderColor: `${entry.color}80` },
-                  ]}
-                >
-                  <Text style={styles.nrEmoji}>{entry.emoji}</Text>
-                  <View style={styles.nrInfo}>
-                    <Text style={[styles.nrName, { color: entry.color }]}>
-                      {entry.name}
-                      {skinEarned ? ' · 스킨 획득 완료' : ''}
-                    </Text>
-                    <Text style={styles.nrReward}>
-                      첫 클리어 다이아 {entry.reward.firstClearDiamondReward} /
-                      반복 처치 +{entry.reward.repeatDiamondReward}
-                    </Text>
-                    <View style={styles.killBar}>
-                      <View
+                return (
+                  <View
+                    key={entry.stage}
+                    style={[
+                      styles.normalRaidCard,
+                      { borderColor: `${entry.color}80` },
+                    ]}
+                  >
+                    <Text style={styles.nrEmoji}>{entry.emoji}</Text>
+                    <View style={styles.nrInfo}>
+                      <Text style={[styles.nrName, { color: entry.color }]}>
+                        {entry.name}
+                        {skinEarned ? ' · 스킨 획득 완료' : ''}
+                      </Text>
+                      <Text style={styles.nrReward}>
+                        첫 클리어 다이아 {entry.reward.firstClearDiamondReward}{' '}
+                        / 반복 처치 +{entry.reward.repeatDiamondReward}
+                      </Text>
+                      <View style={styles.killBar}>
+                        <View
+                          style={[
+                            styles.killBarFill,
+                            {
+                              width: `${Math.min(
+                                (killCount / 10) * 100,
+                                100,
+                              )}%`,
+                              backgroundColor: entry.color,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.killCount}>
+                        누적 처치 {killCount}회
+                      </Text>
+                    </View>
+                    <View style={styles.raidActionColumn}>
+                      <TouchableOpacity
                         style={[
-                          styles.killBarFill,
+                          styles.nrChallengeBtn,
+                          partyStartLocked && styles.challengeBtnDisabled,
                           {
-                            width: `${Math.min((killCount / 10) * 100, 100)}%`,
-                            backgroundColor: entry.color,
+                            backgroundColor: `${entry.color}33`,
+                            borderColor: entry.color,
                           },
                         ]}
-                      />
+                        disabled={partyStartLocked}
+                        onPress={() => handleNormalRaidChallenge(entry.stage)}
+                      >
+                        <Text
+                          style={[
+                            styles.nrChallengeBtnText,
+                            { color: entry.color },
+                          ]}
+                        >
+                          {partyStartLocked ? '대기' : '도전'}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.partyManageBtn,
+                          { borderColor: entry.color },
+                        ]}
+                        onPress={() =>
+                          openPartyManager({
+                            raidType: 'normal',
+                            bossStage: entry.stage,
+                            name: entry.name,
+                            color: entry.color,
+                            emoji: entry.emoji,
+                          })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.partyManageBtnText,
+                            { color: entry.color },
+                          ]}
+                        >
+                          파티
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text style={styles.killCount}>
-                      누적 처치 {killCount}회
+                  </View>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              <View style={styles.bossRaidScheduleCard}>
+                <Text style={styles.bossRaidScheduleTitle}>보스 레이드</Text>
+                <Text style={styles.bossRaidScheduleDesc}>
+                  서버 시간 기준 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수
+                  있습니다.
+                </Text>
+                <Text style={styles.bossRaidScheduleDesc}>
+                  방당 최대 {BOSS_RAID_MAX_PLAYERS}명까지 참가 가능하며, 가득
+                  차면 새 방이 생성됩니다.
+                </Text>
+                <Text style={styles.voiceHint}>
+                  음성 대화는 레이드 전투 안에서만 사용할 수 있습니다.
+                </Text>
+                <View style={styles.bossRaidTimer}>
+                  <Text style={styles.bossRaidTimerLabel}>
+                    {bossWindowInfo.isOpen ? '현재 참여 시간' : '다음 개방까지'}
+                  </Text>
+                  <Text style={styles.bossRaidTimerValue}>
+                    {formatBossRaidCountdownLabel(Date.now())}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.modeDesc}>
+                모든 월드 30스테이지를 클리어하면 해당 단계의 보스 레이드가
+                열립니다.
+              </Text>
+
+              {activeRaids.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>진행 중인 보스 레이드</Text>
+                  {activeRaids.map(raid => {
+                    const raidDisplay = resolveRaidDisplay(
+                      'boss',
+                      raid.boss_stage,
+                    );
+
+                    const remainingMs = Math.max(
+                      0,
+                      new Date(raid.expires_at).getTime() - Date.now(),
+                    );
+                    const minutes = Math.floor(remainingMs / 60000);
+                    const seconds = Math.floor((remainingMs % 60000) / 1000);
+
+                    return (
+                      <TouchableOpacity
+                        key={raid.id}
+                        style={[
+                          styles.activeRaidCard,
+                          { borderColor: raidDisplay.color },
+                          partyId && styles.activeRaidCardDisabled,
+                        ]}
+                        disabled={Boolean(partyId)}
+                        onPress={() => handleJoinRaid(raid)}
+                      >
+                        {getRaidBossSprite(raid.boss_stage) ? (
+                          <Image
+                            source={getRaidBossSprite(raid.boss_stage)!}
+                            resizeMode="contain"
+                            fadeDuration={0}
+                            style={styles.activeRaidSprite}
+                          />
+                        ) : (
+                          <Text style={styles.activeRaidEmoji}>
+                            {raidDisplay.emoji}
+                          </Text>
+                        )}
+                        <View style={styles.activeRaidInfo}>
+                          <Text style={styles.activeRaidName}>
+                            {raidDisplay.name}
+                          </Text>
+                          <Text style={styles.activeRaidHp}>
+                            체력 {formatHp(raid.boss_current_hp)} /{' '}
+                            {formatHp(raid.boss_max_hp)}
+                          </Text>
+                        </View>
+                        <Text style={styles.activeRaidTimer}>
+                          {minutes}:{seconds.toString().padStart(2, '0')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>보스 단계</Text>
+                <View style={styles.bossGrid}>
+                  {bossRaidEntries.map(entry => {
+                    const unlocked =
+                      isAdmin || unlockedBossStages.includes(entry.stage);
+                    const disabled = !unlocked;
+
+                    return (
+                      <View
+                        key={entry.stage}
+                        style={[
+                          styles.bossCard,
+                          { borderColor: entry.color },
+                          disabled && styles.bossCardLocked,
+                          partyStartLocked && styles.bossCardPartyLocked,
+                        ]}
+                      >
+                        {getRaidBossSprite(entry.stage) ? (
+                          <Image
+                            source={getRaidBossSprite(entry.stage)!}
+                            resizeMode="contain"
+                            fadeDuration={0}
+                            style={styles.bossSprite}
+                          />
+                        ) : (
+                          <Text style={styles.bossEmoji}>{entry.emoji}</Text>
+                        )}
+                        <Text style={styles.bossStage}>{entry.stage}단계</Text>
+                        <Text
+                          style={[
+                            styles.bossName,
+                            unlocked
+                              ? getBossNameColorStyle(entry.color)
+                              : styles.bossNameLocked,
+                          ]}
+                        >
+                          {entry.name}
+                        </Text>
+                        <Text style={styles.bossHp}>
+                          {formatHp(entry.maxHp)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.unlockState,
+                            unlocked ? styles.unlocked : styles.locked,
+                          ]}
+                        >
+                          {unlocked
+                            ? isAdmin
+                              ? '관리자 입장 가능'
+                              : bossWindowInfo.isOpen
+                              ? '입장 가능'
+                              : '개방 대기'
+                            : '월드 클리어 필요'}
+                        </Text>
+                        <View style={styles.bossActionRow}>
+                          <TouchableOpacity
+                            style={[
+                              styles.bossChallengeBtn,
+                              { backgroundColor: `${entry.color}33` },
+                              (disabled || partyStartLocked) &&
+                                styles.challengeBtnDisabled,
+                            ]}
+                            disabled={disabled || partyStartLocked}
+                            onPress={() => handleChallengeBoss(entry.stage)}
+                          >
+                            <Text
+                              style={[
+                                styles.bossChallengeBtnText,
+                                { color: entry.color },
+                              ]}
+                            >
+                              {partyStartLocked ? '대기' : '도전'}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.bossPartyBtn,
+                              { borderColor: entry.color },
+                              disabled && styles.challengeBtnDisabled,
+                            ]}
+                            disabled={disabled}
+                            onPress={() =>
+                              openPartyManager({
+                                raidType: 'boss',
+                                bossStage: entry.stage,
+                                name: entry.name,
+                                color: entry.color,
+                                emoji: entry.emoji,
+                              })
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.bossPartyBtnText,
+                                { color: entry.color },
+                              ]}
+                            >
+                              파티
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
+
+          {incomingInvites.length > 0 && (
+            <View style={styles.inviteInboxCard}>
+              <Text style={styles.inviteInboxTitle}>받은 파티 초대</Text>
+              {incomingInvites.map(invite => (
+                <View key={invite.id} style={styles.inviteInboxRow}>
+                  <View style={styles.inviteInboxInfo}>
+                    <Text style={styles.inviteInboxName}>
+                      {invite.inviterNickname}
+                    </Text>
+                    <Text style={styles.inviteInboxMeta}>
+                      {new Date(invite.createdAt).toLocaleTimeString('ko-KR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}{' '}
+                      초대
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    style={[
-                      styles.nrChallengeBtn,
-                      partyStartLocked && styles.challengeBtnDisabled,
-                      {
-                        backgroundColor: `${entry.color}33`,
-                        borderColor: entry.color,
-                      },
-                    ]}
-                    disabled={partyStartLocked}
-                    onPress={() => handleNormalRaidChallenge(entry.stage)}
-                  >
-                    <Text
-                      style={[
-                        styles.nrChallengeBtnText,
-                        { color: entry.color },
-                      ]}
-                    >
-                      {partyStartLocked ? '파티장 시작 대기' : '도전'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </>
-        ) : (
-          <>
-            <View style={styles.bossRaidScheduleCard}>
-              <Text style={styles.bossRaidScheduleTitle}>보스 레이드</Text>
-              <Text style={styles.bossRaidScheduleDesc}>
-                서버 시간 기준 4시간마다 열리고, 열린 뒤 10분 동안만 입장할 수
-                있습니다.
-              </Text>
-              <Text style={styles.bossRaidScheduleDesc}>
-                방당 최대 {BOSS_RAID_MAX_PLAYERS}명까지 참가 가능하며, 가득 차면
-                새 방이 생성됩니다.
-              </Text>
-              <Text style={styles.voiceHint}>
-                음성 대화는 레이드 전투 안에서만 사용할 수 있습니다.
-              </Text>
-              <View style={styles.bossRaidTimer}>
-                <Text style={styles.bossRaidTimerLabel}>
-                  {bossWindowInfo.isOpen ? '현재 참여 시간' : '다음 개방까지'}
-                </Text>
-                <Text style={styles.bossRaidTimerValue}>
-                  {formatBossRaidCountdownLabel(Date.now())}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.modeDesc}>
-              모든 월드 30스테이지를 클리어하면 해당 단계의 보스 레이드가
-              열립니다.
-            </Text>
-
-            {activeRaids.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>진행 중인 보스 레이드</Text>
-                {activeRaids.map(raid => {
-                  const raidDisplay = resolveRaidDisplay(
-                    'boss',
-                    raid.boss_stage,
-                  );
-
-                  const remainingMs = Math.max(
-                    0,
-                    new Date(raid.expires_at).getTime() - Date.now(),
-                  );
-                  const minutes = Math.floor(remainingMs / 60000);
-                  const seconds = Math.floor((remainingMs % 60000) / 1000);
-
-                  return (
+                  <View style={styles.inviteInboxActions}>
                     <TouchableOpacity
-                      key={raid.id}
-                      style={[
-                        styles.activeRaidCard,
-                        { borderColor: raidDisplay.color },
-                        partyId && styles.activeRaidCardDisabled,
-                      ]}
-                      disabled={Boolean(partyId)}
-                      onPress={() => handleJoinRaid(raid)}
+                      style={styles.inviteAcceptBtn}
+                      onPress={() => handleAcceptInvite(invite.id)}
                     >
-                      {getRaidBossSprite(raid.boss_stage) ? (
-                        <Image
-                          source={getRaidBossSprite(raid.boss_stage)!}
-                          resizeMode="contain"
-                          fadeDuration={0}
-                          style={styles.activeRaidSprite}
-                        />
-                      ) : (
-                        <Text style={styles.activeRaidEmoji}>
-                          {raidDisplay.emoji}
-                        </Text>
-                      )}
-                      <View style={styles.activeRaidInfo}>
-                        <Text style={styles.activeRaidName}>
-                          {raidDisplay.name}
-                        </Text>
-                        <Text style={styles.activeRaidHp}>
-                          체력 {formatHp(raid.boss_current_hp)} /{' '}
-                          {formatHp(raid.boss_max_hp)}
-                        </Text>
-                      </View>
-                      <Text style={styles.activeRaidTimer}>
-                        {minutes}:{seconds.toString().padStart(2, '0')}
-                      </Text>
+                      <Text style={styles.inviteAcceptBtnText}>수락</Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>보스 단계</Text>
-              <View style={styles.bossGrid}>
-                {bossRaidEntries.map(entry => {
-                  const unlocked =
-                    isAdmin || unlockedBossStages.includes(entry.stage);
-                  const disabled = !unlocked;
-
-                  return (
                     <TouchableOpacity
-                      key={entry.stage}
-                      style={[
-                        styles.bossCard,
-                        { borderColor: entry.color },
-                        disabled && styles.bossCardLocked,
-                        partyStartLocked && styles.bossCardPartyLocked,
-                      ]}
-                      disabled={disabled || partyStartLocked}
-                      onPress={() => handleChallengeBoss(entry.stage)}
+                      style={styles.inviteDeclineBtn}
+                      onPress={() => handleDeclineInvite(invite.id)}
                     >
-                      {getRaidBossSprite(entry.stage) ? (
-                        <Image
-                          source={getRaidBossSprite(entry.stage)!}
-                          resizeMode="contain"
-                          fadeDuration={0}
-                          style={styles.bossSprite}
-                        />
-                      ) : (
-                        <Text style={styles.bossEmoji}>{entry.emoji}</Text>
-                      )}
-                      <Text style={styles.bossStage}>{entry.stage}단계</Text>
-                      <Text
-                        style={[
-                          styles.bossName,
-                          unlocked
-                            ? getBossNameColorStyle(entry.color)
-                            : styles.bossNameLocked,
-                        ]}
-                      >
-                        {entry.name}
-                      </Text>
-                      <Text style={styles.bossHp}>{formatHp(entry.maxHp)}</Text>
-                      <Text
-                        style={[
-                          styles.unlockState,
-                          unlocked ? styles.unlocked : styles.locked,
-                        ]}
-                      >
-                        {unlocked
-                          ? isAdmin
-                            ? '관리자 입장 가능'
-                            : bossWindowInfo.isOpen
-                            ? '입장 가능'
-                            : '개방 대기'
-                          : '월드 클리어 필요'}
-                      </Text>
+                      <Text style={styles.inviteDeclineBtnText}>거절</Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  </View>
+                </View>
+              ))}
             </View>
-          </>
-        )}
+          )}
 
-        {incomingInvites.length > 0 && (
-          <View style={styles.inviteInboxCard}>
-            <Text style={styles.inviteInboxTitle}>받은 파티 초대</Text>
-            {incomingInvites.map(invite => (
-              <View key={invite.id} style={styles.inviteInboxRow}>
-                <View style={styles.inviteInboxInfo}>
-                  <Text style={styles.inviteInboxName}>
-                    {invite.inviterNickname}
-                  </Text>
-                  <Text style={styles.inviteInboxMeta}>
-                    {new Date(invite.createdAt).toLocaleTimeString('ko-KR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}{' '}
-                    초대
-                  </Text>
-                </View>
-                <View style={styles.inviteInboxActions}>
-                  <TouchableOpacity
-                    style={styles.inviteAcceptBtn}
-                    onPress={() => handleAcceptInvite(invite.id)}
-                  >
-                    <Text style={styles.inviteAcceptBtnText}>수락</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.inviteDeclineBtn}
-                    onPress={() => handleDeclineInvite(invite.id)}
-                  >
-                    <Text style={styles.inviteDeclineBtnText}>거절</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {partyId ? (
-          <View style={styles.partyHintCard}>
-            <Text style={styles.partyHintTitle}>
-              {isLeader ? '파티 레이드 시작 권한' : '파티 레이드 대기 중'}
-            </Text>
-            <Text style={styles.partyHintText}>
-              {isLeader
-                ? '파티장은 레이드를 시작하고 온라인 유저만 초대할 수 있습니다.'
-                : '파티장이 시작하면 같은 보스 인스턴스로 자동 합류합니다.'}
-            </Text>
-          </View>
-        ) : null}
-
-        <PartyPanel
-          partyId={partyId}
-          members={partyMembers}
-          isLeader={isLeader}
-          myPlayerId={playerIdRef.current}
-          onCreateParty={handleCreateParty}
-          onLeaveParty={handleLeaveParty}
-          onDisbandParty={handleDisbandParty}
-          onInviteFriends={() => {
-            if (
-              !partyId ||
-              !isLeader ||
-              partyMembers.length >= MAX_PARTY_SIZE
-            ) {
-              return;
-            }
-            setShowInviteModal(true);
-          }}
-        />
+          {partyId ? (
+            <View style={styles.partyHintCard}>
+              <Text style={styles.partyHintTitle}>
+                {isLeader ? '파티 레이드 시작 권한' : '파티 레이드 대기 중'}
+              </Text>
+              <Text style={styles.partyHintText}>
+                {isLeader
+                  ? '파티장은 레이드를 시작하고 온라인 유저만 초대할 수 있습니다.'
+                  : '파티장이 시작하면 같은 보스 인스턴스로 자동 합류합니다.'}
+              </Text>
+            </View>
+          ) : null}
         </ScrollView>
 
         <GameBottomNav
@@ -1994,6 +2389,45 @@ export default function RaidLobbyScreen({ navigation }: any) {
             void handleInvitePlayer(playerId, candidate?.nickname);
           }}
           onClose={resetInviteModal}
+        />
+
+        <RaidPartyManagerModal
+          visible={Boolean(partyModalTarget)}
+          target={partyModalTarget}
+          partyId={partyId}
+          members={partyMembers}
+          isLeader={isLeader}
+          myPlayerId={playerIdRef.current}
+          listings={visibleRaidPartyListings}
+          loading={raidPartyLoading}
+          actionLoading={partyActionLoading}
+          joinCode={partyJoinCode}
+          onChangeJoinCode={setPartyJoinCode}
+          onCreateParty={handleCreateParty}
+          onPostRecruitment={handlePostRecruitment}
+          onJoinByCode={handleJoinPartyFromCode}
+          onJoinParty={partyIdToJoin => {
+            void handleJoinPartyById(partyIdToJoin);
+          }}
+          onRandomJoin={handleRandomPartyJoin}
+          onRefreshParties={() => {
+            if (partyModalTarget) {
+              void loadRaidPartyListings(partyModalTarget);
+            }
+          }}
+          onInviteFriends={() => {
+            if (
+              !partyId ||
+              !isLeader ||
+              partyMembers.length >= MAX_PARTY_SIZE
+            ) {
+              return;
+            }
+            setShowInviteModal(true);
+          }}
+          onLeaveParty={handleLeaveParty}
+          onDisbandParty={handleDisbandParty}
+          onClose={closePartyManager}
         />
 
         {!coreLoading && chatPlayerId ? (
@@ -2022,6 +2456,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
               });
             }}
             onPressUser={handleInviteFromChat}
+            onJoinParty={partyIdToJoin => {
+              void handleJoinPartyById(partyIdToJoin, true);
+            }}
             bottom={GAME_BOTTOM_NAV_CHAT_OFFSET}
           />
         ) : null}
@@ -2180,13 +2617,30 @@ const styles = StyleSheet.create({
   },
   killBarFill: { height: 4, borderRadius: 2 },
   killCount: { color: '#64748b', fontSize: 10 },
+  raidActionColumn: {
+    width: 66,
+    gap: 6,
+  },
   nrChallengeBtn: {
     borderWidth: 1.5,
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 8,
+    alignItems: 'center',
   },
   nrChallengeBtnText: { fontSize: 13, fontWeight: '900' },
+  partyManageBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.34)',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  partyManageBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
   challengeBtnDisabled: {
     opacity: 0.55,
   },
@@ -2261,7 +2715,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     padding: 12,
     alignItems: 'center',
-    minHeight: 132,
+    minHeight: 170,
   },
   bossCardLocked: { opacity: 0.45 },
   bossCardPartyLocked: { opacity: 0.55 },
@@ -2289,6 +2743,34 @@ const styles = StyleSheet.create({
   },
   unlocked: { color: '#22c55e' },
   locked: { color: '#f87171' },
+  bossActionRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 10,
+    alignSelf: 'stretch',
+  },
+  bossChallengeBtn: {
+    flex: 1,
+    borderRadius: 9,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  bossChallengeBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  bossPartyBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 9,
+    backgroundColor: 'rgba(15, 23, 42, 0.34)',
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  bossPartyBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
   inviteInboxCard: {
     backgroundColor: 'rgba(45, 34, 95, 0.82)',
     borderRadius: 12,

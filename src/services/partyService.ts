@@ -1,6 +1,24 @@
 import { supabase } from './supabase';
 import { MAX_PARTY_SIZE } from '../constants/raidConfig';
 
+export type RaidPartyType = 'normal' | 'boss';
+
+export interface PartyRaidTarget {
+  raidType: RaidPartyType;
+  bossStage: number;
+}
+
+export interface RaidPartyListing {
+  id: string;
+  leaderId: string;
+  leaderNickname: string;
+  raidType: RaidPartyType;
+  bossStage: number;
+  memberCount: number;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+
 export interface PartyInviteRecord {
   id: string;
   party_id: string;
@@ -12,6 +30,36 @@ export interface PartyInviteRecord {
   expires_at: string;
   created_at: string;
   updated_at: string;
+}
+
+function isMissingPartyTargetColumnError(error: unknown) {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+
+  return (
+    (message.includes('raid_type') ||
+      message.includes('boss_stage') ||
+      message.includes('status') ||
+      message.includes('updated_at')) &&
+    (message.includes('schema cache') ||
+      message.includes('column') ||
+      message.includes('does not exist'))
+  );
+}
+
+function buildPartyTargetPayload(target?: PartyRaidTarget | null) {
+  if (!target) {
+    return {};
+  }
+
+  return {
+    raid_type: target.raidType,
+    boss_stage: target.bossStage,
+    status: 'recruiting',
+    updated_at: new Date().toISOString(),
+  };
 }
 
 async function getMembership(playerId: string) {
@@ -28,6 +76,10 @@ async function getPartyMemberCount(partyId: string) {
     .from('party_members')
     .select('*', { count: 'exact', head: true })
     .eq('party_id', partyId);
+}
+
+async function getPartyById(partyId: string) {
+  return supabase.from('parties').select('*').eq('id', partyId).maybeSingle();
 }
 
 async function updateInviteStatus(
@@ -82,6 +134,103 @@ export async function createParty(leaderId: string, nickname: string) {
   return { data: party, error: null };
 }
 
+export async function createRaidParty(
+  leaderId: string,
+  nickname: string,
+  target: PartyRaidTarget,
+) {
+  const { data: existingMembership, error: membershipError } =
+    await getMembership(leaderId);
+  if (membershipError) {
+    return { data: null, error: membershipError };
+  }
+  if (existingMembership?.party_id) {
+    return { data: null, error: { message: 'already_in_party' } };
+  }
+
+  let { data: party, error: partyErr } = await supabase
+    .from('parties')
+    .insert({
+      leader_id: leaderId,
+      ...buildPartyTargetPayload(target),
+    })
+    .select()
+    .single();
+
+  if (partyErr && isMissingPartyTargetColumnError(partyErr)) {
+    const fallback = await supabase
+      .from('parties')
+      .insert({ leader_id: leaderId })
+      .select()
+      .single();
+    party = fallback.data;
+    partyErr = fallback.error;
+  }
+
+  if (partyErr || !party) {
+    return { data: null, error: partyErr };
+  }
+
+  const { error: memberError } = await supabase.from('party_members').insert({
+    party_id: party.id,
+    player_id: leaderId,
+    nickname,
+  });
+  if (memberError) {
+    return { data: null, error: memberError };
+  }
+
+  if (!('raid_type' in party)) {
+    return {
+      data: {
+        ...party,
+        raid_type: target.raidType,
+        boss_stage: target.bossStage,
+      },
+      error: null,
+    };
+  }
+
+  return { data: party, error: null };
+}
+
+export async function updatePartyRaidTarget(
+  partyId: string,
+  leaderId: string,
+  target: PartyRaidTarget,
+) {
+  const { data: party, error: partyError } = await getPartyById(partyId);
+  if (partyError) {
+    return { data: null, error: partyError };
+  }
+  if (!party) {
+    return { data: null, error: { message: 'party_not_found' } };
+  }
+  if (party.leader_id !== leaderId) {
+    return { data: null, error: { message: 'leader_only' } };
+  }
+
+  const { data, error } = await supabase
+    .from('parties')
+    .update(buildPartyTargetPayload(target))
+    .eq('id', partyId)
+    .select()
+    .single();
+
+  if (error && isMissingPartyTargetColumnError(error)) {
+    return {
+      data: {
+        ...party,
+        raid_type: target.raidType,
+        boss_stage: target.bossStage,
+      },
+      error: null,
+    };
+  }
+
+  return { data, error };
+}
+
 export async function joinParty(
   partyId: string,
   playerId: string,
@@ -105,6 +254,14 @@ export async function joinParty(
 
   if (existingMembership?.party_id) {
     return { data: null, error: { message: 'already_in_party' } };
+  }
+
+  const { data: party, error: partyError } = await getPartyById(partyId);
+  if (partyError) {
+    return { data: null, error: partyError };
+  }
+  if (!party) {
+    return { data: null, error: { message: 'party_not_found' } };
   }
 
   const { count, error: countError } = await getPartyMemberCount(partyId);
@@ -162,6 +319,68 @@ export async function getPartyMembers(partyId: string) {
     .select('*')
     .eq('party_id', partyId)
     .order('joined_at', { ascending: true });
+}
+
+export async function listOpenPartiesForRaid(
+  target: PartyRaidTarget,
+  excludePlayerId?: string,
+) {
+  const { data: parties, error } = await supabase
+    .from('parties')
+    .select(
+      'id, leader_id, raid_type, boss_stage, status, created_at, updated_at',
+    )
+    .eq('raid_type', target.raidType)
+    .eq('boss_stage', target.bossStage)
+    .order('updated_at', { ascending: false })
+    .limit(20);
+
+  if (error) {
+    if (isMissingPartyTargetColumnError(error)) {
+      return { data: [] as RaidPartyListing[], error: null };
+    }
+    return { data: [] as RaidPartyListing[], error };
+  }
+
+  const listings: RaidPartyListing[] = [];
+
+  for (const party of parties ?? []) {
+    if (party.status && party.status !== 'recruiting') {
+      continue;
+    }
+
+    const { data: members, error: memberError } = await getPartyMembers(
+      party.id,
+    );
+    if (memberError) {
+      return { data: [] as RaidPartyListing[], error: memberError };
+    }
+
+    const memberRows = members ?? [];
+    if (memberRows.some(member => member.player_id === excludePlayerId)) {
+      continue;
+    }
+    if (memberRows.length >= MAX_PARTY_SIZE) {
+      continue;
+    }
+
+    const leader = memberRows.find(
+      member => member.player_id === party.leader_id,
+    );
+
+    listings.push({
+      id: party.id,
+      leaderId: party.leader_id,
+      leaderNickname: leader?.nickname ?? '파티장',
+      raidType: party.raid_type,
+      bossStage: party.boss_stage,
+      memberCount: memberRows.length,
+      createdAt: party.created_at,
+      updatedAt: party.updated_at,
+    });
+  }
+
+  return { data: listings, error: null };
 }
 
 export async function createPartyInvite(

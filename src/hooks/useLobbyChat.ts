@@ -12,6 +12,9 @@ import {
   fetchLobbyChatMessages,
   getLobbyChatChannelKey,
   insertLobbyChatMessage,
+  parseRaidPartyRecruitment,
+  stripRaidPartyRecruitmentToken,
+  type RaidPartyRecruitment,
   type LobbyChatMode,
 } from '../services/lobbyChatService';
 
@@ -20,6 +23,8 @@ export interface LobbyChatMessage {
   userId?: string;
   nickname: string;
   text: string;
+  rawText?: string;
+  partyRecruitment?: RaidPartyRecruitment;
   self?: boolean;
 }
 
@@ -75,6 +80,19 @@ function appendLobbyChatMessage(
 
   const nextMessages = [...current, next];
   return nextMessages.slice(-limit);
+}
+
+function normalizeLobbyChatMessage(
+  message: LobbyChatMessage,
+): LobbyChatMessage {
+  const rawText = message.rawText ?? message.text;
+
+  return {
+    ...message,
+    rawText,
+    text: stripRaidPartyRecruitmentToken(rawText),
+    partyRecruitment: parseRaidPartyRecruitment(rawText),
+  };
 }
 
 export function useLobbyChat({
@@ -146,16 +164,20 @@ export function useLobbyChat({
           }
 
           setMessages(current => {
-            const nextMessages = appendLobbyChatMessage(current, {
-              id: incomingId,
-              userId:
-                typeof payload?.userId === 'string'
-                  ? payload.userId
-                  : undefined,
-              nickname: incomingNickname,
-              text: incomingText,
-              self: payload?.userId === userId,
-            });
+            const nextMessages = appendLobbyChatMessage(
+              current,
+              normalizeLobbyChatMessage({
+                id: incomingId,
+                userId:
+                  typeof payload?.userId === 'string'
+                    ? payload.userId
+                    : undefined,
+                nickname: incomingNickname,
+                rawText: incomingText,
+                text: incomingText,
+                self: payload?.userId === userId,
+              }),
+            );
             writeLobbyChatHistory(mode, targetChannelId, nextMessages);
             return nextMessages;
           });
@@ -183,16 +205,20 @@ export function useLobbyChat({
             }
 
             setMessages(current => {
-              const nextMessages = appendLobbyChatMessage(current, {
-                id: incomingId,
-                userId:
-                  typeof payload?.new?.user_id === 'string'
-                    ? payload.new.user_id
-                    : undefined,
-                nickname: incomingNickname,
-                text: incomingText,
-                self: payload?.new?.user_id === userId,
-              });
+              const nextMessages = appendLobbyChatMessage(
+                current,
+                normalizeLobbyChatMessage({
+                  id: incomingId,
+                  userId:
+                    typeof payload?.new?.user_id === 'string'
+                      ? payload.new.user_id
+                      : undefined,
+                  nickname: incomingNickname,
+                  rawText: incomingText,
+                  text: incomingText,
+                  self: payload?.new?.user_id === userId,
+                }),
+              );
               writeLobbyChatHistory(mode, targetChannelId, nextMessages);
               return nextMessages;
             });
@@ -242,7 +268,9 @@ export function useLobbyChat({
                 id: message.id,
                 userId: message.userId,
                 nickname: message.nickname,
-                text: message.text,
+                rawText: message.text,
+                text: message.displayText,
+                partyRecruitment: message.partyRecruitment,
                 self: message.userId === userId,
               }));
               writeLobbyChatHistory(mode, targetChannelId, hydratedMessages);
@@ -361,62 +389,74 @@ export function useLobbyChat({
     setIsOpen(current => !current);
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const text = draft.trim();
-    const activeChannelId = currentChannelIdRef.current;
-    if (!text || !chatChannelRef.current || !activeChannelId) {
-      return;
-    }
-
-    const message: LobbyChatMessage = {
-      id: `${userId}-${Date.now()}`,
-      userId,
-      nickname,
-      text,
-      self: true,
-    };
-    setMessages(current => {
-      const nextMessages = appendLobbyChatMessage(current, message);
-      writeLobbyChatHistory(mode, activeChannelId, nextMessages);
-      return nextMessages;
-    });
-    setDraft('');
-
-    let broadcastSucceeded = false;
-    try {
-      const result = await chatChannelRef.current.send({
-        type: 'broadcast',
-        event: 'message',
-        payload: {
-          id: message.id,
-          userId,
-          nickname,
-          text,
-          channelId: activeChannelId,
-        },
-      });
-      broadcastSucceeded = result === 'ok';
-    } catch (error) {
-      console.warn('useLobbyChat broadcast failed:', error);
-    }
-
-    const { error } = await insertLobbyChatMessage({
-      id: message.id,
-      mode,
-      channelId: activeChannelId,
-      userId,
-      nickname,
-      text,
-    });
-
-    if (error) {
-      if (!broadcastSucceeded) {
-        Alert.alert('채팅 전송 실패', error.message);
-      } else {
-        console.warn('useLobbyChat insert failed:', error.message);
+  const sendTextMessage = useCallback(
+    async (rawInput: string) => {
+      const text = rawInput.trim();
+      const activeChannelId = currentChannelIdRef.current;
+      if (!text || !chatChannelRef.current || !activeChannelId) {
+        return false;
       }
+
+      const message = normalizeLobbyChatMessage({
+        id: `${userId}-${Date.now()}`,
+        userId,
+        nickname,
+        rawText: text,
+        text,
+        self: true,
+      });
+      setMessages(current => {
+        const nextMessages = appendLobbyChatMessage(current, message);
+        writeLobbyChatHistory(mode, activeChannelId, nextMessages);
+        return nextMessages;
+      });
+
+      let broadcastSucceeded = false;
+      try {
+        const result = await chatChannelRef.current.send({
+          type: 'broadcast',
+          event: 'message',
+          payload: {
+            id: message.id,
+            userId,
+            nickname,
+            text: message.rawText ?? text,
+            channelId: activeChannelId,
+          },
+        });
+        broadcastSucceeded = result === 'ok';
+      } catch (error) {
+        console.warn('useLobbyChat broadcast failed:', error);
+      }
+
+      const { error } = await insertLobbyChatMessage({
+        id: message.id,
+        mode,
+        channelId: activeChannelId,
+        userId,
+        nickname,
+        text: message.rawText ?? text,
+      });
+
+      if (error) {
+        if (!broadcastSucceeded) {
+          Alert.alert('채팅 전송 실패', error.message);
+        } else {
+          console.warn('useLobbyChat insert failed:', error.message);
+        }
+      }
+
+      return !error || broadcastSucceeded;
+    },
+    [mode, nickname, userId],
+  );
+
+  const sendMessage = useCallback(async () => {
+    const sent = await sendTextMessage(draft);
+    if (sent) {
+      setDraft('');
     }
-  }, [draft, mode, nickname, userId]);
+  }, [draft, sendTextMessage]);
 
   const channelOptions = useMemo(
     () => buildLobbyChatChannelOptions(channelInfos, currentChannelId),
@@ -437,5 +477,6 @@ export function useLobbyChat({
     switchChannel,
     joinRandomChannel,
     sendMessage,
+    sendTextMessage,
   };
 }
