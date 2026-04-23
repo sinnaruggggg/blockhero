@@ -371,6 +371,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const [partyMembers, setPartyMembers] = useState<PartyMemberLocal[]>(
     cachedParty?.partyMembers ?? [],
   );
+  const [partyActiveRaid, setPartyActiveRaid] = useState<ActiveRaid | null>(
+    null,
+  );
   const [isLeader, setIsLeader] = useState(cachedCore?.isLeader ?? false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [friendList, setFriendList] = useState<InviteCandidate[]>(
@@ -775,6 +778,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         cleanupPartyChannel();
         clearRaidLobbyPartyCache();
         setPartyMembers([]);
+        setPartyActiveRaid(null);
         setPartyLoading(false);
         return;
       }
@@ -840,15 +844,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         });
 
         const partyActiveRaid = partyActiveRaidResult?.data ?? null;
-        if (partyActiveRaid) {
-          cleanup();
-          navigation.replace('Raid', {
-            instanceId: partyActiveRaid.id,
-            bossStage: partyActiveRaid.boss_stage,
-            isNormalRaid: inferPartyRaidIsNormal(partyActiveRaid),
-          });
-          return;
-        }
+        setPartyActiveRaid(partyActiveRaid);
 
         if (loadIssues.length > 0) {
           setLoadSummary(buildPartialLoadSummary(loadIssues));
@@ -859,7 +855,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         }
       }
     },
-    [cleanup, cleanupPartyChannel, navigation, setupPartyChannel],
+    [cleanupPartyChannel, setupPartyChannel],
   );
 
   const refreshPartyState = useCallback(async () => {
@@ -925,6 +921,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       clearRaidLobbyPartyCache();
       setPartyId(null);
       setPartyMembers([]);
+      setPartyActiveRaid(null);
       setIsLeader(false);
       writeRaidLobbyCoreCache({
         playerId,
@@ -1072,6 +1069,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           cleanupPartyChannel();
           clearRaidLobbyPartyCache();
           setPartyMembers([]);
+          setPartyActiveRaid(null);
         }
 
         if (loadIssues.length > 0) {
@@ -1893,6 +1891,37 @@ export default function RaidLobbyScreen({ navigation }: any) {
     [cleanup, isAdmin, navigation, partyId, unlockedBossStages],
   );
 
+  const handleJoinPartyActiveRaid = useCallback(async () => {
+    if (!partyActiveRaid) {
+      return;
+    }
+
+    const { error } = await joinRaidInstance(
+      partyActiveRaid.id,
+      playerIdRef.current,
+      nicknameRef.current,
+      { bypassBossWindow: isAdmin },
+    );
+
+    if (error) {
+      Alert.alert(
+        '오류',
+        error.message === 'raid_expired'
+          ? '이미 종료된 파티 레이드입니다. 다시 목록을 불러와 주세요.'
+          : error.message,
+      );
+      void loadPartyData(partyId);
+      return;
+    }
+
+    cleanup();
+    navigation.replace('Raid', {
+      instanceId: partyActiveRaid.id,
+      bossStage: partyActiveRaid.boss_stage,
+      isNormalRaid: inferPartyRaidIsNormal(partyActiveRaid),
+    });
+  }, [cleanup, isAdmin, loadPartyData, navigation, partyActiveRaid, partyId]);
+
   const formatHp = (hp: number) => {
     if (hp >= 1000000) {
       return `${(hp / 1000000).toFixed(1)}M`;
@@ -1906,6 +1935,15 @@ export default function RaidLobbyScreen({ navigation }: any) {
   };
 
   const partyStartLocked = Boolean(partyId) && !isLeader;
+  const partyActiveRaidIsNormal = partyActiveRaid
+    ? inferPartyRaidIsNormal(partyActiveRaid)
+    : false;
+  const partyActiveRaidDisplay = partyActiveRaid
+    ? resolveRaidDisplay(
+        partyActiveRaidIsNormal ? 'normal' : 'boss',
+        partyActiveRaid.boss_stage,
+      )
+    : null;
   const inviteableFriends = friendList.filter(
     friend =>
       friend.isOnline &&
@@ -2362,8 +2400,28 @@ export default function RaidLobbyScreen({ navigation }: any) {
               <Text style={styles.partyHintText}>
                 {isLeader
                   ? '파티장은 레이드를 시작하고 온라인 유저만 초대할 수 있습니다.'
-                  : '파티장이 시작하면 같은 보스 인스턴스로 자동 합류합니다.'}
+                  : '파티장이 지금 시작하면 자동 합류하고, 이미 진행 중인 레이드는 직접 입장할 수 있습니다.'}
               </Text>
+              {partyActiveRaid && partyActiveRaidDisplay ? (
+                <TouchableOpacity
+                  style={[
+                    styles.partyActiveRaidBtn,
+                    { borderColor: partyActiveRaidDisplay.color },
+                  ]}
+                  onPress={handleJoinPartyActiveRaid}
+                >
+                  <View style={styles.partyActiveRaidInfo}>
+                    <Text style={styles.partyActiveRaidTitle}>
+                      진행 중 레이드 입장
+                    </Text>
+                    <Text style={styles.partyActiveRaidMeta}>
+                      {partyActiveRaidDisplay.name} ·{' '}
+                      {partyActiveRaidIsNormal ? '일반' : '보스'} 레이드
+                    </Text>
+                  </View>
+                  <Text style={styles.partyActiveRaidEnter}>입장</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
@@ -2848,5 +2906,34 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 12,
     lineHeight: 18,
+  },
+  partyActiveRaidBtn: {
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  partyActiveRaidInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  partyActiveRaidTitle: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  partyActiveRaidMeta: {
+    color: '#94a3b8',
+    fontSize: 11,
+  },
+  partyActiveRaidEnter: {
+    color: '#facc15',
+    fontSize: 12,
+    fontWeight: '900',
   },
 });
