@@ -68,6 +68,34 @@ describe('visualConfig helpers', () => {
 
   it('collects referenced asset keys without duplicates', () => {
     const manifest = sanitizeVisualConfigManifest({
+      gameplay: {
+        dragTuning: DEFAULT_GAMEPLAY_DRAG_TUNING,
+        audio: {
+          masterVolume: 1,
+          sfxVolume: 1,
+          bgmVolume: 0.7,
+          muted: false,
+          sfx: {
+            blockPlace: {
+              assetKey: 'audio-shared',
+              volume: 1,
+              cooldownMs: 40,
+              allowOverlap: true,
+              enabled: true,
+            },
+          },
+          bgm: {
+            level: {
+              assetKey: 'level-bgm',
+              volume: 0.7,
+              loop: true,
+              fadeInMs: 800,
+              fadeOutMs: 500,
+              enabled: true,
+            },
+          },
+        } as any,
+      },
       studioSnapshots: {
         level: {
           assetKey: 'runtime-level-shot',
@@ -132,6 +160,8 @@ describe('visualConfig helpers', () => {
     });
 
     expect(collectReferencedVisualAssetKeys(manifest).sort()).toEqual([
+      'audio-shared',
+      'level-bgm',
       'raid-only-bg',
       'runtime-level-shot',
       'shared-bg',
@@ -259,18 +289,69 @@ describe('visualConfig helpers', () => {
       gameplay: {
         dragTuning: {
           liftOffsetCells: 9,
+          centerOffsetXCells: -2,
+          centerOffsetYCells: 2,
+          dragDistanceScaleX: 0.2,
+          dragDistanceScaleY: 2,
           snapMaxDistanceCells: -1,
           stickyThresholdCells: 1.5,
           snapSearchRadius: 1.6,
         },
+        audio: {
+          masterVolume: 2,
+          sfxVolume: -1,
+          bgmVolume: 0.5,
+          muted: true,
+          sfx: {
+            blockPlace: {
+              assetKey: ' block-place ',
+              volume: 2,
+              cooldownMs: 3000,
+              allowOverlap: false,
+              enabled: false,
+            },
+          },
+          bgm: {
+            raidBoss: {
+              assetKey: ' raid-theme ',
+              volume: -1,
+              loop: false,
+              fadeInMs: 20000,
+              fadeOutMs: -100,
+              enabled: false,
+            },
+          },
+        } as any,
       },
     });
 
     expect(manifest.gameplay.dragTuning).toEqual({
       liftOffsetCells: 4,
+      centerOffsetXCells: -1.5,
+      centerOffsetYCells: 1.5,
+      dragDistanceScaleX: 0.75,
+      dragDistanceScaleY: 1.5,
       snapMaxDistanceCells: 0,
       stickyThresholdCells: 0.8,
       snapSearchRadius: 2,
+    });
+    expect(manifest.gameplay.audio.masterVolume).toBe(1);
+    expect(manifest.gameplay.audio.sfxVolume).toBe(0);
+    expect(manifest.gameplay.audio.muted).toBe(true);
+    expect(manifest.gameplay.audio.sfx.blockPlace).toEqual({
+      assetKey: 'block-place',
+      volume: 1,
+      cooldownMs: 2000,
+      allowOverlap: false,
+      enabled: false,
+    });
+    expect(manifest.gameplay.audio.bgm.raidBoss).toEqual({
+      assetKey: 'raid-theme',
+      volume: 0,
+      loop: false,
+      fadeInMs: 10000,
+      fadeOutMs: 0,
+      enabled: false,
     });
   });
 

@@ -732,6 +732,11 @@ button.small {
   background: rgba(15, 23, 42, 0.72);
 }
 
+.asset-audio-preview {
+  width: 100%;
+  height: 34px;
+}
+
 .asset-meta,
 .release-meta {
   display: flex;

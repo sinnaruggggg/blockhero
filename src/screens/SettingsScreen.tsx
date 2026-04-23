@@ -11,6 +11,10 @@ import {
 import GamePanel from '../components/GamePanel';
 import MenuScreenFrame from '../components/MenuScreenFrame';
 import {getAdminStatus} from '../services/adminSync';
+import {
+  refreshCachedAudioSettings,
+  refreshCurrentBgm,
+} from '../services/gameAudio';
 import {openGameDialog, showGameConfirm} from '../services/gameDialogService';
 import {supabase} from '../services/supabase';
 import {CURRENT_VERSION_NAME} from '../constants/appVersion';
@@ -110,6 +114,10 @@ export default function SettingsScreen({navigation}: any) {
     value: boolean,
   ) => {
     await saveGameSettings({[key]: value});
+    if (key === 'bgm' || key === 'sfx') {
+      await refreshCachedAudioSettings();
+      refreshCurrentBgm();
+    }
   };
 
   const handleLogout = async () => {

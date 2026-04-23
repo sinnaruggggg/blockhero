@@ -61,6 +61,38 @@ function resolveDragTuning(
       1,
       4,
     ),
+    centerOffsetXCells: clamp(
+      numberOr(
+        tuning?.centerOffsetXCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells,
+      ),
+      -1.5,
+      1.5,
+    ),
+    centerOffsetYCells: clamp(
+      numberOr(
+        tuning?.centerOffsetYCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells,
+      ),
+      -1.5,
+      1.5,
+    ),
+    dragDistanceScaleX: clamp(
+      numberOr(
+        tuning?.dragDistanceScaleX,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX,
+      ),
+      0.75,
+      1.5,
+    ),
+    dragDistanceScaleY: clamp(
+      numberOr(
+        tuning?.dragDistanceScaleY,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY,
+      ),
+      0.75,
+      1.5,
+    ),
     snapMaxDistanceCells: clamp(
       numberOr(
         tuning?.snapMaxDistanceCells,
@@ -181,6 +213,10 @@ export function useDragDrop(
     () => resolveDragTuning(dragTuning),
     [
       dragTuning?.liftOffsetCells,
+      dragTuning?.centerOffsetXCells,
+      dragTuning?.centerOffsetYCells,
+      dragTuning?.dragDistanceScaleX,
+      dragTuning?.dragDistanceScaleY,
       dragTuning?.snapMaxDistanceCells,
       dragTuning?.stickyThresholdCells,
       dragTuning?.snapSearchRadius,

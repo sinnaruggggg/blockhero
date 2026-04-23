@@ -92,6 +92,7 @@ import {
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { flushPlayerStateNow } from '../services/playerState';
+import { playGameBgm, stopGameBgm } from '../services/gameAudio';
 import { playBlockPlacementSound } from '../services/placementSound';
 import { submitRaidLeaderboard } from '../services/rankingService';
 import { supabase } from '../services/supabase';
@@ -304,6 +305,12 @@ export default function RaidScreen({ route, navigation }: any) {
   const { manifest: creatorManifest, assetUris: creatorAssetUris } =
     useCreatorConfig();
   const raidScreenId = isNormalRaid ? 'raidNormal' : 'raidBoss';
+
+  useEffect(() => {
+    playGameBgm(isNormalRaid ? 'raidNormal' : 'raidBoss');
+    return () => stopGameBgm();
+  }, [isNormalRaid, visualManifest.version]);
+
   const creatorRaidRuntime = resolveCreatorRaidRuntime(
     creatorManifest,
     isNormalRaid ? 'normal' : 'boss',

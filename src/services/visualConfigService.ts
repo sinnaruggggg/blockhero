@@ -68,6 +68,18 @@ function inferFileExtension(mimeType: string | null, dataUrl: string) {
   if (value.includes('webp')) {
     return 'webp';
   }
+  if (value.includes('mpeg') || value.includes('mp3')) {
+    return 'mp3';
+  }
+  if (value.includes('wav')) {
+    return 'wav';
+  }
+  if (value.includes('ogg')) {
+    return 'ogg';
+  }
+  if (value.includes('mp4') || value.includes('aac') || value.includes('m4a')) {
+    return 'm4a';
+  }
   return 'jpg';
 }
 

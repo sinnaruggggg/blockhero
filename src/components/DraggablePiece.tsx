@@ -150,6 +150,7 @@ export default function DraggablePiece({
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
   const dragCenterOffsetRef = useRef({ x: 0, y: 0 });
+  const dragOriginRef = useRef({ x: 0, y: 0, active: false });
   const layoutScale = getGameplayLayoutScale(viewport);
   const boardMetrics = getBoardMetrics(viewport, { compact: boardCompact });
   const blockSize = Math.max(
@@ -167,6 +168,50 @@ export default function DraggablePiece({
   );
   const dragOffsetY = -Math.round(
     (boardMetrics.cellSize + boardMetrics.gap) * liftOffsetCells * boardScaleY,
+  );
+  const centerOffsetXCells = Math.max(
+    -1.5,
+    Math.min(
+      1.5,
+      Number.isFinite(Number(dragTuning?.centerOffsetXCells))
+        ? Number(dragTuning?.centerOffsetXCells)
+        : DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells,
+    ),
+  );
+  const centerOffsetYCells = Math.max(
+    -1.5,
+    Math.min(
+      1.5,
+      Number.isFinite(Number(dragTuning?.centerOffsetYCells))
+        ? Number(dragTuning?.centerOffsetYCells)
+        : DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells,
+    ),
+  );
+  const dragDistanceScaleX = Math.max(
+    0.75,
+    Math.min(
+      1.5,
+      Number.isFinite(Number(dragTuning?.dragDistanceScaleX))
+        ? Number(dragTuning?.dragDistanceScaleX)
+        : DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX,
+    ),
+  );
+  const dragDistanceScaleY = Math.max(
+    0.75,
+    Math.min(
+      1.5,
+      Number.isFinite(Number(dragTuning?.dragDistanceScaleY))
+        ? Number(dragTuning?.dragDistanceScaleY)
+        : DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY,
+    ),
+  );
+  const centerOffsetX = Math.round(
+    (boardMetrics.cellSize + boardMetrics.gap) * centerOffsetXCells,
+  );
+  const centerOffsetY = Math.round(
+    (boardMetrics.cellSize + boardMetrics.gap) *
+      centerOffsetYCells *
+      boardScaleY,
   );
   const traySlotSize = Math.max(
     72,
@@ -207,12 +252,33 @@ export default function DraggablePiece({
               ? evt.nativeEvent.pageY
               : gs.y0 ?? 0;
 
+        const origin = dragOriginRef.current;
+        const adjustedPageX = origin.active
+          ? origin.x + (pageX - origin.x) * dragDistanceScaleX
+          : pageX;
+        const adjustedPageY = origin.active
+          ? origin.y + (pageY - origin.y) * dragDistanceScaleY
+          : pageY;
+
         return {
-          x: pageX + dragCenterOffsetRef.current.x,
-          y: pageY + dragCenterOffsetRef.current.y + dragOffsetY,
+          x:
+            adjustedPageX +
+            dragCenterOffsetRef.current.x +
+            centerOffsetX,
+          y:
+            adjustedPageY +
+            dragCenterOffsetRef.current.y +
+            dragOffsetY +
+            centerOffsetY,
         };
       },
-    [dragOffsetY],
+    [
+      centerOffsetX,
+      centerOffsetY,
+      dragDistanceScaleX,
+      dragDistanceScaleY,
+      dragOffsetY,
+    ],
   );
 
   const panResponder = useMemo(
@@ -236,8 +302,13 @@ export default function DraggablePiece({
             x: traySlotSize / 2 - locationX,
             y: traySlotSize / 2 - locationY,
           };
+          dragOriginRef.current = {
+            x: evt.nativeEvent.pageX,
+            y: evt.nativeEvent.pageY,
+            active: true,
+          };
 
-          pan.setValue({ x: 0, y: dragOffsetY });
+          pan.setValue({ x: centerOffsetX, y: dragOffsetY + centerOffsetY });
           Animated.spring(scale, {
             toValue: 1.5,
             useNativeDriver: false,
@@ -252,14 +323,15 @@ export default function DraggablePiece({
         },
         onPanResponderMove: (evt, gs) => {
           pan.setValue({
-            x: gs.dx,
-            y: gs.dy + dragOffsetY,
+            x: gs.dx * dragDistanceScaleX + centerOffsetX,
+            y: gs.dy * dragDistanceScaleY + dragOffsetY + centerOffsetY,
           });
           const liftedCenter = getLiftedPieceCenter(evt, gs);
           callbacksRef.current.onDragMove(liftedCenter.x, liftedCenter.y);
         },
         onPanResponderRelease: (evt, gs) => {
           const liftedCenter = getLiftedPieceCenter(evt, gs);
+          dragOriginRef.current.active = false;
           Animated.spring(scale, {
             toValue: 1,
             useNativeDriver: false,
@@ -273,6 +345,7 @@ export default function DraggablePiece({
           callbacksRef.current.onDragEnd(liftedCenter.x, liftedCenter.y);
         },
         onPanResponderTerminate: () => {
+          dragOriginRef.current.active = false;
           Animated.spring(scale, {
             toValue: 1,
             useNativeDriver: false,
@@ -284,7 +357,17 @@ export default function DraggablePiece({
           callbacksRef.current.onDragCancel();
         },
       }),
-    [dragOffsetY, getLiftedPieceCenter, pan, scale, traySlotSize],
+    [
+      centerOffsetX,
+      centerOffsetY,
+      dragDistanceScaleX,
+      dragDistanceScaleY,
+      dragOffsetY,
+      getLiftedPieceCenter,
+      pan,
+      scale,
+      traySlotSize,
+    ],
   );
 
   if (!piece) {

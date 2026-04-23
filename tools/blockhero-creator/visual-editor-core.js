@@ -170,9 +170,73 @@ export const DEFAULT_RULE = {
 
 export const DEFAULT_GAMEPLAY_DRAG_TUNING = {
   liftOffsetCells: 2.5,
+  centerOffsetXCells: 0,
+  centerOffsetYCells: 0,
+  dragDistanceScaleX: 1,
+  dragDistanceScaleY: 1,
   snapMaxDistanceCells: 0.42,
   stickyThresholdCells: 0,
   snapSearchRadius: 1,
+};
+
+export const GAMEPLAY_SFX_EVENT_IDS = [
+  'blockPlace',
+  'blockPlaceFail',
+  'lineClear',
+  'combo',
+  'levelUp',
+  'skillUse',
+  'reward',
+  'button',
+  'battleStart',
+  'victory',
+  'defeat',
+  'raidEnter',
+  'raidBossAppear',
+  'matchingSuccess',
+  'notice',
+];
+
+export const GAMEPLAY_BGM_TRACK_IDS = [
+  'home',
+  'level',
+  'endless',
+  'battle',
+  'raidNormal',
+  'raidBoss',
+  'shop',
+  'heroes',
+  'lobby',
+];
+
+export const DEFAULT_GAMEPLAY_SFX_RULE = {
+  assetKey: null,
+  volume: 1,
+  cooldownMs: 40,
+  allowOverlap: true,
+  enabled: true,
+};
+
+export const DEFAULT_GAMEPLAY_BGM_RULE = {
+  assetKey: null,
+  volume: 0.7,
+  loop: true,
+  fadeInMs: 800,
+  fadeOutMs: 500,
+  enabled: true,
+};
+
+export const DEFAULT_GAMEPLAY_AUDIO_CONFIG = {
+  masterVolume: 1,
+  sfxVolume: 1,
+  bgmVolume: 0.7,
+  muted: false,
+  sfx: Object.fromEntries(
+    GAMEPLAY_SFX_EVENT_IDS.map(id => [id, clone(DEFAULT_GAMEPLAY_SFX_RULE)]),
+  ),
+  bgm: Object.fromEntries(
+    GAMEPLAY_BGM_TRACK_IDS.map(id => [id, clone(DEFAULT_GAMEPLAY_BGM_RULE)]),
+  ),
 };
 
 export const PREVIEW_LAYOUT = {
@@ -280,6 +344,7 @@ export function createDefaultVisualManifest() {
     referenceViewport: clone(DEFAULT_REFERENCE_VIEWPORT),
     gameplay: {
       dragTuning: clone(DEFAULT_GAMEPLAY_DRAG_TUNING),
+      audio: clone(DEFAULT_GAMEPLAY_AUDIO_CONFIG),
     },
     studioSnapshots: {},
     screens: {
@@ -375,6 +440,38 @@ export function sanitizeGameplayDragTuning(value) {
       1,
       4,
     ),
+    centerOffsetXCells: clamp(
+      numberOr(
+        merged.centerOffsetXCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells,
+      ),
+      -1.5,
+      1.5,
+    ),
+    centerOffsetYCells: clamp(
+      numberOr(
+        merged.centerOffsetYCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells,
+      ),
+      -1.5,
+      1.5,
+    ),
+    dragDistanceScaleX: clamp(
+      numberOr(
+        merged.dragDistanceScaleX,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX,
+      ),
+      0.75,
+      1.5,
+    ),
+    dragDistanceScaleY: clamp(
+      numberOr(
+        merged.dragDistanceScaleY,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY,
+      ),
+      0.75,
+      1.5,
+    ),
     snapMaxDistanceCells: clamp(
       numberOr(
         merged.snapMaxDistanceCells,
@@ -404,9 +501,75 @@ export function sanitizeGameplayDragTuning(value) {
   };
 }
 
+function sanitizeAssetKey(value) {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+export function sanitizeGameplayAudioConfig(value) {
+  const merged = { ...DEFAULT_GAMEPLAY_AUDIO_CONFIG, ...(value ?? {}) };
+  return {
+    masterVolume: clamp(
+      numberOr(merged.masterVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.masterVolume),
+      0,
+      1,
+    ),
+    sfxVolume: clamp(
+      numberOr(merged.sfxVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.sfxVolume),
+      0,
+      1,
+    ),
+    bgmVolume: clamp(
+      numberOr(merged.bgmVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.bgmVolume),
+      0,
+      1,
+    ),
+    muted: merged.muted === true,
+    sfx: Object.fromEntries(
+      GAMEPLAY_SFX_EVENT_IDS.map(id => {
+        const rule = {
+          ...DEFAULT_GAMEPLAY_SFX_RULE,
+          ...(merged.sfx?.[id] ?? {}),
+        };
+        return [
+          id,
+          {
+            assetKey: sanitizeAssetKey(rule.assetKey),
+            volume: clamp(numberOr(rule.volume, 1), 0, 1),
+            cooldownMs: Math.round(clamp(numberOr(rule.cooldownMs, 40), 0, 2000)),
+            allowOverlap: rule.allowOverlap !== false,
+            enabled: rule.enabled !== false,
+          },
+        ];
+      }),
+    ),
+    bgm: Object.fromEntries(
+      GAMEPLAY_BGM_TRACK_IDS.map(id => {
+        const rule = {
+          ...DEFAULT_GAMEPLAY_BGM_RULE,
+          ...(merged.bgm?.[id] ?? {}),
+        };
+        return [
+          id,
+          {
+            assetKey: sanitizeAssetKey(rule.assetKey),
+            volume: clamp(numberOr(rule.volume, 0.7), 0, 1),
+            loop: rule.loop !== false,
+            fadeInMs: Math.round(clamp(numberOr(rule.fadeInMs, 800), 0, 10000)),
+            fadeOutMs: Math.round(clamp(numberOr(rule.fadeOutMs, 500), 0, 10000)),
+            enabled: rule.enabled !== false,
+          },
+        ];
+      }),
+    ),
+  };
+}
+
 export function sanitizeGameplayVisualConfig(value) {
   return {
     dragTuning: sanitizeGameplayDragTuning(value?.dragTuning),
+    audio: sanitizeGameplayAudioConfig(value?.audio),
   };
 }
 

@@ -15,6 +15,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { t } from '../i18n';
+import { playGameBgm, stopGameBgm } from '../services/gameAudio';
 import { playBlockPlacementSound } from '../services/placementSound';
 import { flushPlayerStateNow } from '../services/playerState';
 import { getAdminStatus } from '../services/adminSync';
@@ -385,6 +386,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const dragTuning = getGameplayDragTuning(visualManifest);
   const { manifest: creatorManifest, assetUris: creatorAssetUris } =
     useCreatorConfig();
+
+  useEffect(() => {
+    playGameBgm('level');
+    return () => stopGameBgm();
+  }, [visualManifest.version]);
   const creatorLevelRuntime = resolveCreatorLevelRuntime(
     creatorManifest,
     levelId,

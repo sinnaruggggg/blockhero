@@ -102,13 +102,72 @@ export type VisualBackgroundOverride = {
 
 export type GameplayDragTuning = {
   liftOffsetCells: number;
+  centerOffsetXCells: number;
+  centerOffsetYCells: number;
+  dragDistanceScaleX: number;
+  dragDistanceScaleY: number;
   snapMaxDistanceCells: number;
   stickyThresholdCells: number;
   snapSearchRadius: number;
 };
 
+export type GameplaySfxEventId =
+  | 'blockPlace'
+  | 'blockPlaceFail'
+  | 'lineClear'
+  | 'combo'
+  | 'levelUp'
+  | 'skillUse'
+  | 'reward'
+  | 'button'
+  | 'battleStart'
+  | 'victory'
+  | 'defeat'
+  | 'raidEnter'
+  | 'raidBossAppear'
+  | 'matchingSuccess'
+  | 'notice';
+
+export type GameplayBgmTrackId =
+  | 'home'
+  | 'level'
+  | 'endless'
+  | 'battle'
+  | 'raidNormal'
+  | 'raidBoss'
+  | 'shop'
+  | 'heroes'
+  | 'lobby';
+
+export type GameplaySfxRule = {
+  assetKey: string | null;
+  volume: number;
+  cooldownMs: number;
+  allowOverlap: boolean;
+  enabled: boolean;
+};
+
+export type GameplayBgmRule = {
+  assetKey: string | null;
+  volume: number;
+  loop: boolean;
+  fadeInMs: number;
+  fadeOutMs: number;
+  enabled: boolean;
+};
+
+export type GameplayAudioConfig = {
+  masterVolume: number;
+  sfxVolume: number;
+  bgmVolume: number;
+  muted: boolean;
+  sfx: Record<GameplaySfxEventId, GameplaySfxRule>;
+  bgm: Record<GameplayBgmTrackId, GameplayBgmRule>;
+};
+
 export type GameplayVisualConfig = {
   dragTuning: GameplayDragTuning;
+  audio: GameplayAudioConfig;
 };
 
 export type LevelScreenVisualConfig = {
@@ -308,9 +367,119 @@ export const DEFAULT_VISUAL_BACKGROUND_OVERRIDE: VisualBackgroundOverride = {
 
 export const DEFAULT_GAMEPLAY_DRAG_TUNING: GameplayDragTuning = {
   liftOffsetCells: 2.5,
+  centerOffsetXCells: 0,
+  centerOffsetYCells: 0,
+  dragDistanceScaleX: 1,
+  dragDistanceScaleY: 1,
   snapMaxDistanceCells: 0.42,
   stickyThresholdCells: 0,
   snapSearchRadius: 1,
+};
+
+export const GAMEPLAY_SFX_EVENT_IDS: GameplaySfxEventId[] = [
+  'blockPlace',
+  'blockPlaceFail',
+  'lineClear',
+  'combo',
+  'levelUp',
+  'skillUse',
+  'reward',
+  'button',
+  'battleStart',
+  'victory',
+  'defeat',
+  'raidEnter',
+  'raidBossAppear',
+  'matchingSuccess',
+  'notice',
+];
+
+export const GAMEPLAY_BGM_TRACK_IDS: GameplayBgmTrackId[] = [
+  'home',
+  'level',
+  'endless',
+  'battle',
+  'raidNormal',
+  'raidBoss',
+  'shop',
+  'heroes',
+  'lobby',
+];
+
+export const GAMEPLAY_SFX_LABELS: Record<GameplaySfxEventId, string> = {
+  blockPlace: '블록 놓기',
+  blockPlaceFail: '블록 놓기 실패',
+  lineClear: '줄 클리어',
+  combo: '콤보',
+  levelUp: '레벨업',
+  skillUse: '스킬 사용',
+  reward: '보상 획득',
+  button: '버튼 클릭',
+  battleStart: '전투 시작',
+  victory: '승리',
+  defeat: '패배',
+  raidEnter: '레이드 입장',
+  raidBossAppear: '레이드 보스 등장',
+  matchingSuccess: '매칭 성공',
+  notice: '알림/팝업',
+};
+
+export const GAMEPLAY_BGM_LABELS: Record<GameplayBgmTrackId, string> = {
+  home: '홈',
+  level: '레벨 모드',
+  endless: '무한 모드',
+  battle: '대전 모드',
+  raidNormal: '일반 레이드',
+  raidBoss: '보스 레이드',
+  shop: '상점',
+  heroes: '영웅',
+  lobby: '로비/매칭',
+};
+
+export const DEFAULT_GAMEPLAY_SFX_RULE: GameplaySfxRule = {
+  assetKey: null,
+  volume: 1,
+  cooldownMs: 40,
+  allowOverlap: true,
+  enabled: true,
+};
+
+export const DEFAULT_GAMEPLAY_BGM_RULE: GameplayBgmRule = {
+  assetKey: null,
+  volume: 0.7,
+  loop: true,
+  fadeInMs: 800,
+  fadeOutMs: 500,
+  enabled: true,
+};
+
+function createDefaultGameplaySfxMap(): Record<GameplaySfxEventId, GameplaySfxRule> {
+  return GAMEPLAY_SFX_EVENT_IDS.reduce(
+    (acc, id) => {
+      acc[id] = {...DEFAULT_GAMEPLAY_SFX_RULE};
+      return acc;
+    },
+    {} as Record<GameplaySfxEventId, GameplaySfxRule>,
+  );
+}
+
+function createDefaultGameplayBgmMap(): Record<GameplayBgmTrackId, GameplayBgmRule> {
+  return GAMEPLAY_BGM_TRACK_IDS.reduce(
+    (acc, id) => {
+      acc[id] = {...DEFAULT_GAMEPLAY_BGM_RULE};
+      return acc;
+    },
+    {} as Record<GameplayBgmTrackId, GameplayBgmRule>,
+  );
+}
+
+export const DEFAULT_GAMEPLAY_AUDIO_CONFIG: GameplayAudioConfig = {
+  masterVolume: 1,
+  sfxVolume: 1,
+  bgmVolume: 0.7,
+  muted: false,
+  sfx: createDefaultGameplaySfxMap(),
+  bgm: createDefaultGameplayBgmMap(),
 };
 
 function cloneRule(): VisualElementRule {
@@ -329,6 +498,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
   referenceViewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
   gameplay: {
     dragTuning: { ...DEFAULT_GAMEPLAY_DRAG_TUNING },
+    audio: JSON.parse(JSON.stringify(DEFAULT_GAMEPLAY_AUDIO_CONFIG)),
   },
   screens: {
     level: {
@@ -434,6 +604,38 @@ function sanitizeGameplayDragTuning(
       1,
       4,
     ),
+    centerOffsetXCells: clamp(
+      numberOr(
+        merged.centerOffsetXCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells,
+      ),
+      -1.5,
+      1.5,
+    ),
+    centerOffsetYCells: clamp(
+      numberOr(
+        merged.centerOffsetYCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells,
+      ),
+      -1.5,
+      1.5,
+    ),
+    dragDistanceScaleX: clamp(
+      numberOr(
+        merged.dragDistanceScaleX,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX,
+      ),
+      0.75,
+      1.5,
+    ),
+    dragDistanceScaleY: clamp(
+      numberOr(
+        merged.dragDistanceScaleY,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY,
+      ),
+      0.75,
+      1.5,
+    ),
     snapMaxDistanceCells: clamp(
       numberOr(
         merged.snapMaxDistanceCells,
@@ -463,11 +665,121 @@ function sanitizeGameplayDragTuning(
   };
 }
 
+function sanitizeAssetKey(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function sanitizeGameplaySfxRule(
+  value?: Partial<GameplaySfxRule> | null,
+): GameplaySfxRule {
+  const merged = {
+    ...DEFAULT_GAMEPLAY_SFX_RULE,
+    ...(value ?? {}),
+  };
+
+  return {
+    assetKey: sanitizeAssetKey(merged.assetKey),
+    volume: clamp(numberOr(merged.volume, DEFAULT_GAMEPLAY_SFX_RULE.volume), 0, 1),
+    cooldownMs: Math.round(
+      clamp(
+        numberOr(merged.cooldownMs, DEFAULT_GAMEPLAY_SFX_RULE.cooldownMs),
+        0,
+        2000,
+      ),
+    ),
+    allowOverlap: merged.allowOverlap !== false,
+    enabled: merged.enabled !== false,
+  };
+}
+
+function sanitizeGameplayBgmRule(
+  value?: Partial<GameplayBgmRule> | null,
+): GameplayBgmRule {
+  const merged = {
+    ...DEFAULT_GAMEPLAY_BGM_RULE,
+    ...(value ?? {}),
+  };
+
+  return {
+    assetKey: sanitizeAssetKey(merged.assetKey),
+    volume: clamp(numberOr(merged.volume, DEFAULT_GAMEPLAY_BGM_RULE.volume), 0, 1),
+    loop: merged.loop !== false,
+    fadeInMs: Math.round(
+      clamp(
+        numberOr(merged.fadeInMs, DEFAULT_GAMEPLAY_BGM_RULE.fadeInMs),
+        0,
+        10000,
+      ),
+    ),
+    fadeOutMs: Math.round(
+      clamp(
+        numberOr(merged.fadeOutMs, DEFAULT_GAMEPLAY_BGM_RULE.fadeOutMs),
+        0,
+        10000,
+      ),
+    ),
+    enabled: merged.enabled !== false,
+  };
+}
+
+function sanitizeGameplayAudioConfig(
+  value?: Partial<GameplayAudioConfig> | null,
+): GameplayAudioConfig {
+  const merged = {
+    ...DEFAULT_GAMEPLAY_AUDIO_CONFIG,
+    ...(value ?? {}),
+  };
+
+  const sfx = GAMEPLAY_SFX_EVENT_IDS.reduce(
+    (acc, id) => {
+      acc[id] = sanitizeGameplaySfxRule(
+        (merged.sfx as Partial<Record<GameplaySfxEventId, GameplaySfxRule>> | undefined)?.[id],
+      );
+      return acc;
+    },
+    {} as Record<GameplaySfxEventId, GameplaySfxRule>,
+  );
+
+  const bgm = GAMEPLAY_BGM_TRACK_IDS.reduce(
+    (acc, id) => {
+      acc[id] = sanitizeGameplayBgmRule(
+        (merged.bgm as Partial<Record<GameplayBgmTrackId, GameplayBgmRule>> | undefined)?.[id],
+      );
+      return acc;
+    },
+    {} as Record<GameplayBgmTrackId, GameplayBgmRule>,
+  );
+
+  return {
+    masterVolume: clamp(
+      numberOr(merged.masterVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.masterVolume),
+      0,
+      1,
+    ),
+    sfxVolume: clamp(
+      numberOr(merged.sfxVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.sfxVolume),
+      0,
+      1,
+    ),
+    bgmVolume: clamp(
+      numberOr(merged.bgmVolume, DEFAULT_GAMEPLAY_AUDIO_CONFIG.bgmVolume),
+      0,
+      1,
+    ),
+    muted: merged.muted === true,
+    sfx,
+    bgm,
+  };
+}
+
 function sanitizeGameplayVisualConfig(
   value?: Partial<GameplayVisualConfig> | null,
 ): GameplayVisualConfig {
   return {
     dragTuning: sanitizeGameplayDragTuning(value?.dragTuning),
+    audio: sanitizeGameplayAudioConfig(value?.audio),
   };
 }
 
@@ -828,6 +1140,12 @@ export function getGameplayDragTuning(
   return sanitizeGameplayDragTuning(manifest?.gameplay?.dragTuning);
 }
 
+export function getGameplayAudioConfig(
+  manifest?: Partial<VisualConfigManifest> | null,
+): GameplayAudioConfig {
+  return sanitizeGameplayAudioConfig(manifest?.gameplay?.audio);
+}
+
 export function getLevelBackgroundOverride(
   manifest: VisualConfigManifest,
   levelId: number,
@@ -884,6 +1202,17 @@ export function collectReferencedVisualAssetKeys(
   Object.values(manifest.studioSnapshots ?? {}).forEach(snapshot => {
     if (snapshot?.assetKey) {
       keys.add(snapshot.assetKey);
+    }
+  });
+  const audio = getGameplayAudioConfig(manifest);
+  Object.values(audio.sfx).forEach(rule => {
+    if (rule.assetKey) {
+      keys.add(rule.assetKey);
+    }
+  });
+  Object.values(audio.bgm).forEach(rule => {
+    if (rule.assetKey) {
+      keys.add(rule.assetKey);
     }
   });
   return Array.from(keys);

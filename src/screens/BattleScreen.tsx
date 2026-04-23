@@ -52,6 +52,7 @@ import {
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
+import { playGameBgm, stopGameBgm } from '../services/gameAudio';
 import { playBlockPlacementSound } from '../services/placementSound';
 import { t } from '../i18n';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
@@ -456,6 +457,11 @@ export default function BattleScreen({ route, navigation }: any) {
   const { manifest: visualManifest } = useVisualConfig();
   const dragTuning = getGameplayDragTuning(visualManifest);
   const { roomCode, isHost } = route.params;
+
+  useEffect(() => {
+    playGameBgm('battle');
+    return () => stopGameBgm();
+  }, [visualManifest.version]);
 
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [opponentBoard, setOpponentBoard] = useState<BoardType>(createBoard());

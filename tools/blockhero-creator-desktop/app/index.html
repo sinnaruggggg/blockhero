@@ -309,6 +309,22 @@
                       <input id="visualDragLiftOffset" type="number" step="0.05" min="1" max="4" />
                     </label>
                     <label>
+                      <span>중심축 X</span>
+                      <input id="visualDragCenterOffsetX" type="number" step="0.01" min="-1.5" max="1.5" />
+                    </label>
+                    <label>
+                      <span>중심축 Y</span>
+                      <input id="visualDragCenterOffsetY" type="number" step="0.01" min="-1.5" max="1.5" />
+                    </label>
+                    <label>
+                      <span>이동 증폭 X</span>
+                      <input id="visualDragDistanceScaleX" type="number" step="0.01" min="0.75" max="1.5" />
+                    </label>
+                    <label>
+                      <span>이동 증폭 Y</span>
+                      <input id="visualDragDistanceScaleY" type="number" step="0.01" min="0.75" max="1.5" />
+                    </label>
+                    <label>
                       <span>자석 거리</span>
                       <input id="visualDragSnapDistance" type="number" step="0.01" min="0" max="1.2" />
                     </label>
@@ -331,6 +347,131 @@
                   <small class="inline-note">
                     자석 거리를 낮추고 고정 유지 거리를 0에 가깝게 두면 원하지 않는 칸으로 끌려가는 느낌이 줄어듭니다.
                   </small>
+                </div>
+
+                <div class="panel-subtitle compact-subtitle">
+                  <strong>사운드 에디터</strong>
+                  <small class="muted">효과음과 배경음을 업로드하고 이벤트별 볼륨/반복/쿨다운을 조절합니다.</small>
+                </div>
+
+                <div class="preview-tuning-panel audio-editor-panel">
+                  <div class="form-grid two compact-fields">
+                    <label>
+                      <span>전체 볼륨</span>
+                      <input id="visualAudioMasterVolume" type="number" step="0.01" min="0" max="1" />
+                    </label>
+                    <label>
+                      <span>효과음 볼륨</span>
+                      <input id="visualAudioSfxVolume" type="number" step="0.01" min="0" max="1" />
+                    </label>
+                    <label>
+                      <span>BGM 볼륨</span>
+                      <input id="visualAudioBgmVolume" type="number" step="0.01" min="0" max="1" />
+                    </label>
+                    <label>
+                      <span>전체 음소거</span>
+                      <select id="visualAudioMuted">
+                        <option value="false">꺼짐</option>
+                        <option value="true">켜짐</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>오디오 키</span>
+                      <input id="audioAssetKeyInput" type="text" placeholder="예: sfx_block_place" />
+                    </label>
+                    <label>
+                      <span>오디오 업로드</span>
+                      <input id="audioAssetFileInput" type="file" accept="audio/*" />
+                    </label>
+                  </div>
+                  <div class="button-row wrap compact-actions">
+                    <button id="uploadAudioAssetButton" class="secondary small">오디오 업로드</button>
+                  </div>
+
+                  <div class="panel-subtitle compact-subtitle">
+                    <strong>효과음</strong>
+                    <small class="muted">짧은 반응음은 이벤트별로 따로 지정합니다.</small>
+                  </div>
+                  <div class="form-grid two compact-fields">
+                    <label>
+                      <span>이벤트</span>
+                      <select id="visualAudioSfxEvent"></select>
+                    </label>
+                    <label>
+                      <span>효과음 파일</span>
+                      <select id="visualAudioSfxAsset"></select>
+                    </label>
+                    <label>
+                      <span>개별 볼륨</span>
+                      <input id="visualAudioSfxRuleVolume" type="number" step="0.01" min="0" max="1" />
+                    </label>
+                    <label>
+                      <span>연속 재생 쿨다운(ms)</span>
+                      <input id="visualAudioSfxCooldown" type="number" step="10" min="0" max="2000" />
+                    </label>
+                    <label>
+                      <span>겹쳐 재생</span>
+                      <select id="visualAudioSfxOverlap">
+                        <option value="true">허용</option>
+                        <option value="false">차단</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>사용 여부</span>
+                      <select id="visualAudioSfxEnabled">
+                        <option value="true">사용</option>
+                        <option value="false">끄기</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="button-row wrap compact-actions">
+                    <button id="visualAudioSfxPreview" class="ghost small">효과음 미리듣기</button>
+                  </div>
+
+                  <div class="panel-subtitle compact-subtitle">
+                    <strong>배경음</strong>
+                    <small class="muted">화면/모드별 BGM 반복과 페이드를 지정합니다.</small>
+                  </div>
+                  <div class="form-grid two compact-fields">
+                    <label>
+                      <span>트랙</span>
+                      <select id="visualAudioBgmTrack"></select>
+                    </label>
+                    <label>
+                      <span>BGM 파일</span>
+                      <select id="visualAudioBgmAsset"></select>
+                    </label>
+                    <label>
+                      <span>개별 볼륨</span>
+                      <input id="visualAudioBgmRuleVolume" type="number" step="0.01" min="0" max="1" />
+                    </label>
+                    <label>
+                      <span>반복 여부</span>
+                      <select id="visualAudioBgmLoop">
+                        <option value="true">반복</option>
+                        <option value="false">1회</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>페이드 인(ms)</span>
+                      <input id="visualAudioBgmFadeIn" type="number" step="100" min="0" max="10000" />
+                    </label>
+                    <label>
+                      <span>페이드 아웃(ms)</span>
+                      <input id="visualAudioBgmFadeOut" type="number" step="100" min="0" max="10000" />
+                    </label>
+                    <label>
+                      <span>사용 여부</span>
+                      <select id="visualAudioBgmEnabled">
+                        <option value="true">사용</option>
+                        <option value="false">끄기</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="button-row wrap compact-actions">
+                    <button id="visualAudioBgmPreview" class="ghost small">BGM 미리듣기</button>
+                    <button id="visualAudioBgmStop" class="ghost small">미리듣기 정지</button>
+                  </div>
                 </div>
 
                 <div class="panel-subtitle compact-subtitle">

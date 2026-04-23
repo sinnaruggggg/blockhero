@@ -28,6 +28,7 @@ import BaseVisualElementView, {
   buildVisualElementStyle,
 } from '../components/VisualElementView';
 import { flushPlayerStateNow } from '../services/playerState';
+import { playGameBgm, stopGameBgm } from '../services/gameAudio';
 import { playBlockPlacementSound } from '../services/placementSound';
 import { submitEndlessLeaderboard } from '../services/rankingService';
 import { useVisualConfig } from '../hooks/useVisualConfig';
@@ -130,6 +131,11 @@ export default function EndlessScreen({ navigation }: any) {
   const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
   const { manifest: visualManifest } = useVisualConfig();
   const dragTuning = getGameplayDragTuning(visualManifest);
+
+  useEffect(() => {
+    playGameBgm('endless');
+    return () => stopGameBgm();
+  }, [visualManifest.version]);
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
   const [score, setScore] = useState(0);
