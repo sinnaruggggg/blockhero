@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { Piece } from '../game/engine';
 import DraggablePiece from './DraggablePiece';
 import { getGameplayLayoutScale } from '../game/layoutScale';
-import type { VisualViewport } from '../game/visualConfig';
+import type { GameplayDragTuning, VisualViewport } from '../game/visualConfig';
 
 const PIECE_TRAY_HEIGHT = 124;
 const PIECE_TRAY_HEIGHT_COMPACT = 108;
@@ -18,6 +18,7 @@ interface PieceSelectorProps {
   boardCompact?: boolean;
   boardScaleY?: number;
   viewport?: Partial<VisualViewport>;
+  dragTuning?: Partial<GameplayDragTuning> | null;
 }
 
 export default function PieceSelector({
@@ -30,6 +31,7 @@ export default function PieceSelector({
   boardCompact = false,
   boardScaleY = 1,
   viewport,
+  dragTuning,
 }: PieceSelectorProps) {
   const layoutScale = getGameplayLayoutScale(viewport);
   const trayHeight = Math.max(
@@ -56,6 +58,7 @@ export default function PieceSelector({
               boardCompact={boardCompact}
               boardScaleY={boardScaleY}
               viewport={viewport}
+              dragTuning={dragTuning}
             />
           ))}
         </View>

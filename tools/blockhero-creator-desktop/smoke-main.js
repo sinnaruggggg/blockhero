@@ -33,7 +33,11 @@ function createWindow() {
       console.log(JSON.stringify(state));
       clearTimeout(timeout);
       app.exit(
-        state.loginVisible && state.workspaceHidden && state.supabaseUrlFilled && state.supabaseAnonKeyFilled
+        !state.loginVisible &&
+          !state.workspaceHidden &&
+          state.supabaseUrlFilled &&
+          state.supabaseAnonKeyFilled &&
+          state.connectionStatus === '미리보기 모드'
           ? 0
           : 1,
       );

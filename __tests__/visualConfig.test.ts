@@ -1,6 +1,8 @@
 import {
   collectReferencedVisualAssetKeys,
+  DEFAULT_GAMEPLAY_DRAG_TUNING,
   DEFAULT_VISUAL_CONFIG_MANIFEST,
+  getGameplayDragTuning,
   getLevelBackgroundOverride,
   getRaidBackgroundOverride,
   resolveVisualOffset,
@@ -250,6 +252,30 @@ describe('visualConfig helpers', () => {
       safeTop: 59,
       safeBottom: 34,
     });
+  });
+
+  it('sanitizes gameplay drag tuning metadata', () => {
+    const manifest = sanitizeVisualConfigManifest({
+      gameplay: {
+        dragTuning: {
+          liftOffsetCells: 9,
+          snapMaxDistanceCells: -1,
+          stickyThresholdCells: 1.5,
+          snapSearchRadius: 1.6,
+        },
+      },
+    });
+
+    expect(manifest.gameplay.dragTuning).toEqual({
+      liftOffsetCells: 4,
+      snapMaxDistanceCells: 0,
+      stickyThresholdCells: 0.8,
+      snapSearchRadius: 2,
+    });
+  });
+
+  it('returns default gameplay drag tuning when metadata is missing', () => {
+    expect(getGameplayDragTuning({})).toEqual(DEFAULT_GAMEPLAY_DRAG_TUNING);
   });
 
   it('scales offsets against the reference viewport', () => {

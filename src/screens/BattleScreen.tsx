@@ -27,6 +27,7 @@ import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import BaseVisualElementView from '../components/VisualElementView';
 import { useBattleNotice } from '../hooks/useBattleNotice';
+import { useVisualConfig } from '../hooks/useVisualConfig';
 import { useDragDrop } from '../game/useDragDrop';
 import { ATTACKS } from '../constants';
 import {
@@ -51,6 +52,7 @@ import {
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
+import { playBlockPlacementSound } from '../services/placementSound';
 import { t } from '../i18n';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
@@ -62,6 +64,7 @@ import {
 } from '../game/piecePlacementEffect';
 import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { scaleGameplayUnit } from '../game/layoutScale';
+import { getGameplayDragTuning } from '../game/visualConfig';
 
 // Neon spark particle effect - sparks scatter fast from placed block area
 function PlaceEffect({
@@ -450,6 +453,8 @@ export default function BattleScreen({ route, navigation }: any) {
     safeBottom: insets.bottom,
   };
   const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
+  const { manifest: visualManifest } = useVisualConfig();
+  const dragTuning = getGameplayDragTuning(visualManifest);
   const { roomCode, isHost } = route.params;
 
   const [board, setBoard] = useState<BoardType>(createBoard());
@@ -1088,6 +1093,7 @@ export default function BattleScreen({ route, navigation }: any) {
       if (!canPlacePiece(board, piece.shape, row, col)) return;
 
       let newBoard = placePiece(board, piece, row, col);
+      playBlockPlacementSound();
       showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
 
@@ -1166,6 +1172,7 @@ export default function BattleScreen({ route, navigation }: any) {
     true,
     1,
     visualViewport,
+    dragTuning,
   );
 
   const handleBoardLayout = useCallback(() => {
@@ -1403,6 +1410,7 @@ export default function BattleScreen({ route, navigation }: any) {
             compact
             boardCompact
             viewport={visualViewport}
+            dragTuning={dragTuning}
           />
         </View>
         </VisualElementView>

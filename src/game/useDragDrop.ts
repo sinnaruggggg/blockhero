@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import {
   Board,
   Piece,
@@ -9,7 +9,11 @@ import {
 } from './engine';
 import { ROWS, COLS } from '../constants';
 import { getBoardMetrics } from '../components/Board';
-import type { VisualViewport } from './visualConfig';
+import {
+  DEFAULT_GAMEPLAY_DRAG_TUNING,
+  type GameplayDragTuning,
+  type VisualViewport,
+} from './visualConfig';
 import {
   resolveBoardScreenMetrics,
   type MeasuredBoardLayout,
@@ -36,11 +40,55 @@ export interface DragDropState {
   clearGuideCells: ClearGuideCell[];
 }
 
-// Magnet snap: keep correction close so preview does not jump to distant cells.
-const SNAP_SEARCH_RADIUS = 1;
-const SNAP_MAX_DISTANCE_CELLS = 0.62;
-// Sticky threshold: once snapped, must move this many cells away to re-snap elsewhere
-const STICKY_THRESHOLD = 0.28;
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function numberOr(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function resolveDragTuning(
+  tuning?: Partial<GameplayDragTuning> | null,
+): GameplayDragTuning {
+  return {
+    liftOffsetCells: clamp(
+      numberOr(
+        tuning?.liftOffsetCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.liftOffsetCells,
+      ),
+      1,
+      4,
+    ),
+    snapMaxDistanceCells: clamp(
+      numberOr(
+        tuning?.snapMaxDistanceCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.snapMaxDistanceCells,
+      ),
+      0,
+      1.2,
+    ),
+    stickyThresholdCells: clamp(
+      numberOr(
+        tuning?.stickyThresholdCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.stickyThresholdCells,
+      ),
+      0,
+      0.8,
+    ),
+    snapSearchRadius: Math.round(
+      clamp(
+        numberOr(
+          tuning?.snapSearchRadius,
+          DEFAULT_GAMEPLAY_DRAG_TUNING.snapSearchRadius,
+        ),
+        0,
+        2,
+      ),
+    ),
+  };
+}
 
 function findNearestValid(
   board: Board,
@@ -49,13 +97,14 @@ function findNearestValid(
   centerC: number,
   rawR: number = centerR,
   rawC: number = centerC,
+  dragTuning: GameplayDragTuning = DEFAULT_GAMEPLAY_DRAG_TUNING,
 ): { r: number; c: number } | null {
   // Check exact position first
   if (canPlacePiece(board, shape, centerR, centerC)) {
     return { r: centerR, c: centerC };
   }
   // Search expanding radius
-  for (let radius = 1; radius <= SNAP_SEARCH_RADIUS; radius++) {
+  for (let radius = 1; radius <= dragTuning.snapSearchRadius; radius++) {
     let bestDist = Infinity;
     let bestPos: { r: number; c: number } | null = null;
     for (let dr = -radius; dr <= radius; dr++) {
@@ -66,7 +115,10 @@ function findNearestValid(
         if (canPlacePiece(board, shape, nr, nc)) {
           const rowDistance = Math.abs(nr - rawR);
           const colDistance = Math.abs(nc - rawC);
-          if (Math.max(rowDistance, colDistance) > SNAP_MAX_DISTANCE_CELLS) {
+          if (
+            Math.max(rowDistance, colDistance) >
+            dragTuning.snapMaxDistanceCells
+          ) {
             continue;
           }
           const dist = rowDistance * rowDistance + colDistance * colDistance;
@@ -116,6 +168,7 @@ export function useDragDrop(
   compact?: boolean,
   yOffsetCells: number = 0,
   viewport?: Partial<VisualViewport>,
+  dragTuning?: Partial<GameplayDragTuning> | null,
 ) {
   const [previewCells, setPreviewCells] = useState<PreviewCell[]>([]);
   const [invalidPreview, setInvalidPreview] = useState(false);
@@ -124,6 +177,15 @@ export function useDragDrop(
 
   const lastPreviewPos = useRef<{ row: number; col: number } | null>(null);
   const lastRawPos = useRef<{ r: number; c: number } | null>(null);
+  const resolvedDragTuning = useMemo(
+    () => resolveDragTuning(dragTuning),
+    [
+      dragTuning?.liftOffsetCells,
+      dragTuning?.snapMaxDistanceCells,
+      dragTuning?.stickyThresholdCells,
+      dragTuning?.snapSearchRadius,
+    ],
+  );
 
   // Calculate the top-left board position for centering piece on finger
   // Uses actual filled cell bounds, not shape array dimensions
@@ -230,18 +292,23 @@ export function useDragDrop(
         c,
         rawR,
         rawC,
+        resolvedDragTuning,
       );
 
       if (snapResult) {
         // Sticky snap: if already snapped somewhere, only move if raw position
         // has moved far enough from current snap position
-        if (lastPreviewPos.current && lastRawPos.current) {
+        if (
+          resolvedDragTuning.stickyThresholdCells > 0 &&
+          lastPreviewPos.current &&
+          lastRawPos.current
+        ) {
           const dR = Math.abs(rawR - lastRawPos.current.r);
           const dC = Math.abs(rawC - lastRawPos.current.c);
           const moved = Math.max(dR, dC);
           // If haven't moved enough AND current snap is still valid, keep it
           if (
-            moved < STICKY_THRESHOLD &&
+            moved < resolvedDragTuning.stickyThresholdCells &&
             canPlacePiece(
               board,
               piece.shape,
@@ -311,6 +378,7 @@ export function useDragDrop(
       compact,
       yOffsetCells,
       viewport,
+      resolvedDragTuning,
       getPieceOrigin,
       getPreviewCells,
     ],
@@ -367,6 +435,7 @@ export function useDragDrop(
         c,
         rawR,
         rawC,
+        resolvedDragTuning,
       );
       if (snapResult) {
         onPlace(index, snapResult.r, snapResult.c);
@@ -379,6 +448,7 @@ export function useDragDrop(
       compact,
       yOffsetCells,
       viewport,
+      resolvedDragTuning,
       getPieceOrigin,
       onPlace,
     ],

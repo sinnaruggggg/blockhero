@@ -28,9 +28,11 @@ import BaseVisualElementView, {
   buildVisualElementStyle,
 } from '../components/VisualElementView';
 import { flushPlayerStateNow } from '../services/playerState';
+import { playBlockPlacementSound } from '../services/placementSound';
 import { submitEndlessLeaderboard } from '../services/rankingService';
 import { useVisualConfig } from '../hooks/useVisualConfig';
 import {
+  getGameplayDragTuning,
   getVisualElementRule,
   type VisualViewport,
 } from '../game/visualConfig';
@@ -127,6 +129,7 @@ export default function EndlessScreen({ navigation }: any) {
   };
   const modeVerticalGutter = scaleGameplayUnit(46, visualViewport, 16);
   const { manifest: visualManifest } = useVisualConfig();
+  const dragTuning = getGameplayDragTuning(visualManifest);
   const [board, setBoard] = useState<BoardType>(createBoard());
   const [pieces, setPieces] = useState<(Piece | null)[]>([]);
   const [score, setScore] = useState(0);
@@ -708,6 +711,7 @@ export default function EndlessScreen({ navigation }: any) {
       }
 
       let newBoard = placePiece(board, piece, row, col);
+      playBlockPlacementSound();
       showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
 
@@ -934,6 +938,7 @@ export default function EndlessScreen({ navigation }: any) {
     useCompactLayout,
     0,
     visualViewport,
+    dragTuning,
   );
 
   const handleBoardLayout = useCallback(() => {
@@ -1253,6 +1258,7 @@ export default function EndlessScreen({ navigation }: any) {
           boardCompact={useCompactLayout}
           boardScaleY={boardScaleY}
           viewport={visualViewport}
+          dragTuning={dragTuning}
         />
       </View>
       </VisualElementView>

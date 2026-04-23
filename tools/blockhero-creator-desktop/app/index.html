@@ -1,0 +1,600 @@
+﻿<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BlockHero 화면 편집기</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <p class="eyebrow">BlockHero</p>
+          <h1>화면 편집기</h1>
+          <p class="subtitle">중앙에는 실제 폰 비율 화면만 고정하고, 좌우 패널에서 바로 조절하는 운영용 편집기입니다.</p>
+        </div>
+
+        <nav class="topbar-tabs" aria-label="작업 탭">
+          <button id="viewUiButton" class="tab-button active" data-view="ui">화면 편집기</button>
+          <button id="viewAdminButton" class="tab-button" data-view="admin">관리자 데이터</button>
+          <button id="viewHistoryButton" class="tab-button" data-view="history">배포 이력</button>
+          <button id="viewSettingsButton" class="tab-button" data-view="settings">환경 / 연결</button>
+        </nav>
+
+        <div class="topbar-side">
+          <div class="topbar-pills">
+            <div class="status-pill" id="activeViewStatus">화면 편집기</div>
+            <div class="status-pill" id="connectionStatus">로그인 필요</div>
+            <div class="status-pill" id="deviceConnectionStatus">기기 미연결</div>
+            <div class="status-pill" id="manifestStatus">초안 대기</div>
+          </div>
+
+          <div class="session-mini-grid">
+            <div class="mini-card">
+              <span>관리자</span>
+              <strong id="userEmail">-</strong>
+            </div>
+            <div class="mini-card">
+              <span>화면 초안</span>
+              <strong id="visualDraftVersion">-</strong>
+            </div>
+            <div class="mini-card">
+              <span>화면 배포본</span>
+              <strong id="visualPublishedVersion">-</strong>
+            </div>
+            <button id="logoutButton" class="ghost small">로그아웃</button>
+          </div>
+
+          <div class="status-stack compact">
+            <small id="globalStatusLine" class="inline-note">준비 중</small>
+            <small id="uiEditorStatusLine" class="inline-note">화면 편집기 준비 중</small>
+          </div>
+        </div>
+      </header>
+
+      <section class="login-card" id="loginCard">
+        <div class="panel-header compact-header">
+          <div>
+            <h2>관리자 로그인</h2>
+            <p>로그인하면 저장과 배포까지 사용할 수 있습니다. 로그인하지 않아도 화면 미리보기와 위치 조정은 가능합니다.</p>
+          </div>
+        </div>
+        <div class="form-grid two">
+          <label>
+            <span>Supabase 주소</span>
+            <input id="supabaseUrl" type="text" />
+          </label>
+          <label>
+            <span>익명 키</span>
+            <input id="supabaseAnonKey" type="text" />
+          </label>
+          <label>
+            <span>이메일</span>
+            <input id="adminEmail" type="email" placeholder="관리자 이메일" />
+          </label>
+          <label>
+            <span>비밀번호</span>
+            <input id="adminPassword" type="password" placeholder="비밀번호 입력" />
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="loginButton" class="primary">로그인하고 불러오기</button>
+          <button id="restoreButton" class="ghost">저장된 세션 복원</button>
+        </div>
+      </section>
+
+      <section class="workspace hidden" id="workspace">
+        <div class="workspace-body">
+          <section class="work-view active" id="uiEditorView">
+            <div class="ui-editor-grid">
+              <aside class="panel ui-side-panel ui-inspector-panel">
+                <div class="panel-header compact-header">
+                  <div>
+                    <h2 id="visualInspectorTitle">선택 요소 없음</h2>
+                    <p id="visualInspectorHelp">중앙 화면에서 요소를 클릭하면 여기서 바로 세부 조절합니다.</p>
+                  </div>
+                </div>
+
+                <div class="form-grid two compact-fields">
+                  <label>
+                    <span>가로 위치</span>
+                    <input id="visualOffsetX" type="number" />
+                  </label>
+                  <label>
+                    <span>세로 위치</span>
+                    <input id="visualOffsetY" type="number" />
+                  </label>
+                  <label>
+                    <span>전체 크기</span>
+                    <input id="visualScale" type="number" step="0.05" min="0.3" max="3" />
+                  </label>
+                  <label>
+                    <span>가로 크기</span>
+                    <input id="visualWidthScale" type="number" step="0.05" min="0.3" max="3" />
+                  </label>
+                  <label>
+                    <span>세로 크기</span>
+                    <input id="visualHeightScale" type="number" step="0.05" min="0.3" max="3" />
+                  </label>
+                  <label>
+                    <span>투명도</span>
+                    <input id="visualOpacity" type="number" step="0.05" min="0" max="1" />
+                  </label>
+                  <label>
+                    <span>겹침 순서</span>
+                    <input id="visualZIndex" type="number" />
+                  </label>
+                  <label>
+                    <span>표시 여부</span>
+                    <select id="visualVisible">
+                      <option value="true">표시</option>
+                      <option value="false">숨김</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label class="toggle-row single-toggle">
+                  <input id="visualSafeAware" type="checkbox" />
+                  안전 영역 기준으로 보정
+                </label>
+
+                <div class="mini-section">
+                  <strong>미세 이동</strong>
+                  <div class="nudge-grid compact-nudge-grid">
+                    <button id="visualNudgeUp" class="ghost small">위 1</button>
+                    <button id="visualNudgeDown" class="ghost small">아래 1</button>
+                    <button id="visualNudgeLeft" class="ghost small">왼쪽 1</button>
+                    <button id="visualNudgeRight" class="ghost small">오른쪽 1</button>
+                    <button id="visualNudgeUpLarge" class="ghost small">위 10</button>
+                    <button id="visualNudgeDownLarge" class="ghost small">아래 10</button>
+                    <button id="visualNudgeLeftLarge" class="ghost small">왼쪽 10</button>
+                    <button id="visualNudgeRightLarge" class="ghost small">오른쪽 10</button>
+                  </div>
+                </div>
+
+                <div class="button-row wrap compact-actions">
+                  <button id="visualUndoButton" class="ghost">되돌리기</button>
+                  <button id="visualRedoButton" class="ghost">다시하기</button>
+                  <button id="visualResetButton" class="secondary">선택 요소 초기화</button>
+                </div>
+
+                <label>
+                  <span>배포 메모</span>
+                  <textarea id="visualPublishNotes" rows="3" placeholder="이번 화면 배포에서 바뀐 내용을 적습니다."></textarea>
+                </label>
+
+                <div class="button-row wrap compact-actions">
+                  <button id="visualSaveDraftButton" class="secondary">초안 저장</button>
+                  <button id="visualPublishButton" class="primary">배포</button>
+                </div>
+
+                <div class="panel-subtitle compact-subtitle">
+                  <strong>최근 화면 배포</strong>
+                  <small class="muted">필요하면 이전 버전을 다시 열어 확인할 수 있습니다.</small>
+                </div>
+                <div id="visualReleaseHistory" class="release-history compact-list"></div>
+              </aside>
+
+              <main class="panel ui-stage-panel">
+                <div class="ui-stage-toolbar compact-toolbar">
+                  <div class="toolbar-chip">
+                    <span>현재 화면</span>
+                    <strong id="visualCurrentScreen">레벨 모드</strong>
+                  </div>
+                  <div class="toolbar-chip">
+                    <span>선택 요소</span>
+                    <strong id="visualCurrentElement">상단 헤더</strong>
+                  </div>
+                  <div class="toolbar-chip">
+                    <span>기준 해상도</span>
+                    <strong id="visualCurrentViewport">412 x 915</strong>
+                  </div>
+                  <button id="visualFitButton" class="ghost small">화면 맞춤</button>
+                  <button id="visualActualButton" class="ghost small">실제 크기</button>
+                </div>
+
+                <div id="visualStageHost" class="visual-stage-host">
+                  <div id="visualPhoneFrame" class="visual-phone-frame">
+                    <img id="visualLiveImage" class="visual-live-image" alt="실제 폰 화면" />
+                    <div id="visualFrameFallback" class="visual-frame-fallback">실제 폰 화면을 기다리는 중입니다.</div>
+                    <div id="visualSafeTopOverlay" class="safe-overlay top"></div>
+                    <div id="visualSafeBottomOverlay" class="safe-overlay bottom"></div>
+                    <div id="visualGridOverlay" class="visual-grid-overlay"></div>
+                    <div id="visualOverlay" class="visual-overlay"></div>
+                  </div>
+                </div>
+
+                <div class="ui-stage-footer compact-footer">
+                  <small class="muted">중앙 폰 화면만 기준으로 두고, 선택은 마우스로 바로 처리합니다.</small>
+                  <small id="visualStageStatus" class="inline-note">기기 화면 연결 대기 중</small>
+                </div>
+              </main>
+
+              <aside class="panel ui-side-panel ui-config-panel">
+                <div class="panel-header compact-header">
+                  <div>
+                    <h2>화면과 기기</h2>
+                    <p>편집할 화면과 기기 기준, 격자 옵션을 여기서 조절합니다.</p>
+                  </div>
+                </div>
+
+                <div class="form-grid compact-fields">
+                  <label>
+                    <span>편집 화면</span>
+                    <select id="visualScreenId"></select>
+                  </label>
+                  <label>
+                    <span>기기 기준</span>
+                    <select id="visualDeviceSource">
+                      <option value="phone">연결된 실제 폰</option>
+                      <option value="preset">기기 프리셋</option>
+                      <option value="custom">직접 입력</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>연결 기기</span>
+                    <select id="visualDeviceSelect"></select>
+                  </label>
+                  <label>
+                    <span>기기 프리셋</span>
+                    <select id="visualDeviceProfile"></select>
+                  </label>
+                </div>
+
+                <div class="form-grid two compact-fields">
+                  <label>
+                    <span>가로 폭</span>
+                    <input id="visualViewportWidth" type="number" />
+                  </label>
+                  <label>
+                    <span>세로 높이</span>
+                    <input id="visualViewportHeight" type="number" />
+                  </label>
+                  <label>
+                    <span>상단 안전영역</span>
+                    <input id="visualSafeTop" type="number" />
+                  </label>
+                  <label>
+                    <span>하단 안전영역</span>
+                    <input id="visualSafeBottom" type="number" />
+                  </label>
+                </div>
+
+                <div class="reference-viewport-panel">
+                  <div class="panel-subtitle compact-subtitle reference-viewport-header">
+                    <strong>실제 배포 기준 좌표</strong>
+                    <button id="visualReferenceViewportButton" class="ghost small">
+                      현재 기기를 기준 좌표로 저장
+                    </button>
+                  </div>
+                  <strong id="visualReferenceViewportValue">412 x 915 · 안전영역 34 / 34</strong>
+                  <small id="visualReferenceViewportNote" class="inline-note">
+                    이 값이 실제 배포 좌표의 기준입니다. 아래 미리보기 이동과 확대는 이 기준 좌표를 바꾸지 않습니다.
+                  </small>
+                </div>
+
+                <div class="button-row wrap compact-actions">
+                  <button id="visualRefreshDeviceButton" class="secondary">기기 새로고침</button>
+                  <button id="visualRefreshFrameButton" class="ghost">현재 화면 다시 가져오기</button>
+                </div>
+                <small id="visualDeviceMeta" class="inline-note">기기 정보를 불러오는 중입니다.</small>
+
+                <div class="compact-toggle-grid">
+                  <label class="toggle-row"><input id="visualShowGrid" type="checkbox" /> 격자 표시</label>
+                  <label class="toggle-row"><input id="visualSnapGrid" type="checkbox" /> 격자 붙이기</label>
+                </div>
+
+                <label>
+                  <span>격자 간격</span>
+                  <select id="visualGridSize">
+                    <option value="4">4 픽셀</option>
+                    <option value="8">8 픽셀</option>
+                    <option value="12">12 픽셀</option>
+                    <option value="16" selected>16 픽셀</option>
+                    <option value="24">24 픽셀</option>
+                    <option value="32">32 픽셀</option>
+                  </select>
+                </label>
+
+                <div class="panel-subtitle compact-subtitle">
+                  <strong>블록 조작감</strong>
+                  <small class="muted">앱에 배포되는 드래그 위치 보정과 자석 가이드 강도입니다.</small>
+                </div>
+
+                <div class="preview-tuning-panel gameplay-tuning-panel">
+                  <div class="form-grid two compact-fields">
+                    <label>
+                      <span>들어올림 높이</span>
+                      <input id="visualDragLiftOffset" type="number" step="0.05" min="1" max="4" />
+                    </label>
+                    <label>
+                      <span>자석 거리</span>
+                      <input id="visualDragSnapDistance" type="number" step="0.01" min="0" max="1.2" />
+                    </label>
+                    <label>
+                      <span>고정 유지 거리</span>
+                      <input id="visualDragStickyThreshold" type="number" step="0.01" min="0" max="0.8" />
+                    </label>
+                    <label>
+                      <span>검색 반경</span>
+                      <input id="visualDragSearchRadius" type="number" step="1" min="0" max="2" />
+                    </label>
+                  </div>
+
+                  <div class="button-row wrap compact-actions">
+                    <button id="visualDragPresetPrecise" class="secondary small">정확형</button>
+                    <button id="visualDragPresetAssist" class="ghost small">보조형</button>
+                    <button id="visualDragPresetLegacy" class="ghost small">기존값</button>
+                  </div>
+
+                  <small class="inline-note">
+                    자석 거리를 낮추고 고정 유지 거리를 0에 가깝게 두면 원하지 않는 칸으로 끌려가는 느낌이 줄어듭니다.
+                  </small>
+                </div>
+
+                <div class="panel-subtitle compact-subtitle">
+                  <strong>미리보기 조절</strong>
+                  <small class="muted">스크롤 없이 이 패널 안에서 폰 화면 위치와 크기만 맞춥니다.</small>
+                </div>
+
+                <div class="preview-tuning-panel">
+                  <label class="range-field">
+                    <span>미리보기 크기</span>
+                    <div class="range-field-control">
+                      <input
+                        id="visualZoomSlider"
+                        type="range"
+                        min="60"
+                        max="140"
+                        step="1"
+                        value="100"
+                      />
+                      <strong id="visualZoomReadout">100%</strong>
+                    </div>
+                  </label>
+
+                  <label class="range-field">
+                    <span>가로 위치</span>
+                    <div class="range-field-control">
+                      <input
+                        id="visualStageOffsetX"
+                        type="range"
+                        min="-100"
+                        max="100"
+                        step="1"
+                        value="0"
+                      />
+                      <strong id="visualStageOffsetXReadout">0%</strong>
+                    </div>
+                  </label>
+
+                  <label class="range-field">
+                    <span>세로 위치</span>
+                    <div class="range-field-control">
+                      <input
+                        id="visualStageOffsetY"
+                        type="range"
+                        min="-100"
+                        max="100"
+                        step="1"
+                        value="0"
+                      />
+                      <strong id="visualStageOffsetYReadout">0%</strong>
+                    </div>
+                  </label>
+
+                  <div class="button-row wrap compact-actions">
+                    <button id="visualStageResetButton" class="ghost small">
+                      미리보기 조절 초기화
+                    </button>
+                  </div>
+
+                  <small class="inline-note">
+                    화면 맞춤과 실제 크기, 가로/세로 위치는 캔버스 보기 전용입니다. 저장되는 배포 좌표는 위 기준 viewport를 그대로 씁니다.
+                  </small>
+                  <small id="visualRuntimeApplyNote" class="inline-note">
+                    이 화면의 게임 적용 상태를 점검하는 중입니다.
+                  </small>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="work-view" id="adminDataView">
+            <div class="admin-workspace">
+              <aside class="sidebar">
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>관리자 상태</h2>
+                      <p>관리자 데이터 초안과 배포 상태를 확인합니다.</p>
+                    </div>
+                  </div>
+                  <div class="key-value compact-key-value">
+                    <div><span>관리자 초안</span><strong id="draftVersion">-</strong></div>
+                    <div><span>관리자 배포본</span><strong id="publishedVersion">-</strong></div>
+                    <div><span>배경 자산 수</span><strong id="assetCount">0</strong></div>
+                  </div>
+                  <div class="button-row wrap compact-actions">
+                    <button id="refreshButton" class="ghost">새로고침</button>
+                    <button id="saveDraftButton" class="secondary">초안 저장</button>
+                    <button id="publishButton" class="primary">배포</button>
+                  </div>
+                  <label>
+                    <span>배포 메모</span>
+                    <textarea id="publishNotes" rows="3" placeholder="이번 관리자 데이터 배포에서 바뀐 내용을 적습니다."></textarea>
+                  </label>
+                </section>
+
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>콘텐츠 목록</h2>
+                      <p>레벨, 레이드, 적 템플릿 중 하나를 선택합니다.</p>
+                    </div>
+                  </div>
+                  <div class="button-row wrap compact-actions">
+                    <button id="addLevelButton" class="small secondary">레벨 추가</button>
+                    <button id="addNormalRaidButton" class="small secondary">일반 레이드 추가</button>
+                    <button id="addBossRaidButton" class="small secondary">보스 레이드 추가</button>
+                    <button id="addEncounterButton" class="small secondary">적 템플릿 추가</button>
+                  </div>
+                  <div class="tree-panel" id="contentTree"></div>
+                </section>
+              </aside>
+
+              <main class="editor">
+                <section class="panel hero-panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2 id="editorTitle">항목을 선택하세요</h2>
+                      <p id="editorSubtitle">왼쪽 목록에서 레벨, 레이드, 적 템플릿을 선택하면 상세 편집기가 열립니다.</p>
+                    </div>
+                    <div class="button-row compact-actions">
+                      <button id="cloneButton" class="ghost small">복제</button>
+                      <button id="deleteButton" class="danger small">삭제</button>
+                    </div>
+                  </div>
+                  <div class="summary-strip" id="selectionSummary">
+                    <div class="summary-card">
+                      <span>선택 없음</span>
+                      <strong>편집 대상 미선택</strong>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>상세 편집</h2>
+                      <p>현재 게임 데이터에서 가져온 값을 수정합니다.</p>
+                    </div>
+                  </div>
+                  <div id="editorForm" class="editor-form empty-state">
+                    <p>왼쪽에서 항목을 선택하면 여기에서 현재 값을 수정할 수 있습니다.</p>
+                  </div>
+                </section>
+
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>관리자 초안 JSON</h2>
+                      <p>전체 JSON을 복사하거나 붙여 넣어 적용할 수 있습니다.</p>
+                    </div>
+                    <div class="button-row compact-actions">
+                      <button id="copyJsonButton" class="ghost small">JSON 복사</button>
+                      <button id="applyJsonButton" class="secondary small">JSON 적용</button>
+                    </div>
+                  </div>
+                  <textarea id="manifestJson" class="json-area" spellcheck="false"></textarea>
+                </section>
+              </main>
+
+              <aside class="inspector">
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>메뉴 설명</h2>
+                      <p>선택한 항목에서 확인해야 할 내용을 빠르게 봅니다.</p>
+                    </div>
+                  </div>
+                  <div id="helpPanel" class="help-panel"></div>
+                </section>
+
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>배경 자산</h2>
+                      <p>레벨과 레이드 배경에 연결할 자산을 관리합니다.</p>
+                    </div>
+                  </div>
+                  <div class="form-grid compact-fields">
+                    <label>
+                      <span>새 자산 키</span>
+                      <input id="assetKeyInput" type="text" placeholder="저장할 자산 키" />
+                    </label>
+                    <label>
+                      <span>이미지 업로드</span>
+                      <input id="assetFileInput" type="file" accept="image/*" />
+                    </label>
+                  </div>
+                  <div class="button-row compact-actions">
+                    <button id="uploadAssetButton" class="secondary">이미지 업로드</button>
+                  </div>
+                  <div id="assetLibrary" class="asset-library"></div>
+                </section>
+
+                <section class="panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>관리자 배포 이력</h2>
+                      <p>과거 관리자 데이터 배포본을 다시 확인합니다.</p>
+                    </div>
+                  </div>
+                  <div id="releaseHistory" class="release-history"></div>
+                </section>
+              </aside>
+            </div>
+          </section>
+
+          <section class="work-view" id="historyView">
+            <div class="history-grid">
+              <section class="panel compact-panel">
+                <div class="panel-header compact-header">
+                  <div>
+                    <h2>화면 배포 이력</h2>
+                    <p>화면 배치 버전을 다시 열거나 비교할 수 있습니다.</p>
+                  </div>
+                </div>
+                <div id="visualHistoryViewList" class="release-history"></div>
+              </section>
+              <section class="panel compact-panel">
+                <div class="panel-header compact-header">
+                  <div>
+                    <h2>관리자 데이터 배포 이력</h2>
+                    <p>레벨, 레이드, 적 템플릿 배포 이력을 확인합니다.</p>
+                  </div>
+                </div>
+                <div id="adminHistoryViewList" class="release-history"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="work-view" id="settingsView">
+            <div class="settings-grid">
+              <section class="panel compact-panel">
+                <div class="panel-header compact-header">
+                  <div>
+                    <h2>서버 연결</h2>
+                    <p>현재 사용 중인 연결 정보를 확인합니다.</p>
+                  </div>
+                </div>
+                <div class="key-value compact-key-value">
+                  <div><span>Supabase 주소</span><strong id="settingsSupabaseUrl">-</strong></div>
+                  <div><span>관리자 계정</span><strong id="settingsAdminEmail">-</strong></div>
+                </div>
+              </section>
+              <section class="panel compact-panel">
+                <div class="panel-header compact-header">
+                  <div>
+                    <h2>안드로이드 연결</h2>
+                    <p>USB로 연결된 실제 폰의 상태와 화면 정보를 확인합니다.</p>
+                  </div>
+                </div>
+                <div class="button-row wrap compact-actions">
+                  <button id="settingsRefreshDevicesButton" class="secondary">기기 목록 새로고침</button>
+                  <button id="settingsRefreshFrameButton" class="ghost">현재 화면 다시 가져오기</button>
+                </div>
+                <div id="settingsDeviceList" class="device-list"></div>
+                <small id="settingsDeviceMeta" class="inline-note">기기 화면 정보를 아직 읽지 않았습니다.</small>
+              </section>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <script src="./creator.bundle.js"></script>
+  </body>
+</html>

@@ -10,7 +10,11 @@ import {
 import { Piece, getPieceRewardMarkerCell } from '../game/engine';
 import { getBoardMetrics } from './Board';
 import { getGameplayLayoutScale } from '../game/layoutScale';
-import type { VisualViewport } from '../game/visualConfig';
+import {
+  DEFAULT_GAMEPLAY_DRAG_TUNING,
+  type GameplayDragTuning,
+  type VisualViewport,
+} from '../game/visualConfig';
 import SpecialBlockBadge from './SpecialBlockBadge';
 
 const BLOCK_SIZE = 18;
@@ -128,6 +132,7 @@ interface DraggablePieceProps {
   boardCompact?: boolean;
   boardScaleY?: number;
   viewport?: Partial<VisualViewport>;
+  dragTuning?: Partial<GameplayDragTuning> | null;
 }
 
 export default function DraggablePiece({
@@ -140,6 +145,7 @@ export default function DraggablePiece({
   boardCompact = false,
   boardScaleY = 1,
   viewport,
+  dragTuning,
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
@@ -150,8 +156,17 @@ export default function DraggablePiece({
     12,
     Math.round((compact ? COMPACT_BLOCK_SIZE : BLOCK_SIZE) * layoutScale),
   );
+  const liftOffsetCells = Math.max(
+    1,
+    Math.min(
+      4,
+      Number.isFinite(Number(dragTuning?.liftOffsetCells))
+        ? Number(dragTuning?.liftOffsetCells)
+        : DEFAULT_GAMEPLAY_DRAG_TUNING.liftOffsetCells,
+    ),
+  );
   const dragOffsetY = -Math.round(
-    (boardMetrics.cellSize + boardMetrics.gap) * 2.5 * boardScaleY,
+    (boardMetrics.cellSize + boardMetrics.gap) * liftOffsetCells * boardScaleY,
   );
   const traySlotSize = Math.max(
     72,

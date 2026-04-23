@@ -15,6 +15,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { t } from '../i18n';
+import { playBlockPlacementSound } from '../services/placementSound';
 import { flushPlayerStateNow } from '../services/playerState';
 import { getAdminStatus } from '../services/adminSync';
 import { submitLevelLeaderboard } from '../services/rankingService';
@@ -35,6 +36,7 @@ import { useVisualConfig } from '../hooks/useVisualConfig';
 import { useCreatorConfig } from '../hooks/useCreatorConfig';
 import {
   buildVisualTintColor,
+  getGameplayDragTuning,
   getLevelBackgroundOverride,
   getVisualElementRule,
   type VisualViewport,
@@ -380,6 +382,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const activeLevel = levelData ?? LEVELS[0];
   const { manifest: visualManifest, assetUris: visualAssetUris } =
     useVisualConfig();
+  const dragTuning = getGameplayDragTuning(visualManifest);
   const { manifest: creatorManifest, assetUris: creatorAssetUris } =
     useCreatorConfig();
   const creatorLevelRuntime = resolveCreatorLevelRuntime(
@@ -1611,6 +1614,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       }
 
       let newBoard = placePiece(board, piece, row, col);
+      playBlockPlacementSound();
       showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
       let totalLines = 0;
@@ -1891,6 +1895,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     false,
     0,
     visualViewport,
+    dragTuning,
   );
 
   const handleBoardLayout = useCallback(() => {
@@ -2578,6 +2583,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                       boardCompact={false}
                       boardScaleY={boardRule.scale * (boardRule.heightScale ?? 1)}
                       viewport={visualViewport}
+                      dragTuning={dragTuning}
                     />
                   </VisualElementView>
                 </View>
@@ -2733,6 +2739,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                     boardCompact={false}
                     boardScaleY={boardRule.scale * (boardRule.heightScale ?? 1)}
                     viewport={visualViewport}
+                    dragTuning={dragTuning}
                   />
                 </VisualElementView>
               </View>

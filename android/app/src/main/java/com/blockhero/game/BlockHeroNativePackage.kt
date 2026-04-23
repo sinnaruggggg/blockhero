@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class BlockHeroNativePackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-    return emptyList()
+    return listOf(PlacementSoundModule(reactContext))
   }
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

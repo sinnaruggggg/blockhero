@@ -92,6 +92,7 @@ import {
 } from '../stores/gameStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { flushPlayerStateNow } from '../services/playerState';
+import { playBlockPlacementSound } from '../services/placementSound';
 import { submitRaidLeaderboard } from '../services/rankingService';
 import { supabase } from '../services/supabase';
 import {
@@ -164,6 +165,7 @@ import {
 import { useVisualConfig } from '../hooks/useVisualConfig';
 import {
   buildVisualTintColor,
+  getGameplayDragTuning,
   getRaidBackgroundOverride,
   getVisualElementRule,
   type VisualViewport,
@@ -298,6 +300,7 @@ export default function RaidScreen({ route, navigation }: any) {
     RAID_BOSSES.find(b => b.stage === bossStage) || RAID_BOSSES[0];
   const { manifest: visualManifest, assetUris: visualAssetUris } =
     useVisualConfig();
+  const dragTuning = getGameplayDragTuning(visualManifest);
   const { manifest: creatorManifest, assetUris: creatorAssetUris } =
     useCreatorConfig();
   const raidScreenId = isNormalRaid ? 'raidNormal' : 'raidBoss';
@@ -1516,6 +1519,7 @@ export default function RaidScreen({ route, navigation }: any) {
       if (!canPlacePiece(board, piece.shape, row, col)) return;
 
       let newBoard = placePiece(board, piece, row, col);
+      playBlockPlacementSound();
       showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
       const effects = getRaidEffects();
@@ -1869,6 +1873,7 @@ export default function RaidScreen({ route, navigation }: any) {
     true,
     1,
     visualViewport,
+    dragTuning,
   );
 
   const handleBoardLayout = useCallback(() => {
@@ -3046,6 +3051,7 @@ export default function RaidScreen({ route, navigation }: any) {
                 raidBoardRule.scale * (raidBoardRule.heightScale ?? 1)
               }
               viewport={visualViewport}
+              dragTuning={dragTuning}
             />
           </VisualElementView>
         </View>

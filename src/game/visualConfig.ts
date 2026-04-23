@@ -100,6 +100,17 @@ export type VisualBackgroundOverride = {
   removeImage: boolean;
 };
 
+export type GameplayDragTuning = {
+  liftOffsetCells: number;
+  snapMaxDistanceCells: number;
+  stickyThresholdCells: number;
+  snapSearchRadius: number;
+};
+
+export type GameplayVisualConfig = {
+  dragTuning: GameplayDragTuning;
+};
+
 export type LevelScreenVisualConfig = {
   elements: Record<LevelElementId, VisualElementRule>;
   characterElements: VisualCharacterElementOverrides<LevelElementId>;
@@ -130,6 +141,7 @@ export type RaidScreenVisualConfig = {
 export type VisualConfigManifest = {
   version: number;
   referenceViewport: VisualViewport;
+  gameplay: GameplayVisualConfig;
   studioSnapshots?: Partial<
     Record<
       VisualScreenId,
@@ -294,6 +306,13 @@ export const DEFAULT_VISUAL_BACKGROUND_OVERRIDE: VisualBackgroundOverride = {
   removeImage: false,
 };
 
+export const DEFAULT_GAMEPLAY_DRAG_TUNING: GameplayDragTuning = {
+  liftOffsetCells: 2.5,
+  snapMaxDistanceCells: 0.42,
+  stickyThresholdCells: 0,
+  snapSearchRadius: 1,
+};
+
 function cloneRule(): VisualElementRule {
   return { ...DEFAULT_VISUAL_ELEMENT_RULE };
 }
@@ -308,6 +327,9 @@ function createRules<T extends string>(ids: T[]): Record<T, VisualElementRule> {
 export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
   version: 0,
   referenceViewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
+  gameplay: {
+    dragTuning: { ...DEFAULT_GAMEPLAY_DRAG_TUNING },
+  },
   screens: {
     level: {
       elements: createRules<LevelElementId>([
@@ -388,6 +410,65 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function numberOr(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function sanitizeGameplayDragTuning(
+  value?: Partial<GameplayDragTuning> | null,
+): GameplayDragTuning {
+  const merged = {
+    ...DEFAULT_GAMEPLAY_DRAG_TUNING,
+    ...(value ?? {}),
+  };
+
+  return {
+    liftOffsetCells: clamp(
+      numberOr(
+        merged.liftOffsetCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.liftOffsetCells,
+      ),
+      1,
+      4,
+    ),
+    snapMaxDistanceCells: clamp(
+      numberOr(
+        merged.snapMaxDistanceCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.snapMaxDistanceCells,
+      ),
+      0,
+      1.2,
+    ),
+    stickyThresholdCells: clamp(
+      numberOr(
+        merged.stickyThresholdCells,
+        DEFAULT_GAMEPLAY_DRAG_TUNING.stickyThresholdCells,
+      ),
+      0,
+      0.8,
+    ),
+    snapSearchRadius: Math.round(
+      clamp(
+        numberOr(
+          merged.snapSearchRadius,
+          DEFAULT_GAMEPLAY_DRAG_TUNING.snapSearchRadius,
+        ),
+        0,
+        2,
+      ),
+    ),
+  };
+}
+
+function sanitizeGameplayVisualConfig(
+  value?: Partial<GameplayVisualConfig> | null,
+): GameplayVisualConfig {
+  return {
+    dragTuning: sanitizeGameplayDragTuning(value?.dragTuning),
+  };
 }
 
 function sanitizeElementRule(
@@ -637,6 +718,7 @@ export function sanitizeVisualConfigManifest(
   return {
     version: Math.max(0, Math.round(Number(value?.version) || 0)),
     referenceViewport: sanitizeViewport(value?.referenceViewport),
+    gameplay: sanitizeGameplayVisualConfig(value?.gameplay),
     studioSnapshots: sanitizeStudioSnapshots(value?.studioSnapshots),
     screens: {
       level: {
@@ -738,6 +820,12 @@ export function sanitizeVisualConfigManifest(
 
 export function cloneVisualConfigManifest(manifest: VisualConfigManifest) {
   return JSON.parse(JSON.stringify(manifest)) as VisualConfigManifest;
+}
+
+export function getGameplayDragTuning(
+  manifest?: Partial<VisualConfigManifest> | null,
+): GameplayDragTuning {
+  return sanitizeGameplayDragTuning(manifest?.gameplay?.dragTuning);
 }
 
 export function getLevelBackgroundOverride(
