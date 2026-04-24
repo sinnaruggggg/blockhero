@@ -6,12 +6,13 @@
 ## Source Of Truth
 - Release workflow: [.github/workflows/release-apk.yml](/C:/www/game/blockhero_codex/.github/workflows/release-apk.yml)
 - App update check: [src/services/updateService.ts](/C:/www/game/blockhero_codex/src/services/updateService.ts)
+- App version constants: [src/constants/appVersion.ts](/C:/www/game/blockhero_codex/src/constants/appVersion.ts)
 - Android app version: [android/app/build.gradle](/C:/www/game/blockhero_codex/android/app/build.gradle)
 - Release verifier script: [scripts/wait-for-github-release.ps1](/C:/www/game/blockhero_codex/scripts/wait-for-github-release.ps1)
 
 ## Required Release Flow
 1. Update `versionCode` and `versionName` in `android/app/build.gradle`.
-2. Update `CURRENT_VERSION_CODE` and `CURRENT_VERSION_NAME` in `src/services/updateService.ts`.
+2. Update `CURRENT_VERSION_CODE` and `CURRENT_VERSION_NAME` in `src/constants/appVersion.ts`.
 3. Build locally.
 4. Commit the release bump.
 5. Push `main`.
