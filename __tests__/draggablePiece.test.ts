@@ -1,15 +1,19 @@
-import {getPickupCenteredOffset} from '../src/components/DraggablePiece';
+import {getFixedPickupAnchorPage} from '../src/components/DraggablePiece';
 
-describe('getPickupCenteredOffset', () => {
-  it('moves a left-slot inner touch toward the screen center instead of farther left', () => {
-    expect(getPickupCenteredOffset(100, 70)).toBe(20);
+describe('getFixedPickupAnchorPage', () => {
+  it('returns the same lifted anchor for any touch point inside the left slot', () => {
+    expect(getFixedPickupAnchorPage(100, 120, 20)).toBe(150);
+    expect(getFixedPickupAnchorPage(100, 150, 50)).toBe(150);
+    expect(getFixedPickupAnchorPage(100, 180, 80)).toBe(150);
   });
 
-  it('moves a right-slot inner touch toward the screen center instead of farther right', () => {
-    expect(getPickupCenteredOffset(100, 30)).toBe(-20);
+  it('returns the same lifted anchor for any touch point inside the right slot', () => {
+    expect(getFixedPickupAnchorPage(100, 320, 20)).toBe(350);
+    expect(getFixedPickupAnchorPage(100, 350, 50)).toBe(350);
+    expect(getFixedPickupAnchorPage(100, 380, 80)).toBe(350);
   });
 
-  it('keeps a centered pickup stable', () => {
-    expect(getPickupCenteredOffset(100, 50)).toBe(0);
+  it('keeps a centered touch unchanged', () => {
+    expect(getFixedPickupAnchorPage(100, 250, 50)).toBe(250);
   });
 });

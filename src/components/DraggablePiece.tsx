@@ -23,8 +23,12 @@ const BEVEL = 2;
 const TRAY_SLOT_SIZE = 108;
 const TRAY_SLOT_SIZE_COMPACT = 96;
 
-export function getPickupCenteredOffset(slotSize: number, location: number) {
-  return location - slotSize / 2;
+export function getFixedPickupAnchorPage(
+  slotSize: number,
+  page: number,
+  location: number,
+) {
+  return page + (slotSize / 2 - location);
 }
 
 // Voxel helpers
@@ -172,7 +176,7 @@ export default function DraggablePiece({
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const [isDragging, setIsDragging] = useState(false);
-  const dragCenterOffsetRef = useRef({ x: 0, y: 0 });
+  const dragAnchorRef = useRef({ x: 0, y: 0 });
   const dragOriginRef = useRef({ x: 0, y: 0, active: false });
   const layoutScale = getGameplayLayoutScale(viewport);
   const boardMetrics = getBoardMetrics(viewport, { compact: boardCompact });
@@ -288,11 +292,12 @@ export default function DraggablePiece({
               : gs.y0 ?? 0;
 
         const origin = dragOriginRef.current;
+        const anchor = dragAnchorRef.current;
         const adjustedPageX = origin.active
-          ? origin.x + (pageX - origin.x) * dragDistanceScaleX
+          ? anchor.x + (pageX - origin.x) * dragDistanceScaleX
           : pageX;
         const adjustedPageY = origin.active
-          ? origin.y + (pageY - origin.y) * dragDistanceScaleY
+          ? anchor.y + (pageY - origin.y) * dragDistanceScaleY
           : pageY;
 
         return {
@@ -329,9 +334,17 @@ export default function DraggablePiece({
             typeof evt.nativeEvent.locationY === 'number'
               ? evt.nativeEvent.locationY
               : traySlotSize / 2;
-          dragCenterOffsetRef.current = {
-            x: getPickupCenteredOffset(traySlotSize, locationX),
-            y: getPickupCenteredOffset(traySlotSize, locationY),
+          dragAnchorRef.current = {
+            x: getFixedPickupAnchorPage(
+              traySlotSize,
+              evt.nativeEvent.pageX,
+              locationX,
+            ),
+            y: getFixedPickupAnchorPage(
+              traySlotSize,
+              evt.nativeEvent.pageY,
+              locationY,
+            ),
           };
           dragOriginRef.current = {
             x: evt.nativeEvent.pageX,
@@ -341,11 +354,8 @@ export default function DraggablePiece({
           setIsDragging(true);
 
           pan.setValue({
-            x: dragCenterOffsetRef.current.x + centerOffsetX,
-            y:
-              dragCenterOffsetRef.current.y +
-              dragOffsetY +
-              centerOffsetY,
+            x: centerOffsetX,
+            y: dragOffsetY + centerOffsetY,
           });
           callbacksRef.current.onDragStart();
           const liftedCenter = getLiftedPieceCenter(evt, {
@@ -356,15 +366,8 @@ export default function DraggablePiece({
         },
         onPanResponderMove: (evt, gs) => {
           pan.setValue({
-            x:
-              gs.dx * dragDistanceScaleX +
-              dragCenterOffsetRef.current.x +
-              centerOffsetX,
-            y:
-              gs.dy * dragDistanceScaleY +
-              dragCenterOffsetRef.current.y +
-              dragOffsetY +
-              centerOffsetY,
+            x: gs.dx * dragDistanceScaleX + centerOffsetX,
+            y: gs.dy * dragDistanceScaleY + dragOffsetY + centerOffsetY,
           });
           const liftedCenter = getLiftedPieceCenter(evt, gs);
           callbacksRef.current.onDragMove(liftedCenter.x, liftedCenter.y);
