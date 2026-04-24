@@ -7,7 +7,7 @@ function readJsonIfExists(filePath) {
     if (!fs.existsSync(filePath)) {
       return null;
     }
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, ''));
   } catch (error) {
     console.error(`Failed to read ${filePath}`, error);
     return null;

@@ -16,7 +16,9 @@ import {
 } from 'react-native-safe-area-context';
 import { t } from '../i18n';
 import { playGameBgm, stopGameBgm } from '../services/gameAudio';
+import { playGameSfx } from '../services/gameSfx';
 import { playBlockPlacementSound } from '../services/placementSound';
+import { playLineClearSound } from '../services/lineClearSound';
 import { flushPlayerStateNow } from '../services/playerState';
 import { getAdminStatus } from '../services/adminSync';
 import { submitLevelLeaderboard } from '../services/rankingService';
@@ -28,6 +30,7 @@ import BoardSkillCastEffect, {
   type BoardSkillCastEffectEvent,
 } from '../components/BoardSkillCastEffect';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import LineClearEffect from '../components/LineClearEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView, {
   buildVisualAutomationLabel,
@@ -149,6 +152,10 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import {
+  buildLineClearEffectCells,
+  type LineClearEffectCell,
+} from '../game/lineClearEffect';
 import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
 import {
@@ -462,6 +469,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [lineClearEffect, setLineClearEffect] = useState<{
+    id: number;
+    cells: LineClearEffectCell[];
+  } | null>(null);
   const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
     BoardSkillCastEffectEvent[] | null
   >(null);
@@ -482,6 +493,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const boardRef = useRef<View>(null);
   const floatingHitIdRef = useRef(0);
   const placementEffectIdRef = useRef(0);
+  const lineClearEffectIdRef = useRef(0);
   const boardSkillEffectIdRef = useRef(0);
   const gameDataRef = useRef<GameData | null>(null);
   const maxComboRef = useRef(0);
@@ -527,6 +539,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const comboBurstAnim = useRef(new Animated.Value(0)).current;
   const screenShakeX = useRef(new Animated.Value(0)).current;
   const screenShakeY = useRef(new Animated.Value(0)).current;
+  const lineClearBoardShakeX = useRef(new Animated.Value(0)).current;
   const comboShakeAnimationRef =
     useRef<Animated.CompositeAnimation | null>(null);
   const victoryXpAnim = useRef(new Animated.Value(0)).current;
@@ -687,6 +700,47 @@ export default function SingleGameScreen({ route, navigation }: any) {
     [boardLayout, visualViewport],
   );
 
+  const triggerLineClearBoardShake = useCallback(() => {
+    lineClearBoardShakeX.stopAnimation();
+    lineClearBoardShakeX.setValue(0);
+    Animated.sequence([
+      Animated.timing(lineClearBoardShakeX, {
+        toValue: -7,
+        duration: 34,
+        useNativeDriver: true,
+      }),
+      Animated.timing(lineClearBoardShakeX, {
+        toValue: 7,
+        duration: 38,
+        useNativeDriver: true,
+      }),
+      Animated.timing(lineClearBoardShakeX, {
+        toValue: -4,
+        duration: 30,
+        useNativeDriver: true,
+      }),
+      Animated.timing(lineClearBoardShakeX, {
+        toValue: 0,
+        duration: 34,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [lineClearBoardShakeX]);
+
+  const showLineClearEffect = useCallback(
+    (cells: LineClearEffectCell[]) => {
+      if (cells.length === 0) {
+        return;
+      }
+
+      triggerLineClearBoardShake();
+      playLineClearSound();
+      lineClearEffectIdRef.current += 1;
+      setLineClearEffect({id: lineClearEffectIdRef.current, cells});
+    },
+    [triggerLineClearBoardShake],
+  );
+
   const showBoardSkillCastEffects = useCallback(
     (
       animations: Array<{
@@ -697,6 +751,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       if (!boardLayout || animations.length === 0) {
         return;
       }
+      playGameSfx('skillUse');
 
       const events = animations
         .map(animation => {
@@ -779,6 +834,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     setMonsterHits([]);
     setMonsterImpactHit(null);
     setPlacementEffect(null);
+    setLineClearEffect(null);
     setPlayerHit(null);
     setVictoryState(null);
     setDefeatState(null);
@@ -982,10 +1038,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
   const showLevelUpCelebration = useCallback(
     (fromLevel: number, toLevel: number) =>
-      new Promise<void>(resolve => {
-        const skillPointsGained = (toLevel - fromLevel) * 2;
-        setLevelUpState({ fromLevel, toLevel, skillPointsGained });
-        levelUpAnim.setValue(0);
+        new Promise<void>(resolve => {
+          const skillPointsGained = (toLevel - fromLevel) * 2;
+          playGameSfx('levelUp');
+          setLevelUpState({ fromLevel, toLevel, skillPointsGained });
+          levelUpAnim.setValue(0);
         Animated.sequence([
           Animated.timing(levelUpAnim, {
             toValue: 1,
@@ -1326,6 +1383,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
         void flushPlayerStateNow('single_game_victory');
         gameDataRef.current = updated;
         setGameData(updated);
+        playGameSfx('victory');
+        playGameSfx('reward');
         setVictoryState({
           characterId: characterIdForReward,
           rewardGold: goldReward,
@@ -1346,6 +1405,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         setGameData(updated);
       }
       void flushPlayerStateNow('single_game_defeat');
+      playGameSfx('defeat');
       setDefeatState({
         characterId: selectedCharacterId,
         reason,
@@ -1611,13 +1671,14 @@ export default function SingleGameScreen({ route, navigation }: any) {
         return;
       }
 
-      const piece = pieces[pieceIndex];
-      if (!piece) {
-        return;
-      }
-      if (!canPlacePiece(board, piece.shape, row, col)) {
-        return;
-      }
+        const piece = pieces[pieceIndex];
+        if (!piece) {
+          return;
+        }
+        if (!canPlacePiece(board, piece.shape, row, col)) {
+          playGameSfx('blockPlaceFail');
+          return;
+        }
 
       let newBoard = placePiece(board, piece, row, col);
       playBlockPlacementSound();
@@ -1626,6 +1687,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       let totalLines = 0;
       let totalGemsFound = 0;
       const totalItemsFound: string[] = [];
+      const clearedEffectCells: LineClearEffectCell[] = [];
 
       while (true) {
         const result = checkAndClearLines(newBoard);
@@ -1636,6 +1698,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
           break;
         }
 
+        clearedEffectCells.push(
+          ...buildLineClearEffectCells(newBoard, result.newBoard),
+        );
         newBoard = result.newBoard;
         totalLines += clearedLineCount;
         totalGemsFound += result.gemsFound;
@@ -1676,10 +1741,14 @@ export default function SingleGameScreen({ route, navigation }: any) {
         colors: getSkinColors(),
       });
       showBoardSkillCastEffects(boardSkillResult.animations);
+      clearedEffectCells.push(
+        ...buildLineClearEffectCells(newBoard, boardSkillResult.board),
+      );
       newBoard = boardSkillResult.board;
       totalLines += boardSkillResult.extraLinesCleared;
       totalGemsFound += boardSkillResult.gemsFound;
       totalItemsFound.push(...boardSkillResult.itemsFound);
+      showLineClearEffect(clearedEffectCells);
 
       const turnResult = resolveCombatTurn({
         mode: 'level',
@@ -1701,13 +1770,16 @@ export default function SingleGameScreen({ route, navigation }: any) {
         maxComboRef.current = turnResult.nextCombo;
       }
 
-      comboRef.current = turnResult.nextCombo;
-      setCombo(turnResult.nextCombo);
+        comboRef.current = turnResult.nextCombo;
+        setCombo(turnResult.nextCombo);
 
-      if (turnResult.didClear) {
-        resetComboTimer();
-        triggerComboEffects(turnResult.nextCombo);
-      }
+        if (turnResult.didClear) {
+          if (turnResult.nextCombo > 1) {
+            playGameSfx('combo');
+          }
+          resetComboTimer();
+          triggerComboEffects(turnResult.nextCombo);
+        }
 
       if (turnResult.feverTriggered) {
         activateFever();
@@ -1883,6 +1955,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       monsterAvatarShakeX,
       queueMonsterHit,
       showPlacementEffect,
+      showLineClearEffect,
       showBoardSkillCastEffects,
       triggerMonsterPose,
       showSkillTriggerNotice,
@@ -2508,7 +2581,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 {renderBattleLane()}
               </VisualElementView>
 
-              <View style={styles.boardContainer}>
+              <Animated.View
+                style={[
+                  styles.boardContainer,
+                  {transform: [{translateX: lineClearBoardShakeX}]},
+                ]}>
                 <VisualElementView
                   screenId="level"
                   elementId="board"
@@ -2554,6 +2631,17 @@ export default function SingleGameScreen({ route, navigation }: any) {
                         }
                       />
                     )}
+                    {lineClearEffect && (
+                      <LineClearEffect
+                        cells={lineClearEffect.cells}
+                        viewport={visualViewport}
+                        onDone={() =>
+                          setLineClearEffect(current =>
+                            current?.id === lineClearEffect.id ? null : current,
+                          )
+                        }
+                      />
+                    )}
                   </View>
                   <VisualElementView
                     screenId="level"
@@ -2569,7 +2657,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                     />
                   </VisualElementView>
                 </VisualElementView>
-              </View>
+              </Animated.View>
 
               <View style={styles.bottomActionRow}>
                 <View style={styles.bottomPieceArea}>
@@ -2587,12 +2675,13 @@ export default function SingleGameScreen({ route, navigation }: any) {
                       onDragCancel={dragDrop.onDragCancel}
                       compact={compactPieceTray}
                       boardCompact={false}
+                      boardScaleX={boardRule.scale * (boardRule.widthScale ?? 1)}
                       boardScaleY={boardRule.scale * (boardRule.heightScale ?? 1)}
                       viewport={visualViewport}
                       dragTuning={dragTuning}
-                    />
-                  </VisualElementView>
-                </View>
+                  />
+                </VisualElementView>
+              </View>
                 {hasSidePreview && (
                   <NextPiecePreview
                     pieces={previewPieces}
@@ -2664,7 +2753,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
               {renderBattleLane()}
             </VisualElementView>
 
-            <View style={styles.boardContainer}>
+            <Animated.View
+              style={[
+                styles.boardContainer,
+                {transform: [{translateX: lineClearBoardShakeX}]},
+              ]}>
               <VisualElementView
                 screenId="level"
                 elementId="board"
@@ -2710,6 +2803,17 @@ export default function SingleGameScreen({ route, navigation }: any) {
                       }
                     />
                   )}
+                  {lineClearEffect && (
+                    <LineClearEffect
+                      cells={lineClearEffect.cells}
+                      viewport={visualViewport}
+                      onDone={() =>
+                        setLineClearEffect(current =>
+                          current?.id === lineClearEffect.id ? null : current,
+                        )
+                      }
+                    />
+                  )}
                 </View>
                 <VisualElementView
                   screenId="level"
@@ -2725,7 +2829,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                   />
                 </VisualElementView>
               </VisualElementView>
-            </View>
+            </Animated.View>
 
             <View style={styles.bottomActionRow}>
               <View style={styles.bottomPieceArea}>
@@ -2743,6 +2847,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
                     onDragCancel={dragDrop.onDragCancel}
                     compact={compactPieceTray}
                     boardCompact={false}
+                    boardScaleX={boardRule.scale * (boardRule.widthScale ?? 1)}
                     boardScaleY={boardRule.scale * (boardRule.heightScale ?? 1)}
                     viewport={visualViewport}
                     dragTuning={dragTuning}

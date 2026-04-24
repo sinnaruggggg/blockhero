@@ -16,6 +16,7 @@ interface PieceSelectorProps {
   onDragCancel: (index: number) => void;
   compact?: boolean;
   boardCompact?: boolean;
+  boardScaleX?: number;
   boardScaleY?: number;
   viewport?: Partial<VisualViewport>;
   dragTuning?: Partial<GameplayDragTuning> | null;
@@ -29,6 +30,7 @@ export default function PieceSelector({
   onDragCancel,
   compact = false,
   boardCompact = false,
+  boardScaleX = 1,
   boardScaleY = 1,
   viewport,
   dragTuning,
@@ -56,6 +58,7 @@ export default function PieceSelector({
               onDragCancel={() => onDragCancel(i)}
               compact={compact}
               boardCompact={boardCompact}
+              boardScaleX={boardScaleX}
               boardScaleY={boardScaleY}
               viewport={viewport}
               dragTuning={dragTuning}

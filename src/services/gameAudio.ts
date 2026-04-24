@@ -5,6 +5,7 @@ import {
   type GameplaySfxEventId,
 } from '../game/visualConfig';
 import {
+  downloadPublishedVisualConfigIfNeeded,
   getCachedVisualConfigSnapshot,
   type VisualConfigSnapshot,
 } from './visualConfigService';
@@ -15,7 +16,6 @@ import {
 } from '../stores/gameSettings';
 
 type GameAudioNativeModule = {
-  playBlockPlace?: () => void;
   playSound?: (
     uri: string | null,
     volume: number,
@@ -39,6 +39,7 @@ let cachedSettings: GameSettings = {...DEFAULT_GAME_SETTINGS};
 let settingsLoaded = false;
 let settingsLoadInFlight: Promise<GameSettings> | null = null;
 let currentBgmTrack: GameplayBgmTrackId | null = null;
+let audioRefreshInFlight: Promise<VisualConfigSnapshot> | null = null;
 const MAX_AUDIO_VOLUME = 3;
 
 function ensureSettingsLoaded() {
@@ -78,6 +79,26 @@ function getAssetUri(assetKey: string | null, snapshot: VisualConfigSnapshot) {
   return snapshot.assetUris[assetKey] ?? null;
 }
 
+function refreshAudioAssetsInBackground() {
+  if (audioRefreshInFlight) {
+    return audioRefreshInFlight;
+  }
+
+  audioRefreshInFlight = downloadPublishedVisualConfigIfNeeded(true)
+    .then(snapshot => {
+      if (currentBgmTrack) {
+        playGameBgm(currentBgmTrack);
+      }
+      return snapshot;
+    })
+    .catch(() => getSnapshot())
+    .finally(() => {
+      audioRefreshInFlight = null;
+    });
+
+  return audioRefreshInFlight;
+}
+
 function getVolume(...values: number[]) {
   const multiplied = values.reduce(
     (acc, value) => acc * Math.max(0, Math.min(MAX_AUDIO_VOLUME, value)),
@@ -106,16 +127,22 @@ export function playGameAudioEvent(eventId: GameplaySfxEventId) {
   }
 
   const volume = getVolume(audio.masterVolume, audio.sfxVolume, rule.volume);
+  if (!rule.assetKey) {
+    return;
+  }
+
   const uri = getAssetUri(rule.assetKey, snapshot);
-  if (!uri && eventId !== 'blockPlace') {
+  if (rule.assetKey && !uri) {
+    void refreshAudioAssetsInBackground();
+    return;
+  }
+  if (!uri) {
     return;
   }
 
   try {
     if (nativeAudio?.playSound) {
       nativeAudio.playSound(uri, volume, rule.cooldownMs, rule.allowOverlap);
-    } else if (eventId === 'blockPlace') {
-      nativeAudio?.playBlockPlace?.();
     }
   } catch {
     // Audio must never block gameplay.
@@ -140,6 +167,9 @@ export function playGameBgm(trackId: GameplayBgmTrackId) {
 
   const uri = getAssetUri(rule.assetKey, snapshot);
   if (!uri) {
+    if (rule.assetKey) {
+      void refreshAudioAssetsInBackground();
+    }
     stopGameBgm(rule.fadeOutMs);
     return;
   }

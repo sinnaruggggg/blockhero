@@ -22,7 +22,8 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
   font-family: 'Segoe UI', 'Pretendard', sans-serif;
   background:
     radial-gradient(circle at top, rgba(64, 112, 193, 0.18), transparent 34%),
@@ -59,9 +60,10 @@ p {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar,
@@ -74,15 +76,15 @@ p {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(360px, 1fr) minmax(260px, 0.9fr);
-  gap: 12px;
-  align-items: start;
-  padding: 10px 12px;
+  grid-template-columns: minmax(190px, 0.72fr) minmax(420px, 0.95fr) minmax(620px, 1.65fr);
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
 }
 
 .topbar-brand {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .eyebrow {
@@ -95,7 +97,7 @@ p {
 }
 
 h1 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -112,29 +114,29 @@ h3 {
 .subtitle,
 .muted {
   color: var(--muted);
-  line-height: 1.4;
-  font-size: 11px;
+  line-height: 1.25;
+  font-size: 10px;
 }
 
 .topbar-tabs {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  padding-top: 6px;
 }
 
 .tab-button {
   min-width: 100px;
-  padding: 8px 10px;
-  border-radius: 12px;
+  padding: 6px 9px;
+  border-radius: 11px;
   text-align: center;
   background: rgba(18, 29, 52, 0.84);
   color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 11px;
   font-weight: 800;
+  min-height: 30px;
 }
 
 .tab-button.active {
@@ -144,24 +146,30 @@ h3 {
 
 .topbar-side {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, auto) minmax(390px, 1fr);
+  grid-template-areas:
+    "pills session"
+    "status session";
+  gap: 3px 8px;
+  align-items: center;
   justify-items: stretch;
 }
 
 .topbar-pills {
+  grid-area: pills;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
 .status-pill,
 .toolbar-chip {
-  padding: 7px 10px;
-  border-radius: 12px;
+  padding: 5px 8px;
+  border-radius: 10px;
   border: 1px solid var(--stroke);
   background: rgba(16, 27, 49, 0.7);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
 }
 
@@ -176,28 +184,29 @@ h3 {
 }
 
 .session-mini-grid {
+  grid-area: session;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 5px;
 }
 
 .mini-card {
-  min-height: 46px;
-  padding: 8px 10px;
-  border-radius: 12px;
+  min-height: 34px;
+  padding: 5px 7px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(9, 16, 31, 0.62);
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .mini-card span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .mini-card strong {
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.2;
   word-break: break-all;
 }
@@ -208,7 +217,9 @@ h3 {
 }
 
 .status-stack.compact {
+  grid-area: status;
   justify-items: end;
+  gap: 1px;
 }
 
 .login-card,
@@ -225,7 +236,8 @@ h3 {
 .workspace {
   flex: 1;
   min-height: 0;
-  padding: 10px;
+  overflow: hidden;
+  padding: 8px 10px 10px;
 }
 
 .workspace-body,
@@ -238,15 +250,25 @@ h3 {
 
 .workspace-body {
   height: 100%;
+  overflow: hidden;
 }
 
 .work-view {
   display: none;
   height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .work-view.active {
   display: block;
+}
+
+#adminDataView.active,
+#historyView.active,
+#settingsView.active {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .panel-header {
@@ -465,9 +487,12 @@ button.small {
 
 .ui-editor-grid {
   height: 100%;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(250px, 280px) minmax(0, 1fr) minmax(250px, 280px);
   gap: 10px;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .ui-side-panel,
@@ -476,12 +501,17 @@ button.small {
 }
 
 .ui-side-panel {
+  max-height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .ui-stage-panel {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .ui-stage-toolbar,
@@ -503,7 +533,7 @@ button.small {
 
 .visual-stage-host {
   flex: 1;
-  min-height: 520px;
+  min-height: 0;
   position: relative;
   overflow: hidden;
   padding: 10px;
@@ -823,6 +853,11 @@ input[type="range"] {
   }
 
   .topbar-side {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "pills"
+      "session"
+      "status";
     justify-items: start;
   }
 
@@ -846,7 +881,7 @@ input[type="range"] {
   }
 
   .visual-stage-host {
-    min-height: 460px;
+    min-height: 0;
   }
 }
 

@@ -49,9 +49,6 @@ class PlacementSoundModule(
     .build()
   private val soundEntriesByPath = LinkedHashMap<String, SoundEntry>()
   private val soundEntriesById = HashMap<Int, SoundEntry>()
-  private val blockPlaceSoundId: Int
-  private var blockPlaceLoaded = false
-  private var blockPlaceLastPlayAt = 0L
 
   private var bgmPlayer: MediaPlayer? = null
   private var bgmEnhancer: LoudnessEnhancer? = null
@@ -59,19 +56,19 @@ class PlacementSoundModule(
   private var bgmBaseVolume = 0f
 
   init {
-    blockPlaceSoundId = soundPool.load(reactContext, R.raw.block_place, 1)
     soundPool.setOnLoadCompleteListener { _, sampleId, status ->
-      if (sampleId == blockPlaceSoundId && status == 0) {
-        blockPlaceLoaded = true
-        return@setOnLoadCompleteListener
-      }
-
       val entry = soundEntriesById[sampleId] ?: return@setOnLoadCompleteListener
       if (status == 0) {
         entry.loaded = true
         entry.pendingPlay?.let { pending ->
           playLoadedEntry(entry, pending.volume, pending.cooldownMs, pending.allowOverlap)
         }
+      } else {
+        entry.pendingPlay?.let { pending ->
+          playMediaSound(entry.path, pending.volume)
+        }
+        soundEntriesByPath.remove(entry.path)
+        soundEntriesById.remove(sampleId)
       }
       entry.pendingPlay = null
     }
@@ -118,13 +115,52 @@ class PlacementSoundModule(
       return
     }
 
-    val fullStreams = volume.toInt().coerceAtMost(MAX_SFX_VOLUME.toInt())
-    val remainder = volume - fullStreams
-    repeat(fullStreams) {
-      soundPool.play(soundId, 1.0f, 1.0f, 1, 0, 1.0f)
+    // SoundPool stream volume is capped at 1.0. Replaying the same sample multiple
+    // times to emulate louder volume makes one trigger sound like stacked duplicates.
+    val playbackVolume = min(1.0f, volume)
+    soundPool.play(soundId, playbackVolume, playbackVolume, 1, 0, 1.0f)
+  }
+
+  private fun playMediaSound(path: String, requestedVolume: Float) {
+    if (!File(path).exists()) {
+      return
     }
-    if (remainder > 0.02f) {
-      soundPool.play(soundId, remainder, remainder, 1, 0, 1.0f)
+
+    val player = MediaPlayer()
+    try {
+      val volume = toMediaPlayerVolume(clampVolume(requestedVolume.toDouble(), MAX_SFX_VOLUME))
+      player.setAudioAttributes(audioAttributes)
+      player.setDataSource(path)
+      player.setVolume(volume, volume)
+      player.setOnPreparedListener {
+        try {
+          it.start()
+        } catch (_error: Exception) {
+          try {
+            it.release()
+          } catch (_releaseError: Exception) {
+          }
+        }
+      }
+      player.setOnCompletionListener {
+        try {
+          it.release()
+        } catch (_error: Exception) {
+        }
+      }
+      player.setOnErrorListener { mp, _, _ ->
+        try {
+          mp.release()
+        } catch (_error: Exception) {
+        }
+        true
+      }
+      player.prepareAsync()
+    } catch (_error: Exception) {
+      try {
+        player.release()
+      } catch (_releaseError: Exception) {
+      }
     }
   }
 
@@ -151,6 +187,9 @@ class PlacementSoundModule(
     soundEntriesByPath[path]?.let { return it }
     trimSoundCacheIfNeeded()
     val soundId = soundPool.load(path, 1)
+    if (soundId == 0) {
+      return null
+    }
     val entry = SoundEntry(path = path, soundId = soundId)
     soundEntriesByPath[path] = entry
     soundEntriesById[soundId] = entry
@@ -176,27 +215,19 @@ class PlacementSoundModule(
   }
 
   @ReactMethod
-  fun playBlockPlace() {
-    val now = SystemClock.elapsedRealtime()
-    if (!blockPlaceLoaded || now - blockPlaceLastPlayAt < 35L) {
-      return
-    }
-
-    blockPlaceLastPlayAt = now
-    playSoundPool(blockPlaceSoundId, MAX_SFX_VOLUME)
-  }
-
-  @ReactMethod
   fun playSound(uri: String?, volume: Double, cooldownMs: Double, allowOverlap: Boolean) {
     val path = normalizeFilePath(uri)
     if (path == null) {
-      playBlockPlace()
       return
     }
 
-    val entry = getOrLoadSound(path) ?: return
     val nextVolume = clampVolume(volume, MAX_SFX_VOLUME)
     val nextCooldownMs = max(0.0, cooldownMs).toLong()
+    val entry = getOrLoadSound(path)
+    if (entry == null) {
+      playMediaSound(path, nextVolume)
+      return
+    }
     if (entry.loaded) {
       playLoadedEntry(entry, nextVolume, nextCooldownMs, allowOverlap)
     } else {

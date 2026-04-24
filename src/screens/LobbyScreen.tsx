@@ -61,6 +61,7 @@ export default function LobbyScreen({navigation}: any) {
   const nicknameRef = useRef('');
   const channelRef = useRef<any>(null);
   const matchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const lobbyChat = useLobbyChat({
     mode: 'battle',
     userId: chatPlayerId,

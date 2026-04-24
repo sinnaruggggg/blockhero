@@ -47,4 +47,35 @@ describe('endless mode hard obstacles', () => {
 
     expect(hardCells).toHaveLength(0);
   });
+
+  it('does not place a hard obstacle into the last empty slot of a full line', () => {
+    const board = createBoard();
+    for (let col = 0; col < board[0].length - 1; col += 1) {
+      board[0][col] = {color: '#ffffff'};
+    }
+
+    const randomSpy = jest.spyOn(Math, 'random');
+    randomSpy
+      .mockReturnValueOnce(0.0)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.9)
+      .mockReturnValueOnce(0.9);
+
+    const nextBoard = addEndlessHardObstacles(board, 4);
+
+    randomSpy.mockRestore();
+
+    expect(nextBoard[0][board[0].length - 1]).toBeNull();
+    expect(nextBoard[7][7]).toEqual({
+      color: '#7c3aed',
+      type: 'hard',
+      hits: 2,
+    });
+    const hasFullRow = nextBoard.some(row => row.every(cell => cell !== null));
+    const hasFullColumn = nextBoard[0].some((_, col) =>
+      nextBoard.every(row => row[col] !== null),
+    );
+    expect(hasFullRow).toBe(false);
+    expect(hasFullColumn).toBe(false);
+  });
 });

@@ -603,40 +603,40 @@ function sanitizeGameplayDragTuning(
         merged.liftOffsetCells,
         DEFAULT_GAMEPLAY_DRAG_TUNING.liftOffsetCells,
       ),
-      1,
-      4,
+      0.5,
+      8,
     ),
     centerOffsetXCells: clamp(
       numberOr(
         merged.centerOffsetXCells,
         DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells,
       ),
-      -1.5,
-      1.5,
+      -3,
+      3,
     ),
     centerOffsetYCells: clamp(
       numberOr(
         merged.centerOffsetYCells,
         DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells,
       ),
-      -1.5,
-      1.5,
+      -3,
+      3,
     ),
     dragDistanceScaleX: clamp(
       numberOr(
         merged.dragDistanceScaleX,
         DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX,
       ),
-      0.75,
-      1.5,
+      0.5,
+      2,
     ),
     dragDistanceScaleY: clamp(
       numberOr(
         merged.dragDistanceScaleY,
         DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY,
       ),
-      0.75,
-      1.5,
+      0.5,
+      2,
     ),
     snapMaxDistanceCells: clamp(
       numberOr(
@@ -644,7 +644,7 @@ function sanitizeGameplayDragTuning(
         DEFAULT_GAMEPLAY_DRAG_TUNING.snapMaxDistanceCells,
       ),
       0,
-      1.2,
+      2.4,
     ),
     stickyThresholdCells: clamp(
       numberOr(
@@ -652,7 +652,7 @@ function sanitizeGameplayDragTuning(
         DEFAULT_GAMEPLAY_DRAG_TUNING.stickyThresholdCells,
       ),
       0,
-      0.8,
+      1.6,
     ),
     snapSearchRadius: Math.round(
       clamp(
@@ -661,7 +661,7 @@ function sanitizeGameplayDragTuning(
           DEFAULT_GAMEPLAY_DRAG_TUNING.snapSearchRadius,
         ),
         0,
-        2,
+        4,
       ),
     ),
   };

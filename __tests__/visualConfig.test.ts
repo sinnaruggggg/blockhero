@@ -289,8 +289,8 @@ describe('visualConfig helpers', () => {
       gameplay: {
         dragTuning: {
           liftOffsetCells: 9,
-          centerOffsetXCells: -2,
-          centerOffsetYCells: 2,
+          centerOffsetXCells: -4,
+          centerOffsetYCells: 4,
           dragDistanceScaleX: 0.2,
           dragDistanceScaleY: 2,
           snapMaxDistanceCells: -1,
@@ -326,13 +326,13 @@ describe('visualConfig helpers', () => {
     });
 
     expect(manifest.gameplay.dragTuning).toEqual({
-      liftOffsetCells: 4,
-      centerOffsetXCells: -1.5,
-      centerOffsetYCells: 1.5,
-      dragDistanceScaleX: 0.75,
-      dragDistanceScaleY: 1.5,
+      liftOffsetCells: 8,
+      centerOffsetXCells: -3,
+      centerOffsetYCells: 3,
+      dragDistanceScaleX: 0.5,
+      dragDistanceScaleY: 2,
       snapMaxDistanceCells: 0,
-      stickyThresholdCells: 0.8,
+      stickyThresholdCells: 1.5,
       snapSearchRadius: 2,
     });
     expect(manifest.gameplay.audio.masterVolume).toBe(2);

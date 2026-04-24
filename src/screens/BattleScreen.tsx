@@ -24,6 +24,7 @@ import BoardSkillCastEffect, {
 import NextPiecePreview from '../components/NextPiecePreview';
 import PieceSelector from '../components/PieceSelector';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import LineClearEffect from '../components/LineClearEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import BaseVisualElementView from '../components/VisualElementView';
 import { useBattleNotice } from '../hooks/useBattleNotice';
@@ -53,7 +54,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { playGameBgm, stopGameBgm } from '../services/gameAudio';
+import { playGameSfx } from '../services/gameSfx';
 import { playBlockPlacementSound } from '../services/placementSound';
+import { playLineClearSound } from '../services/lineClearSound';
 import { t } from '../i18n';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
@@ -63,9 +66,16 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import {
+  buildLineClearEffectCells,
+  type LineClearEffectCell,
+} from '../game/lineClearEffect';
 import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { scaleGameplayUnit } from '../game/layoutScale';
-import { getGameplayDragTuning } from '../game/visualConfig';
+import {
+  getGameplayDragTuning,
+  getVisualElementRule,
+} from '../game/visualConfig';
 
 // Neon spark particle effect - sparks scatter fast from placed block area
 function PlaceEffect({
@@ -403,8 +413,10 @@ function useShake() {
     })();
   }, []);
 
-  const triggerShake = useCallback(() => {
-    if (vibrationRef.current) Vibration.vibrate([0, 100, 50, 100]);
+  const triggerShake = useCallback((withVibration = true) => {
+    if (withVibration && vibrationRef.current) {
+      Vibration.vibrate([0, 100, 50, 100]);
+    }
     Animated.sequence([
       Animated.timing(shakeAnim, {
         toValue: 10,
@@ -460,6 +472,7 @@ export default function BattleScreen({ route, navigation }: any) {
 
   useEffect(() => {
     playGameBgm('battle');
+    playGameSfx('battleStart');
     return () => stopGameBgm();
   }, [visualManifest.version]);
 
@@ -482,6 +495,10 @@ export default function BattleScreen({ route, navigation }: any) {
   const [placementEffect, setPlacementEffect] = useState<{
     id: number;
     cells: PiecePlacementEffectCell[];
+  } | null>(null);
+  const [lineClearEffect, setLineClearEffect] = useState<{
+    id: number;
+    cells: LineClearEffectCell[];
   } | null>(null);
   const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
     BoardSkillCastEffectEvent[] | null
@@ -507,6 +524,7 @@ export default function BattleScreen({ route, navigation }: any) {
   const gameOverRef = useRef(false);
   const opponentDisconnectedRef = useRef(false);
   const placementEffectIdRef = useRef(0);
+  const lineClearEffectIdRef = useRef(0);
   const boardSkillEffectIdRef = useRef(0);
   const rematchAcceptedRef = useRef(false);
   const opponentRematchAcceptedRef = useRef(false);
@@ -861,6 +879,20 @@ export default function BattleScreen({ route, navigation }: any) {
     [boardLayout, visualViewport],
   );
 
+  const showLineClearEffect = useCallback(
+    (cells: LineClearEffectCell[]) => {
+      if (cells.length === 0) {
+        return;
+      }
+
+      triggerShake(false);
+      playLineClearSound();
+      lineClearEffectIdRef.current += 1;
+      setLineClearEffect({ id: lineClearEffectIdRef.current, cells });
+    },
+    [triggerShake],
+  );
+
   const showBoardSkillCastEffects = useCallback(
     (
       animations: Array<{
@@ -871,6 +903,7 @@ export default function BattleScreen({ route, navigation }: any) {
       if (!boardLayout || animations.length === 0) {
         return;
       }
+      playGameSfx('skillUse');
 
       const events = animations
         .map(animation => {
@@ -932,6 +965,7 @@ export default function BattleScreen({ route, navigation }: any) {
       setGameOver(false);
       setResult(null);
       setPlacementEffect(null);
+      setLineClearEffect(null);
       setBoardSkillCastEffect(null);
       setMissileEffect(null);
       setOpponentDisconnected(false);
@@ -1045,6 +1079,7 @@ export default function BattleScreen({ route, navigation }: any) {
       return;
     }
 
+    playGameSfx(result === 'win' ? 'victory' : 'defeat');
     battleResultSubmittedRef.current = true;
     void submitBattleLeaderboard({
       won: result === 'win',
@@ -1094,14 +1129,18 @@ export default function BattleScreen({ route, navigation }: any) {
   const handlePlace = useCallback(
     (pieceIndex: number, row: number, col: number) => {
       if (gameOverRef.current) return;
-      const piece = pieces[pieceIndex];
-      if (!piece) return;
-      if (!canPlacePiece(board, piece.shape, row, col)) return;
+        const piece = pieces[pieceIndex];
+        if (!piece) return;
+        if (!canPlacePiece(board, piece.shape, row, col)) {
+          playGameSfx('blockPlaceFail');
+          return;
+        }
 
       let newBoard = placePiece(board, piece, row, col);
       playBlockPlacementSound();
       showPlacementEffect(piece, row, col);
       const blockCount = countBlocks(piece.shape);
+      const clearedEffectCells: LineClearEffectCell[] = [];
 
       let totalLines = 0;
       let combo = 0;
@@ -1109,7 +1148,11 @@ export default function BattleScreen({ route, navigation }: any) {
         const r = checkAndClearLines(newBoard);
         const cl = r.clearedRows.length + r.clearedCols.length;
         if (cl === 0) break;
+        clearedEffectCells.push(...buildLineClearEffectCells(newBoard, r.newBoard));
         const decayResult = decayLockedAttackBlocks(r.newBoard, cl);
+        clearedEffectCells.push(
+          ...buildLineClearEffectCells(r.newBoard, decayResult.newBoard),
+        );
         newBoard = decayResult.newBoard;
         totalLines += cl;
         combo++;
@@ -1125,12 +1168,19 @@ export default function BattleScreen({ route, navigation }: any) {
         effects: skillEffectsRef.current,
       });
       showBoardSkillCastEffects(boardSkillResult.animations);
+      clearedEffectCells.push(
+        ...buildLineClearEffectCells(newBoard, boardSkillResult.board),
+      );
       newBoard = boardSkillResult.board;
       totalLines += boardSkillResult.extraLinesCleared;
-      if (boardSkillResult.extraLinesCleared > 0 && combo === 0) {
-        combo = 1;
-      }
-      combo += boardSkillResult.comboChainBonus;
+        if (boardSkillResult.extraLinesCleared > 0 && combo === 0) {
+          combo = 1;
+        }
+        combo += boardSkillResult.comboChainBonus;
+        if (combo > 1) {
+          playGameSfx('combo');
+        }
+        showLineClearEffect(clearedEffectCells);
 
       let gained = blockCount * 10 + totalLines * 100;
       if (combo > 1) gained += combo * 50;
@@ -1164,6 +1214,7 @@ export default function BattleScreen({ route, navigation }: any) {
       board,
       pieces,
       showPlacementEffect,
+      showLineClearEffect,
       showBoardSkillCastEffects,
       syncBoardState,
       handleGameOver,
@@ -1190,6 +1241,16 @@ export default function BattleScreen({ route, navigation }: any) {
       );
     }, 100);
   }, []);
+
+  useEffect(() => {
+    handleBoardLayout();
+  }, [
+    handleBoardLayout,
+    selectedCharacterId,
+    visualManifest.version,
+    visualViewport.height,
+    visualViewport.width,
+  ]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -1238,6 +1299,14 @@ export default function BattleScreen({ route, navigation }: any) {
           Math.min(3, skillEffectsRef.current.previewCountBonus),
         )
       : [];
+  const boardRule = getVisualElementRule(
+    visualManifest,
+    'battle',
+    'board',
+    selectedCharacterId,
+  );
+  const boardScaleX = boardRule.scale * (boardRule.widthScale ?? 1);
+  const boardScaleY = boardRule.scale * (boardRule.heightScale ?? 1);
   const VisualElementView = React.useMemo(
     () =>
       function CharacterVisualElementView(
@@ -1384,6 +1453,18 @@ export default function BattleScreen({ route, navigation }: any) {
                     }
                   />
                 )}
+                {lineClearEffect && (
+                  <LineClearEffect
+                    cells={lineClearEffect.cells}
+                    compact
+                    viewport={visualViewport}
+                    onDone={() =>
+                      setLineClearEffect(current =>
+                        current?.id === lineClearEffect.id ? null : current,
+                      )
+                    }
+                  />
+                )}
               </View>
               <VisualElementView
                 screenId="battle"
@@ -1415,6 +1496,8 @@ export default function BattleScreen({ route, navigation }: any) {
             onDragCancel={dragDrop.onDragCancel}
             compact
             boardCompact
+            boardScaleX={boardScaleX}
+            boardScaleY={boardScaleY}
             viewport={visualViewport}
             dragTuning={dragTuning}
           />

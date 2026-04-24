@@ -22,6 +22,7 @@ import BoardSkillCastEffect, {
   type BoardSkillCastEffectEvent,
 } from '../components/BoardSkillCastEffect';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import LineClearEffect from '../components/LineClearEffect';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import BaseVisualElementView, {
   buildVisualAutomationLabel,
@@ -29,7 +30,9 @@ import BaseVisualElementView, {
 } from '../components/VisualElementView';
 import { flushPlayerStateNow } from '../services/playerState';
 import { playGameBgm, stopGameBgm } from '../services/gameAudio';
+import { playGameSfx } from '../services/gameSfx';
 import { playBlockPlacementSound } from '../services/placementSound';
+import { playLineClearSound } from '../services/lineClearSound';
 import { submitEndlessLeaderboard } from '../services/rankingService';
 import { useVisualConfig } from '../hooks/useVisualConfig';
 import {
@@ -107,6 +110,10 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import {
+  buildLineClearEffectCells,
+  type LineClearEffectCell,
+} from '../game/lineClearEffect';
 import { scaleGameplayUnit } from '../game/layoutScale';
 import { applySkillBoardEffects } from '../game/skillBoardEffects';
 import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
@@ -166,12 +173,17 @@ export default function EndlessScreen({ navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [lineClearEffect, setLineClearEffect] = useState<{
+    id: number;
+    cells: LineClearEffectCell[];
+  } | null>(null);
   const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
     BoardSkillCastEffectEvent[] | null
   >(null);
 
   const boardRef = useRef<View>(null);
   const placementEffectIdRef = useRef(0);
+  const lineClearEffectIdRef = useRef(0);
   const boardSkillEffectIdRef = useRef(0);
   const maxComboRef = useRef(0);
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -310,6 +322,20 @@ export default function EndlessScreen({ navigation }: any) {
     ]).start();
   }, [boardShakeAnim]);
 
+  const showLineClearEffect = useCallback(
+    (cells: LineClearEffectCell[]) => {
+      if (cells.length === 0) {
+        return;
+      }
+
+      triggerBoardShake();
+      playLineClearSound();
+      lineClearEffectIdRef.current += 1;
+      setLineClearEffect({ id: lineClearEffectIdRef.current, cells });
+    },
+    [triggerBoardShake],
+  );
+
   const showBoardSkillCastEffects = useCallback(
     (
       animations: Array<{
@@ -320,6 +346,7 @@ export default function EndlessScreen({ navigation }: any) {
       if (!boardLayout || animations.length === 0) {
         return;
       }
+      playGameSfx('skillUse');
 
       const compactLayout = shouldUseCompactEndlessLayout();
       const events = animations
@@ -406,6 +433,7 @@ export default function EndlessScreen({ navigation }: any) {
     feverExpireAtRef.current = null;
     feverRemainingMsRef.current = 0;
     setPlacementEffect(null);
+    setLineClearEffect(null);
     setFeverRemainingMs(0);
     setComboRemainingMs(0);
     updateNextPieces([]);
@@ -603,6 +631,7 @@ export default function EndlessScreen({ navigation }: any) {
       return;
     }
     setGameOver(true);
+    playGameSfx('defeat');
     clearFeverTimers();
     feverExpireAtRef.current = null;
     feverRemainingMsRef.current = 0;
@@ -708,13 +737,14 @@ export default function EndlessScreen({ navigation }: any) {
       if (gameOver) {
         return;
       }
-      const piece = pieces[pieceIndex];
-      if (!piece) {
-        return;
-      }
-      if (!canPlacePiece(board, piece.shape, row, col)) {
-        return;
-      }
+        const piece = pieces[pieceIndex];
+        if (!piece) {
+          return;
+        }
+        if (!canPlacePiece(board, piece.shape, row, col)) {
+          playGameSfx('blockPlaceFail');
+          return;
+        }
 
       let newBoard = placePiece(board, piece, row, col);
       playBlockPlacementSound();
@@ -724,6 +754,7 @@ export default function EndlessScreen({ navigation }: any) {
       let totalLines = 0;
       let totalGemsFound = 0;
       const totalItemsFound: string[] = [];
+      const clearedEffectCells: LineClearEffectCell[] = [];
 
       while (true) {
         const result = checkAndClearLines(newBoard);
@@ -732,6 +763,9 @@ export default function EndlessScreen({ navigation }: any) {
         if (clearedLines === 0) {
           break;
         }
+        clearedEffectCells.push(
+          ...buildLineClearEffectCells(newBoard, result.newBoard),
+        );
         newBoard = result.newBoard;
         totalLines += clearedLines;
         totalGemsFound += result.gemsFound;
@@ -765,10 +799,14 @@ export default function EndlessScreen({ navigation }: any) {
         colors: getSkinColors(),
       });
       showBoardSkillCastEffects(boardSkillResult.animations);
+      clearedEffectCells.push(
+        ...buildLineClearEffectCells(newBoard, boardSkillResult.board),
+      );
       newBoard = boardSkillResult.board;
       totalLines += boardSkillResult.extraLinesCleared;
       totalGemsFound += boardSkillResult.gemsFound;
       totalItemsFound.push(...boardSkillResult.itemsFound);
+      showLineClearEffect(clearedEffectCells);
 
       const turnResult = resolveCombatTurn({
         mode: 'endless',
@@ -791,11 +829,14 @@ export default function EndlessScreen({ navigation }: any) {
         maxComboRef.current = turnResult.nextCombo;
       }
 
-      comboRef.current = turnResult.nextCombo;
-      setCombo(turnResult.nextCombo);
-      if (turnResult.didClear) {
-        resetComboTimer();
-      }
+        comboRef.current = turnResult.nextCombo;
+        setCombo(turnResult.nextCombo);
+        if (turnResult.didClear) {
+          if (turnResult.nextCombo > 1) {
+            playGameSfx('combo');
+          }
+          resetComboTimer();
+        }
 
       const scoreResult = applyCombatDamageEffectsDetailed(
         turnResult.score,
@@ -854,11 +895,14 @@ export default function EndlessScreen({ navigation }: any) {
         newBoard = addEndlessHardObstacles(newBoard, newLevel);
       }
 
-      setBoard(newBoard);
-      setScore(newScore);
-      setLinesCleared(newLines);
-      setCurrentLevel(newLevel);
-      setFeverGauge(newFeverGauge);
+        setBoard(newBoard);
+        setScore(newScore);
+        setLinesCleared(newLines);
+        if (newLevel > currentLevel) {
+          playGameSfx('levelUp');
+        }
+        setCurrentLevel(newLevel);
+        setFeverGauge(newFeverGauge);
 
       if (
         gameDataRef.current &&
@@ -917,6 +961,7 @@ export default function EndlessScreen({ navigation }: any) {
       resetComboTimer,
       score,
       showPlacementEffect,
+      showLineClearEffect,
       showBoardSkillCastEffects,
       showSkillTriggerNotice,
       updateNextPieces,
@@ -1075,6 +1120,7 @@ export default function EndlessScreen({ navigation }: any) {
     FEVER_DURATION +
     skillEffectsRef.current.feverDurationBonusMs +
     skinBattleEffectsRef.current.feverDurationBonusMs;
+  const boardScaleX = boardRule.scale * (boardRule.widthScale ?? 1);
   const boardScaleY = boardRule.scale * (boardRule.heightScale ?? 1);
   return (
     <SafeAreaView
@@ -1231,6 +1277,18 @@ export default function EndlessScreen({ navigation }: any) {
                   }
                 />
               )}
+              {lineClearEffect && (
+                <LineClearEffect
+                  cells={lineClearEffect.cells}
+                  compact={useCompactLayout}
+                  viewport={visualViewport}
+                  onDone={() =>
+                    setLineClearEffect(current =>
+                      current?.id === lineClearEffect.id ? null : current,
+                    )
+                  }
+                />
+              )}
             </View>
             <VisualElementView
               screenId="endless"
@@ -1262,6 +1320,7 @@ export default function EndlessScreen({ navigation }: any) {
           onDragCancel={dragDrop.onDragCancel}
           compact={useCompactLayout}
           boardCompact={useCompactLayout}
+          boardScaleX={boardScaleX}
           boardScaleY={boardScaleY}
           viewport={visualViewport}
           dragTuning={dragTuning}

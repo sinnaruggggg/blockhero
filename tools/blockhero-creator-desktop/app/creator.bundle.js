@@ -24611,40 +24611,40 @@ ${suffix}`;
     return {
       liftOffsetCells: clamp(
         numberOr(merged.liftOffsetCells, DEFAULT_GAMEPLAY_DRAG_TUNING.liftOffsetCells),
-        1,
-        4
+        0.5,
+        8
       ),
       centerOffsetXCells: clamp(
         numberOr(
           merged.centerOffsetXCells,
           DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells
         ),
-        -1.5,
-        1.5
+        -3,
+        3
       ),
       centerOffsetYCells: clamp(
         numberOr(
           merged.centerOffsetYCells,
           DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells
         ),
-        -1.5,
-        1.5
+        -3,
+        3
       ),
       dragDistanceScaleX: clamp(
         numberOr(
           merged.dragDistanceScaleX,
           DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX
         ),
-        0.75,
-        1.5
+        0.5,
+        2
       ),
       dragDistanceScaleY: clamp(
         numberOr(
           merged.dragDistanceScaleY,
           DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY
         ),
-        0.75,
-        1.5
+        0.5,
+        2
       ),
       snapMaxDistanceCells: clamp(
         numberOr(
@@ -24652,7 +24652,7 @@ ${suffix}`;
           DEFAULT_GAMEPLAY_DRAG_TUNING.snapMaxDistanceCells
         ),
         0,
-        1.2
+        2.4
       ),
       stickyThresholdCells: clamp(
         numberOr(
@@ -24660,13 +24660,13 @@ ${suffix}`;
           DEFAULT_GAMEPLAY_DRAG_TUNING.stickyThresholdCells
         ),
         0,
-        0.8
+        1.6
       ),
       snapSearchRadius: Math.round(
         clamp(
           numberOr(merged.snapSearchRadius, DEFAULT_GAMEPLAY_DRAG_TUNING.snapSearchRadius),
           0,
-          2
+          4
         )
       )
     };
@@ -25346,6 +25346,13 @@ ${suffix}`;
   function slugify(value) {
     return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   }
+  function hashString(value) {
+    let hash = 5381;
+    for (let index = 0; index < value.length; index += 1) {
+      hash = hash * 33 ^ value.charCodeAt(index);
+    }
+    return Math.abs(hash >>> 0).toString(16);
+  }
   function normalizeNumber(value, fallback = 0) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -25353,21 +25360,27 @@ ${suffix}`;
   function getManifestVersion(manifest) {
     return Number(manifest?.version || 0);
   }
+  function isPlainObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+  function isValidCreatorManifest(manifest) {
+    return isPlainObject(manifest) && isPlainObject(manifest.levels) && isPlainObject(manifest.encounters) && isPlainObject(manifest.raids) && isPlainObject(manifest.raids.normal) && isPlainObject(manifest.raids.boss);
+  }
   function getSelectedRecord() {
     if (!state.manifest || !state.selected) {
       return null;
     }
     if (state.selected.kind === "level") {
-      return state.manifest.levels[state.selected.id] ?? null;
+      return state.manifest.levels?.[state.selected.id] ?? null;
     }
     if (state.selected.kind === "raidNormal") {
-      return state.manifest.raids.normal[state.selected.id] ?? null;
+      return state.manifest.raids?.normal?.[state.selected.id] ?? null;
     }
     if (state.selected.kind === "raidBoss") {
-      return state.manifest.raids.boss[state.selected.id] ?? null;
+      return state.manifest.raids?.boss?.[state.selected.id] ?? null;
     }
     if (state.selected.kind === "encounter") {
-      return state.manifest.encounters[state.selected.id] ?? null;
+      return state.manifest.encounters?.[state.selected.id] ?? null;
     }
     return null;
   }
@@ -25584,6 +25597,10 @@ ${suffix}`;
       elements.contentTree.innerHTML = "";
       return;
     }
+    if (!isValidCreatorManifest(state.manifest)) {
+      elements.contentTree.innerHTML = `<div class="release-card"><strong>\uAD00\uB9AC\uC790 \uB370\uC774\uD130 \uAD6C\uC870 \uC624\uB958</strong><p>\uCD08\uC548 \uB370\uC774\uD130\uAC00 \uBE44\uC5B4 \uC788\uC5B4 \uAE30\uBCF8 manifest\uB85C \uBCF5\uAD6C\uD574\uC57C \uD569\uB2C8\uB2E4.</p></div>`;
+      return;
+    }
     const buildGroup = (title, items, kind) => `
     <section class="tree-group">
       <button type="button">${title}</button>
@@ -25711,7 +25728,7 @@ ${suffix}`;
       elements.visualDraftVersion.textContent = "-";
       elements.visualPublishedVersion.textContent = "-";
     }
-    if (state.adminWorkspaceLoaded && state.manifest) {
+    if (state.adminWorkspaceLoaded && isValidCreatorManifest(state.manifest)) {
       renderAdminWorkspace();
     } else {
       elements.draftVersion.textContent = "-";
@@ -26616,7 +26633,9 @@ ${suffix}`;
     if (!state.visualManifest) {
       return;
     }
+    const current = sanitizeGameplayVisualConfig(state.visualManifest.gameplay);
     state.visualManifest.gameplay = sanitizeGameplayVisualConfig({
+      ...current,
       dragTuning: {
         liftOffsetCells: elements.visualDragLiftOffset.value,
         centerOffsetXCells: elements.visualDragCenterOffsetX.value,
@@ -26644,7 +26663,9 @@ ${suffix}`;
       return;
     }
     pushVisualHistory();
+    const current = sanitizeGameplayVisualConfig(state.visualManifest.gameplay);
     state.visualManifest.gameplay = sanitizeGameplayVisualConfig({
+      ...current,
       dragTuning: preset
     });
     markVisualDirty();
@@ -27180,7 +27201,7 @@ ${suffix}`;
         asset_key: assetKey,
         data_url: dataUrl,
         mime_type: file.type || null,
-        content_hash: String(file.lastModified),
+        content_hash: hashString(dataUrl),
         updated_by: state.session.user.id
       },
       { onConflict: "asset_key" }
@@ -27213,7 +27234,7 @@ ${suffix}`;
         asset_key: assetKey,
         data_url: dataUrl,
         mime_type: file.type || "audio/mpeg",
-        content_hash: String(file.lastModified),
+        content_hash: hashString(dataUrl),
         updated_by: state.session.user.id
       },
       { onConflict: "asset_key" }
@@ -27222,7 +27243,33 @@ ${suffix}`;
     elements.audioAssetKeyInput.value = assetKey;
     elements.audioAssetFileInput.value = "";
     state.assets = await fetchAssets();
+    if (state.visualManifest) {
+      pushVisualHistory();
+      const audio = getVisualAudioConfig();
+      const sfxEventId = GAMEPLAY_SFX_EVENT_IDS.includes(state.visualSelectedSfxEventId) ? state.visualSelectedSfxEventId : "blockPlace";
+      state.visualSelectedSfxEventId = sfxEventId;
+      state.visualManifest.gameplay = sanitizeGameplayVisualConfig({
+        ...state.visualManifest.gameplay,
+        audio: {
+          ...audio,
+          sfx: {
+            ...audio.sfx,
+            [sfxEventId]: {
+              ...audio.sfx[sfxEventId],
+              assetKey
+            }
+          }
+        }
+      });
+      markVisualDirty();
+      await saveVisualDraft();
+    }
     renderAll();
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      `${assetKey}\uB97C ${GAMEPLAY_SFX_LABELS[state.visualSelectedSfxEventId]}\uC5D0 \uC5F0\uACB0\uD558\uACE0 \uCD08\uC548\uC5D0 \uC800\uC7A5\uD588\uC2B5\uB2C8\uB2E4. \uBC30\uD3EC\uB97C \uB20C\uB7EC\uC57C \uC571\uC5D0 \uBC18\uC601\uB429\uB2C8\uB2E4.`,
+      "success"
+    );
   }
   async function loadWorkspace() {
     const [draft, latestRelease, releaseHistory, assets] = await Promise.all([
@@ -27234,11 +27281,13 @@ ${suffix}`;
     state.assets = assets;
     state.releaseHistory = releaseHistory;
     state.publishedVersion = latestRelease?.version ?? null;
-    if (draft?.manifest_json) state.manifest = deepClone2(draft.manifest_json);
-    else if (latestRelease?.manifest_json)
-      state.manifest = deepClone2(latestRelease.manifest_json);
-    else {
+    const draftManifest = isValidCreatorManifest(draft?.manifest_json) ? deepClone2(draft.manifest_json) : null;
+    const releaseManifest = isValidCreatorManifest(latestRelease?.manifest_json) ? deepClone2(latestRelease.manifest_json) : null;
+    state.manifest = draftManifest ?? releaseManifest;
+    if (!state.manifest) {
       state.manifest = await loadDefaultManifest();
+    }
+    if (!draftManifest) {
       await saveDraft();
     }
     state.adminWorkspaceLoaded = true;

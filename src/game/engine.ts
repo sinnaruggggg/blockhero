@@ -813,6 +813,18 @@ export function placePiece(
   return newBoard;
 }
 
+function wouldCompleteOccupiedLine(board: Board, row: number, col: number): boolean {
+  const rowWouldFill = board[row].every(
+    (cell, index) => index === col || cell !== null,
+  );
+  if (rowWouldFill) {
+    return true;
+  }
+  return board.every(
+    (boardRow, index) => index === row || boardRow[col] !== null,
+  );
+}
+
 // Count blocks in a piece
 export function countBlocks(shape: PieceShape): number {
   let count = 0;
@@ -1324,7 +1336,10 @@ export function addEndlessHardObstacles(board: Board, level: number): Board {
   while (placed < count && attempts < 200) {
     const r = Math.floor(Math.random() * ROWS);
     const c = Math.floor(Math.random() * COLS);
-    if (newBoard[r][c] === null) {
+    if (
+      newBoard[r][c] === null &&
+      !wouldCompleteOccupiedLine(newBoard, r, c)
+    ) {
       newBoard[r][c] = { color: '#7c3aed', type: 'hard', hits: hitCount };
       placed++;
     }

@@ -30,6 +30,7 @@ import BoardSkillCastEffect, {
 } from '../components/BoardSkillCastEffect';
 import NextPiecePreview from '../components/NextPiecePreview';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
+import LineClearEffect from '../components/LineClearEffect';
 import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import SkillBar from '../components/SkillBar';
@@ -93,7 +94,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { flushPlayerStateNow } from '../services/playerState';
 import { playGameBgm, stopGameBgm } from '../services/gameAudio';
+import { playGameSfx } from '../services/gameSfx';
 import { playBlockPlacementSound } from '../services/placementSound';
+import { playLineClearSound } from '../services/lineClearSound';
 import { submitRaidLeaderboard } from '../services/rankingService';
 import { supabase } from '../services/supabase';
 import {
@@ -178,6 +181,10 @@ import {
   buildPiecePlacementEffectCells,
   type PiecePlacementEffectCell,
 } from '../game/piecePlacementEffect';
+import {
+  buildLineClearEffectCells,
+  type LineClearEffectCell,
+} from '../game/lineClearEffect';
 import { type MeasuredBoardLayout } from '../game/boardScreenMetrics';
 import { getBoardMetrics } from '../components/Board';
 import { scaleGameplayUnit } from '../game/layoutScale';
@@ -382,6 +389,10 @@ export default function RaidScreen({ route, navigation }: any) {
     id: number;
     cells: PiecePlacementEffectCell[];
   } | null>(null);
+  const [lineClearEffect, setLineClearEffect] = useState<{
+    id: number;
+    cells: LineClearEffectCell[];
+  } | null>(null);
   const [boardSkillCastEffect, setBoardSkillCastEffect] = useState<
     BoardSkillCastEffectEvent[] | null
   >(null);
@@ -484,6 +495,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const raidSkillLevelsRef = useRef<Record<number, number>>({});
   const floatingHitIdRef = useRef(0);
   const placementEffectIdRef = useRef(0);
+  const lineClearEffectIdRef = useRef(0);
   const boardSkillEffectIdRef = useRef(0);
   const nextPiecesRef = useRef<Piece[]>([]);
   const remoteBoardsRef = useRef<
@@ -651,6 +663,20 @@ export default function RaidScreen({ route, navigation }: any) {
     ]).start();
   }, [boardShakeAnim]);
 
+  const showLineClearEffect = useCallback(
+    (cells: LineClearEffectCell[]) => {
+      if (cells.length === 0) {
+        return;
+      }
+
+      triggerBoardShake();
+      playLineClearSound();
+      lineClearEffectIdRef.current += 1;
+      setLineClearEffect({id: lineClearEffectIdRef.current, cells});
+    },
+    [triggerBoardShake],
+  );
+
   const showBoardSkillCastEffects = useCallback(
     (
       animations: Array<{
@@ -661,6 +687,7 @@ export default function RaidScreen({ route, navigation }: any) {
       if (!boardLayout || animations.length === 0) {
         return;
       }
+      playGameSfx('skillUse');
 
       const events = animations
         .map(animation => {
@@ -754,6 +781,7 @@ export default function RaidScreen({ route, navigation }: any) {
     setBossDamageHits([]);
     setBossImpactHit(null);
     setPlacementEffect(null);
+    setLineClearEffect(null);
     setBoardSkillCastEffect(null);
     updateNextPieces([]);
     setSkillGauge(0);
@@ -1184,6 +1212,18 @@ export default function RaidScreen({ route, navigation }: any) {
   }, [bossDefeated, instanceId, timeExpired]);
 
   useEffect(() => {
+    if (bossDefeated) {
+      playGameSfx('victory');
+    }
+  }, [bossDefeated]);
+
+  useEffect(() => {
+    if (gameOver && !bossDefeated && !spectatorMode) {
+      playGameSfx('defeat');
+    }
+  }, [bossDefeated, gameOver, spectatorMode]);
+
+  useEffect(() => {
     if (!selectedCharacterRef.current || !selectedCharacterDataRef.current) {
       return;
     }
@@ -1521,9 +1561,12 @@ export default function RaidScreen({ route, navigation }: any) {
   const handlePlace = useCallback(
     (pieceIndex: number, row: number, col: number) => {
       if (gameOverRef.current || spectatorRef.current) return;
-      const piece = pieces[pieceIndex];
-      if (!piece) return;
-      if (!canPlacePiece(board, piece.shape, row, col)) return;
+        const piece = pieces[pieceIndex];
+        if (!piece) return;
+        if (!canPlacePiece(board, piece.shape, row, col)) {
+          playGameSfx('blockPlaceFail');
+          return;
+        }
 
       let newBoard = placePiece(board, piece, row, col);
       playBlockPlacementSound();
@@ -1555,10 +1598,12 @@ export default function RaidScreen({ route, navigation }: any) {
       let totalLinesCleared = 0;
       let totalGemsFound = 0;
       const totalItemsFound: string[] = [];
+      const clearedEffectCells: LineClearEffectCell[] = [];
       while (true) {
         const r = checkAndClearLines(newBoard);
         const cl = r.clearedRows.length + r.clearedCols.length;
         if (cl === 0) break;
+        clearedEffectCells.push(...buildLineClearEffectCells(newBoard, r.newBoard));
         newBoard = r.newBoard;
         totalLinesCleared += cl;
         totalGemsFound += r.gemsFound;
@@ -1576,10 +1621,14 @@ export default function RaidScreen({ route, navigation }: any) {
         colors: getSkinColors(),
       });
       showBoardSkillCastEffects(boardSkillResult.animations);
+      clearedEffectCells.push(
+        ...buildLineClearEffectCells(newBoard, boardSkillResult.board),
+      );
       newBoard = boardSkillResult.board;
       totalLinesCleared += boardSkillResult.extraLinesCleared;
       totalGemsFound += boardSkillResult.gemsFound;
       totalItemsFound.push(...boardSkillResult.itemsFound);
+      showLineClearEffect(clearedEffectCells);
 
       const blocksFromLines = totalLinesCleared * 8;
       const totalBroken = blockCount + blocksFromLines;
@@ -1613,13 +1662,16 @@ export default function RaidScreen({ route, navigation }: any) {
         ),
         feverGaugeGainMultiplier: effects.feverGaugeGainMultiplier,
       });
-      comboRef.current = turnResult.nextCombo;
-      setCombo(turnResult.nextCombo);
-      linesClearedRef.current += totalLinesCleared;
-      setLinesCleared(linesClearedRef.current);
-      if (turnResult.didClear) {
-        resetComboTimer();
-      }
+        comboRef.current = turnResult.nextCombo;
+        setCombo(turnResult.nextCombo);
+        linesClearedRef.current += totalLinesCleared;
+        setLinesCleared(linesClearedRef.current);
+        if (turnResult.didClear) {
+          if (turnResult.nextCombo > 1) {
+            playGameSfx('combo');
+          }
+          resetComboTimer();
+        }
 
       if (turnResult.feverTriggered) {
         activateFever();
@@ -1863,6 +1915,7 @@ export default function RaidScreen({ route, navigation }: any) {
       resetComboTimer,
       round,
       showPlacementEffect,
+      showLineClearEffect,
       showBoardSkillCastEffects,
       animatePlayerHpBar,
       buildRaidPiecePack,
@@ -2075,7 +2128,8 @@ export default function RaidScreen({ route, navigation }: any) {
         preview.diamonds,
         getRaidEffects(),
       );
-      setRewardData({
+        playGameSfx('reward');
+        setRewardData({
         gold: 0,
         diamonds: rewardTotals.diamonds,
         items: {},
@@ -2130,7 +2184,8 @@ export default function RaidScreen({ route, navigation }: any) {
       activeSkinIdRef.current,
     );
     reward.diamonds = rewardTotals.diamonds;
-    setRewardData(reward);
+      playGameSfx('reward');
+      setRewardData(reward);
   }, [
     bossStage,
     getRaidEffects,
@@ -3029,6 +3084,18 @@ export default function RaidScreen({ route, navigation }: any) {
                     }
                   />
                 )}
+                {lineClearEffect && (
+                  <LineClearEffect
+                    cells={lineClearEffect.cells}
+                    compact
+                    viewport={visualViewport}
+                    onDone={() =>
+                      setLineClearEffect(current =>
+                        current?.id === lineClearEffect.id ? null : current,
+                      )
+                    }
+                  />
+                )}
               </View>
               <VisualElementView
                 screenId={raidScreenId}
@@ -3054,6 +3121,9 @@ export default function RaidScreen({ route, navigation }: any) {
               onDragCancel={dragDrop.onDragCancel}
               compact
               boardCompact
+              boardScaleX={
+                raidBoardRule.scale * (raidBoardRule.widthScale ?? 1)
+              }
               boardScaleY={
                 raidBoardRule.scale * (raidBoardRule.heightScale ?? 1)
               }

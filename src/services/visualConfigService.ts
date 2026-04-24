@@ -175,6 +175,43 @@ async function fetchAssetRows(assetKeys: string[]) {
   return (data as VisualAssetRow[] | null) ?? [];
 }
 
+function areAssetUriMapsEqual(
+  left: Record<string, string>,
+  right: Record<string, string>,
+) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every(key => left[key] === right[key]);
+}
+
+async function cacheReferencedVisualAssets(
+  manifest: VisualConfigManifest,
+  previousAssetUris: Record<string, string> = {},
+) {
+  const nextAssetUris: Record<string, string> = {};
+  const assetKeys = collectReferencedVisualAssetKeys(manifest);
+  const assetRows = await fetchAssetRows(assetKeys);
+
+  for (const row of assetRows) {
+    const uri = await cacheVisualAsset(row);
+    if (uri) {
+      nextAssetUris[row.asset_key] = uri;
+    }
+  }
+
+  for (const assetKey of assetKeys) {
+    if (!nextAssetUris[assetKey] && previousAssetUris[assetKey]) {
+      nextAssetUris[assetKey] = previousAssetUris[assetKey];
+    }
+  }
+
+  return nextAssetUris;
+}
+
 export function getCachedVisualConfigSnapshot(): VisualConfigSnapshot {
   return cloneSnapshot();
 }
@@ -236,18 +273,19 @@ export async function downloadPublishedVisualConfigIfNeeded(force = false) {
       | undefined);
     incomingManifest.version = Number(latestRelease.version) || 0;
 
-    if (!force && incomingManifest.version === cachedManifest.version) {
-      return cloneSnapshot();
-    }
+    const nextAssetUris = await cacheReferencedVisualAssets(
+      incomingManifest,
+      cachedAssetUris,
+    );
 
-    const nextAssetUris: Record<string, string> = {};
-    const assetKeys = collectReferencedVisualAssetKeys(incomingManifest);
-    const assetRows = await fetchAssetRows(assetKeys);
-    for (const row of assetRows) {
-      const uri = await cacheVisualAsset(row);
-      if (uri) {
-        nextAssetUris[row.asset_key] = uri;
+    if (!force && incomingManifest.version === cachedManifest.version) {
+      if (!areAssetUriMapsEqual(nextAssetUris, cachedAssetUris)) {
+        cachedManifest = incomingManifest;
+        cachedAssetUris = nextAssetUris;
+        await persistVisualConfigCache();
+        notifyListeners();
       }
+      return cloneSnapshot();
     }
 
     cachedManifest = incomingManifest;

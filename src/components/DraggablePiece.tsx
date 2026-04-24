@@ -1,4 +1,4 @@
-import React, { useRef, useMemo, useEffect } from 'react';
+import React, { useRef, useMemo, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -52,18 +52,35 @@ function darken(hex: string, amount: number): string {
 function VoxelBlock({
   color,
   size,
+  height = size,
+  gapX = 2,
+  gapY = gapX,
   isGem = false,
   isItem = false,
   itemType,
 }: {
   color: string;
   size: number;
+  height?: number;
+  gapX?: number;
+  gapY?: number;
   isGem?: boolean;
   isItem?: boolean;
   itemType?: string;
 }) {
+  const marginHorizontal = gapX / 2;
+  const marginVertical = gapY / 2;
+  const badgeSize = Math.min(size, height);
+
   return (
-    <View style={{ width: size, height: size, margin: 1 }}>
+    <View
+      style={{
+        width: size,
+        height,
+        marginHorizontal,
+        marginVertical,
+      }}
+    >
       {/* Shadow edge */}
       <View
         style={{
@@ -107,7 +124,7 @@ function VoxelBlock({
           top: BEVEL + 1,
           left: BEVEL + 1,
           width: Math.floor((size - BEVEL * 2) * 0.4),
-          height: Math.floor((size - BEVEL * 2) * 0.25),
+          height: Math.floor((height - BEVEL * 2) * 0.25),
           borderRadius: 1,
           backgroundColor: 'rgba(255,255,255,0.3)',
         }}
@@ -116,7 +133,7 @@ function VoxelBlock({
         isGem={isGem}
         isItem={isItem}
         itemType={itemType}
-        size={size}
+        size={badgeSize}
       />
     </View>
   );
@@ -130,6 +147,7 @@ interface DraggablePieceProps {
   onDragCancel: () => void;
   compact?: boolean;
   boardCompact?: boolean;
+  boardScaleX?: number;
   boardScaleY?: number;
   viewport?: Partial<VisualViewport>;
   dragTuning?: Partial<GameplayDragTuning> | null;
@@ -143,76 +161,89 @@ export default function DraggablePiece({
   onDragCancel,
   compact = false,
   boardCompact = false,
+  boardScaleX = 1,
   boardScaleY = 1,
   viewport,
   dragTuning,
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
-  const scale = useRef(new Animated.Value(1)).current;
+  const [isDragging, setIsDragging] = useState(false);
   const dragCenterOffsetRef = useRef({ x: 0, y: 0 });
   const dragOriginRef = useRef({ x: 0, y: 0, active: false });
   const layoutScale = getGameplayLayoutScale(viewport);
   const boardMetrics = getBoardMetrics(viewport, { compact: boardCompact });
-  const blockSize = Math.max(
+  const trayBlockSize = Math.max(
     12,
     Math.round((compact ? COMPACT_BLOCK_SIZE : BLOCK_SIZE) * layoutScale),
   );
+  const trayBlockGap = 2;
+  const boardBlockWidth = Math.max(12, boardMetrics.cellSize * boardScaleX);
+  const boardBlockHeight = Math.max(12, boardMetrics.cellSize * boardScaleY);
+  const boardBlockGapX = Math.max(0, boardMetrics.gap * boardScaleX);
+  const boardBlockGapY = Math.max(0, boardMetrics.gap * boardScaleY);
+  const boardCellStepX = (boardMetrics.cellSize + boardMetrics.gap) * boardScaleX;
+  const boardCellStepY = (boardMetrics.cellSize + boardMetrics.gap) * boardScaleY;
+  const dragVisualScale = 0.8;
+  const displayBlockWidth = isDragging
+    ? Math.max(10, Math.round(boardBlockWidth * dragVisualScale))
+    : trayBlockSize;
+  const displayBlockHeight = isDragging
+    ? Math.max(10, Math.round(boardBlockHeight * dragVisualScale))
+    : trayBlockSize;
+  const displayBlockGapX = isDragging
+    ? Math.max(0, Math.round(boardBlockGapX * dragVisualScale))
+    : trayBlockGap;
+  const displayBlockGapY = isDragging
+    ? Math.max(0, Math.round(boardBlockGapY * dragVisualScale))
+    : trayBlockGap;
   const liftOffsetCells = Math.max(
-    1,
+    0.5,
     Math.min(
-      4,
+      8,
       Number.isFinite(Number(dragTuning?.liftOffsetCells))
         ? Number(dragTuning?.liftOffsetCells)
         : DEFAULT_GAMEPLAY_DRAG_TUNING.liftOffsetCells,
     ),
   );
-  const dragOffsetY = -Math.round(
-    (boardMetrics.cellSize + boardMetrics.gap) * liftOffsetCells * boardScaleY,
-  );
+  const dragOffsetY = -Math.round(boardCellStepY * liftOffsetCells);
   const centerOffsetXCells = Math.max(
-    -1.5,
+    -3,
     Math.min(
-      1.5,
+      3,
       Number.isFinite(Number(dragTuning?.centerOffsetXCells))
         ? Number(dragTuning?.centerOffsetXCells)
         : DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetXCells,
     ),
   );
   const centerOffsetYCells = Math.max(
-    -1.5,
+    -3,
     Math.min(
-      1.5,
+      3,
       Number.isFinite(Number(dragTuning?.centerOffsetYCells))
         ? Number(dragTuning?.centerOffsetYCells)
         : DEFAULT_GAMEPLAY_DRAG_TUNING.centerOffsetYCells,
     ),
   );
   const dragDistanceScaleX = Math.max(
-    0.75,
+    0.5,
     Math.min(
-      1.5,
+      2,
       Number.isFinite(Number(dragTuning?.dragDistanceScaleX))
         ? Number(dragTuning?.dragDistanceScaleX)
         : DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleX,
     ),
   );
   const dragDistanceScaleY = Math.max(
-    0.75,
+    0.5,
     Math.min(
-      1.5,
+      2,
       Number.isFinite(Number(dragTuning?.dragDistanceScaleY))
         ? Number(dragTuning?.dragDistanceScaleY)
         : DEFAULT_GAMEPLAY_DRAG_TUNING.dragDistanceScaleY,
     ),
   );
-  const centerOffsetX = Math.round(
-    (boardMetrics.cellSize + boardMetrics.gap) * centerOffsetXCells,
-  );
-  const centerOffsetY = Math.round(
-    (boardMetrics.cellSize + boardMetrics.gap) *
-      centerOffsetYCells *
-      boardScaleY,
-  );
+  const centerOffsetX = Math.round(boardCellStepX * centerOffsetXCells);
+  const centerOffsetY = Math.round(boardCellStepY * centerOffsetYCells);
   const traySlotSize = Math.max(
     72,
     Math.round(
@@ -307,13 +338,15 @@ export default function DraggablePiece({
             y: evt.nativeEvent.pageY,
             active: true,
           };
+          setIsDragging(true);
 
-          pan.setValue({ x: centerOffsetX, y: dragOffsetY + centerOffsetY });
-          Animated.spring(scale, {
-            toValue: 1.5,
-            useNativeDriver: false,
-            friction: 8,
-          }).start();
+          pan.setValue({
+            x: dragCenterOffsetRef.current.x + centerOffsetX,
+            y:
+              dragCenterOffsetRef.current.y +
+              dragOffsetY +
+              centerOffsetY,
+          });
           callbacksRef.current.onDragStart();
           const liftedCenter = getLiftedPieceCenter(evt, {
             moveX: evt.nativeEvent.pageX,
@@ -323,8 +356,15 @@ export default function DraggablePiece({
         },
         onPanResponderMove: (evt, gs) => {
           pan.setValue({
-            x: gs.dx * dragDistanceScaleX + centerOffsetX,
-            y: gs.dy * dragDistanceScaleY + dragOffsetY + centerOffsetY,
+            x:
+              gs.dx * dragDistanceScaleX +
+              dragCenterOffsetRef.current.x +
+              centerOffsetX,
+            y:
+              gs.dy * dragDistanceScaleY +
+              dragCenterOffsetRef.current.y +
+              dragOffsetY +
+              centerOffsetY,
           });
           const liftedCenter = getLiftedPieceCenter(evt, gs);
           callbacksRef.current.onDragMove(liftedCenter.x, liftedCenter.y);
@@ -332,11 +372,7 @@ export default function DraggablePiece({
         onPanResponderRelease: (evt, gs) => {
           const liftedCenter = getLiftedPieceCenter(evt, gs);
           dragOriginRef.current.active = false;
-          Animated.spring(scale, {
-            toValue: 1,
-            useNativeDriver: false,
-            friction: 8,
-          }).start();
+          setIsDragging(false);
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: false,
@@ -346,10 +382,7 @@ export default function DraggablePiece({
         },
         onPanResponderTerminate: () => {
           dragOriginRef.current.active = false;
-          Animated.spring(scale, {
-            toValue: 1,
-            useNativeDriver: false,
-          }).start();
+          setIsDragging(false);
           Animated.spring(pan, {
             toValue: { x: 0, y: 0 },
             useNativeDriver: false,
@@ -365,7 +398,6 @@ export default function DraggablePiece({
       dragOffsetY,
       getLiftedPieceCenter,
       pan,
-      scale,
       traySlotSize,
     ],
   );
@@ -391,7 +423,7 @@ export default function DraggablePiece({
         {
           width: traySlotSize,
           height: traySlotSize,
-          transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale }],
+          transform: [{ translateX: pan.x }, { translateY: pan.y }],
         },
       ]}
       {...panResponder.panHandlers}
@@ -403,7 +435,10 @@ export default function DraggablePiece({
               <VoxelBlock
                 key={c}
                 color={piece.color}
-                size={blockSize}
+                size={displayBlockWidth}
+                height={displayBlockHeight}
+                gapX={displayBlockGapX}
+                gapY={displayBlockGapY}
                 isGem={
                   rewardMarker !== null &&
                   rewardMarker.row === r &&
@@ -427,7 +462,12 @@ export default function DraggablePiece({
             ) : (
               <View
                 key={c}
-                style={{ width: blockSize, height: blockSize, margin: 1 }}
+                style={{
+                  width: displayBlockWidth,
+                  height: displayBlockHeight,
+                  marginHorizontal: displayBlockGapX / 2,
+                  marginVertical: displayBlockGapY / 2,
+                }}
               />
             ),
           )}
@@ -444,6 +484,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+    overflow: 'visible',
   },
   emptyContainer: {
     backgroundColor: 'rgba(15, 10, 40, 0.3)',

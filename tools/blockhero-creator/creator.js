@@ -132,21 +132,36 @@ function getManifestVersion(manifest) {
   return Number(manifest?.version || 0);
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidCreatorManifest(manifest) {
+  return (
+    isPlainObject(manifest) &&
+    isPlainObject(manifest.levels) &&
+    isPlainObject(manifest.encounters) &&
+    isPlainObject(manifest.raids) &&
+    isPlainObject(manifest.raids.normal) &&
+    isPlainObject(manifest.raids.boss)
+  );
+}
+
 function getSelectedRecord() {
   if (!state.manifest || !state.selected) {
     return null;
   }
   if (state.selected.kind === 'level') {
-    return state.manifest.levels[state.selected.id] ?? null;
+    return state.manifest.levels?.[state.selected.id] ?? null;
   }
   if (state.selected.kind === 'raidNormal') {
-    return state.manifest.raids.normal[state.selected.id] ?? null;
+    return state.manifest.raids?.normal?.[state.selected.id] ?? null;
   }
   if (state.selected.kind === 'raidBoss') {
-    return state.manifest.raids.boss[state.selected.id] ?? null;
+    return state.manifest.raids?.boss?.[state.selected.id] ?? null;
   }
   if (state.selected.kind === 'encounter') {
-    return state.manifest.encounters[state.selected.id] ?? null;
+    return state.manifest.encounters?.[state.selected.id] ?? null;
   }
   return null;
 }
@@ -310,6 +325,10 @@ function renderEncounterEditor(encounter) {
 function renderTree() {
   if (!state.manifest) {
     elements.contentTree.innerHTML = '';
+    return;
+  }
+  if (!isValidCreatorManifest(state.manifest)) {
+    elements.contentTree.innerHTML = `<div class="release-card"><strong>관리자 데이터 구조 오류</strong><p>초안 데이터가 비어 있어 기본 manifest로 복구해야 합니다.</p></div>`;
     return;
   }
   const buildGroup = (title, items, kind) => `
@@ -644,13 +663,16 @@ async function loadWorkspace() {
   state.assets = assets;
   state.releaseHistory = releaseHistory;
   state.publishedVersion = latestRelease?.version ?? null;
-  if (draft?.manifest_json) state.manifest = deepClone(draft.manifest_json);
-  else if (latestRelease?.manifest_json) state.manifest = deepClone(latestRelease.manifest_json);
-  else {
+  const draftManifest = isValidCreatorManifest(draft?.manifest_json) ? deepClone(draft.manifest_json) : null;
+  const releaseManifest = isValidCreatorManifest(latestRelease?.manifest_json) ? deepClone(latestRelease.manifest_json) : null;
+  state.manifest = draftManifest ?? releaseManifest;
+  if (!state.manifest) {
     state.manifest = await loadDefaultManifest();
+  }
+  if (!draftManifest) {
     await saveDraft();
   }
-  if (!state.selected) {
+  if (!state.selected || !getSelectedRecord()) {
     const firstLevel = Object.values(state.manifest.levels).sort((a, b) => a.levelId - b.levelId)[0];
     if (firstLevel) state.selected = {kind: 'level', id: firstLevel.id};
   }

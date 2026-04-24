@@ -21,6 +21,7 @@ import {
   claimMissionReward,
   getEconomyErrorCode,
 } from '../services/economyService';
+import {playGameSfx} from '../services/gameSfx';
 
 export default function MissionsScreen({navigation}: any) {
   const [tab, setTab] = useState<'missions' | 'achievements'>('missions');
@@ -81,6 +82,7 @@ export default function MissionsScreen({navigation}: any) {
       const result = await claimMissionReward(missionId);
       setMissionData(result.missionData);
       setGameData(result.gameData);
+      playGameSfx('reward');
       Alert.alert(t('missions.rewardClaimed'), t('missions.starsEarned', result.reward));
     } catch (error) {
       const code = getEconomyErrorCode(error);
@@ -102,6 +104,7 @@ export default function MissionsScreen({navigation}: any) {
       const result = await claimAchievementReward(achievementId);
       setAchievementData(result.achievementData);
       setGameData(result.gameData);
+      playGameSfx('reward');
       Alert.alert(
         t('missions.achievementClaimed'),
         t('missions.starsEarned', result.reward),
