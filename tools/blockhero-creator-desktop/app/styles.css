@@ -767,6 +767,74 @@ button.small {
   height: 34px;
 }
 
+.audio-volume-field {
+  gap: 4px;
+}
+
+.audio-volume-field input[type='number'] {
+  margin-top: 2px;
+}
+
+.audio-asset-library {
+  display: grid;
+  gap: 8px;
+}
+
+.asset-card-header,
+.asset-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.asset-card-header {
+  align-items: flex-start;
+}
+
+.asset-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.asset-status-badge.in-use {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(22, 101, 52, 0.28);
+  color: #dcfce7;
+}
+
+.asset-status-badge.unused {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.44);
+  color: #cbd5e1;
+}
+
+.asset-usage-list {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.asset-usage-item strong {
+  color: var(--text);
+}
+
+.asset-delete-button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .asset-meta,
 .release-meta {
   display: flex;

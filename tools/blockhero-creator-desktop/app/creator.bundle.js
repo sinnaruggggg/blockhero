@@ -25041,8 +25041,14 @@ ${suffix}`;
     visualDragPresetAssist: $("#visualDragPresetAssist"),
     visualDragPresetLegacy: $("#visualDragPresetLegacy"),
     visualAudioMasterVolume: $("#visualAudioMasterVolume"),
+    visualAudioMasterVolumeSlider: $("#visualAudioMasterVolumeSlider"),
+    visualAudioMasterVolumeReadout: $("#visualAudioMasterVolumeReadout"),
     visualAudioSfxVolume: $("#visualAudioSfxVolume"),
+    visualAudioSfxVolumeSlider: $("#visualAudioSfxVolumeSlider"),
+    visualAudioSfxVolumeReadout: $("#visualAudioSfxVolumeReadout"),
     visualAudioBgmVolume: $("#visualAudioBgmVolume"),
+    visualAudioBgmVolumeSlider: $("#visualAudioBgmVolumeSlider"),
+    visualAudioBgmVolumeReadout: $("#visualAudioBgmVolumeReadout"),
     visualAudioMuted: $("#visualAudioMuted"),
     audioAssetKeyInput: $("#audioAssetKeyInput"),
     audioAssetFileInput: $("#audioAssetFileInput"),
@@ -25050,6 +25056,8 @@ ${suffix}`;
     visualAudioSfxEvent: $("#visualAudioSfxEvent"),
     visualAudioSfxAsset: $("#visualAudioSfxAsset"),
     visualAudioSfxRuleVolume: $("#visualAudioSfxRuleVolume"),
+    visualAudioSfxRuleVolumeSlider: $("#visualAudioSfxRuleVolumeSlider"),
+    visualAudioSfxRuleVolumeReadout: $("#visualAudioSfxRuleVolumeReadout"),
     visualAudioSfxCooldown: $("#visualAudioSfxCooldown"),
     visualAudioSfxOverlap: $("#visualAudioSfxOverlap"),
     visualAudioSfxEnabled: $("#visualAudioSfxEnabled"),
@@ -25057,12 +25065,15 @@ ${suffix}`;
     visualAudioBgmTrack: $("#visualAudioBgmTrack"),
     visualAudioBgmAsset: $("#visualAudioBgmAsset"),
     visualAudioBgmRuleVolume: $("#visualAudioBgmRuleVolume"),
+    visualAudioBgmRuleVolumeSlider: $("#visualAudioBgmRuleVolumeSlider"),
+    visualAudioBgmRuleVolumeReadout: $("#visualAudioBgmRuleVolumeReadout"),
     visualAudioBgmLoop: $("#visualAudioBgmLoop"),
     visualAudioBgmFadeIn: $("#visualAudioBgmFadeIn"),
     visualAudioBgmFadeOut: $("#visualAudioBgmFadeOut"),
     visualAudioBgmEnabled: $("#visualAudioBgmEnabled"),
     visualAudioBgmPreview: $("#visualAudioBgmPreview"),
     visualAudioBgmStop: $("#visualAudioBgmStop"),
+    audioAssetLibrary: $("#audioAssetLibrary"),
     visualElementList: $("#visualElementList"),
     visualCurrentScreen: $("#visualCurrentScreen"),
     visualCurrentElement: $("#visualCurrentElement"),
@@ -25144,6 +25155,7 @@ ${suffix}`;
     profile: null,
     visualManifest: null,
     visualPublishedVersion: null,
+    visualPublishedManifest: null,
     visualReleaseHistory: [],
     visualSelectedScreenId: "level",
     visualSelectedElementId: "header",
@@ -25727,6 +25739,9 @@ ${suffix}`;
     } else {
       elements.visualDraftVersion.textContent = "-";
       elements.visualPublishedVersion.textContent = "-";
+      if (elements.audioAssetLibrary) {
+        elements.audioAssetLibrary.innerHTML = "";
+      }
     }
     if (state.adminWorkspaceLoaded && isValidCreatorManifest(state.manifest)) {
       renderAdminWorkspace();
@@ -26143,6 +26158,7 @@ ${suffix}`;
     }
     state.visualManifest = nextDraft;
     state.visualPublishedVersion = nextVersion;
+    state.visualPublishedManifest = ensureVisualManifest(payload);
     let draftSyncFailed = false;
     try {
       await saveVisualDraft();
@@ -26195,6 +26211,7 @@ ${suffix}`;
     state.assets = assets ?? [];
     state.visualReleaseHistory = releaseHistory;
     state.visualPublishedVersion = latestRelease?.version ?? null;
+    state.visualPublishedManifest = latestRelease?.config_json ? ensureVisualManifest(latestRelease.config_json) : null;
     if (draft?.config_json) {
       state.visualManifest = ensureVisualManifest(draft.config_json);
     } else if (latestRelease?.config_json) {
@@ -26525,6 +26542,87 @@ ${suffix}`;
     }
     return state.assets.find((asset) => asset.asset_key === assetKey)?.data_url || "";
   }
+  function formatAudioVolumeValue(value) {
+    return numberOr(value, 0).toFixed(2);
+  }
+  function normalizeSfxPlaybackVolume(value) {
+    return clamp(numberOr(value, 0) / 3, 0, 1);
+  }
+  function syncAudioVolumeControl(input, slider, readout, value) {
+    const normalized = clamp(numberOr(value, 0), 0, 3);
+    if (input) input.value = String(normalized);
+    if (slider) slider.value = String(normalized);
+    if (readout) readout.textContent = formatAudioVolumeValue(normalized);
+  }
+  function copyAudioVolumeValue(source, target, readout) {
+    const normalized = clamp(numberOr(source?.value, 0), 0, 3);
+    if (target) target.value = String(normalized);
+    if (readout) readout.textContent = formatAudioVolumeValue(normalized);
+  }
+  function collectAudioUsageFromManifest(manifest, bucket, usageMap) {
+    if (!manifest?.gameplay) {
+      return;
+    }
+    const audio = sanitizeGameplayVisualConfig(manifest.gameplay).audio;
+    GAMEPLAY_SFX_EVENT_IDS.forEach((id) => {
+      const assetKey = audio.sfx[id]?.assetKey;
+      if (!assetKey) {
+        return;
+      }
+      const current = usageMap.get(assetKey) || { draft: [], published: [] };
+      current[bucket].push(`효과음 ${GAMEPLAY_SFX_LABELS[id]}`);
+      usageMap.set(assetKey, current);
+    });
+    GAMEPLAY_BGM_TRACK_IDS.forEach((id) => {
+      const assetKey = audio.bgm[id]?.assetKey;
+      if (!assetKey) {
+        return;
+      }
+      const current = usageMap.get(assetKey) || { draft: [], published: [] };
+      current[bucket].push(`배경음 ${GAMEPLAY_BGM_LABELS[id]}`);
+      usageMap.set(assetKey, current);
+    });
+  }
+  function getAudioAssetUsageMap() {
+    const usageMap = /* @__PURE__ */ new Map();
+    collectAudioUsageFromManifest(state.visualManifest, "draft", usageMap);
+    collectAudioUsageFromManifest(state.visualPublishedManifest, "published", usageMap);
+    return usageMap;
+  }
+  function renderAudioAssetLibrary() {
+    if (!elements.audioAssetLibrary) {
+      return;
+    }
+    const usageMap = getAudioAssetUsageMap();
+    const audioAssets = state.assets.filter(isAudioAsset).sort((a, b) => a.asset_key.localeCompare(b.asset_key));
+    if (!audioAssets.length) {
+      elements.audioAssetLibrary.innerHTML = `<div class="asset-card"><strong>등록된 오디오가 없습니다.</strong><p>효과음이나 배경음을 올리면 여기서 사용 상태와 삭제 가능 여부를 확인할 수 있습니다.</p></div>`;
+      return;
+    }
+    elements.audioAssetLibrary.innerHTML = audioAssets.map((asset) => {
+      const usage = usageMap.get(asset.asset_key) || { draft: [], published: [] };
+      const inUse = usage.draft.length > 0 || usage.published.length > 0;
+      const usageLines = [
+        usage.draft.length ? `<div class="asset-usage-item"><strong>초안</strong> ${usage.draft.join(", ")}</div>` : "",
+        usage.published.length ? `<div class="asset-usage-item"><strong>배포</strong> ${usage.published.join(", ")}</div>` : "",
+        !inUse ? `<div class="asset-usage-item">어느 효과음/BGM에도 연결되지 않았습니다.</div>` : ""
+      ].filter(Boolean).join("");
+      return `
+        <div class="asset-card">
+          <div class="asset-card-header">
+            <strong class="mono">${asset.asset_key}</strong>
+            <span class="asset-status-badge ${inUse ? "in-use" : "unused"}">${inUse ? "사용 중" : "미사용"}</span>
+          </div>
+          <audio controls src="${asset.data_url}" class="asset-audio-preview"></audio>
+          <div class="asset-usage-list">${usageLines}</div>
+          <div class="asset-meta"><span>${asset.mime_type || "audio/*"}</span><span>${asset.content_hash || "-"}</span></div>
+          <div class="asset-actions">
+            <small class="inline-note">${inUse ? "초안 또는 최신 배포본에서 사용 중이라 삭제를 막습니다." : "현재 초안과 최신 배포본 어디에도 연결되지 않아 삭제할 수 있습니다."}</small>
+            <button class="ghost small asset-delete-button" data-asset-key="${asset.asset_key}" ${inUse ? "disabled" : ""}>삭제</button>
+          </div>
+        </div>`;
+    }).join("");
+  }
   function getVisualAudioConfig() {
     if (!state.visualManifest) {
       return clone(DEFAULT_GAMEPLAY_AUDIO_CONFIG);
@@ -26562,19 +26660,44 @@ ${suffix}`;
     state.visualSelectedBgmTrackId = GAMEPLAY_BGM_TRACK_IDS.includes(state.visualSelectedBgmTrackId) ? state.visualSelectedBgmTrackId : "level";
     const sfxRule = audio.sfx[state.visualSelectedSfxEventId];
     const bgmRule = audio.bgm[state.visualSelectedBgmTrackId];
-    elements.visualAudioMasterVolume.value = String(audio.masterVolume);
-    elements.visualAudioSfxVolume.value = String(audio.sfxVolume);
-    elements.visualAudioBgmVolume.value = String(audio.bgmVolume);
+    syncAudioVolumeControl(
+      elements.visualAudioMasterVolume,
+      elements.visualAudioMasterVolumeSlider,
+      elements.visualAudioMasterVolumeReadout,
+      audio.masterVolume
+    );
+    syncAudioVolumeControl(
+      elements.visualAudioSfxVolume,
+      elements.visualAudioSfxVolumeSlider,
+      elements.visualAudioSfxVolumeReadout,
+      audio.sfxVolume
+    );
+    syncAudioVolumeControl(
+      elements.visualAudioBgmVolume,
+      elements.visualAudioBgmVolumeSlider,
+      elements.visualAudioBgmVolumeReadout,
+      audio.bgmVolume
+    );
     elements.visualAudioMuted.value = String(audio.muted);
     elements.visualAudioSfxEvent.innerHTML = GAMEPLAY_SFX_EVENT_IDS.map((id) => `<option value="${id}" ${id === state.visualSelectedSfxEventId ? "selected" : ""}>${GAMEPLAY_SFX_LABELS[id]}</option>`).join("");
     elements.visualAudioSfxAsset.innerHTML = getAudioAssetOptions(sfxRule.assetKey);
-    elements.visualAudioSfxRuleVolume.value = String(sfxRule.volume);
+    syncAudioVolumeControl(
+      elements.visualAudioSfxRuleVolume,
+      elements.visualAudioSfxRuleVolumeSlider,
+      elements.visualAudioSfxRuleVolumeReadout,
+      sfxRule.volume
+    );
     elements.visualAudioSfxCooldown.value = String(sfxRule.cooldownMs);
     elements.visualAudioSfxOverlap.value = String(sfxRule.allowOverlap);
     elements.visualAudioSfxEnabled.value = String(sfxRule.enabled);
     elements.visualAudioBgmTrack.innerHTML = GAMEPLAY_BGM_TRACK_IDS.map((id) => `<option value="${id}" ${id === state.visualSelectedBgmTrackId ? "selected" : ""}>${GAMEPLAY_BGM_LABELS[id]}</option>`).join("");
     elements.visualAudioBgmAsset.innerHTML = getAudioAssetOptions(bgmRule.assetKey);
-    elements.visualAudioBgmRuleVolume.value = String(bgmRule.volume);
+    syncAudioVolumeControl(
+      elements.visualAudioBgmRuleVolume,
+      elements.visualAudioBgmRuleVolumeSlider,
+      elements.visualAudioBgmRuleVolumeReadout,
+      bgmRule.volume
+    );
     elements.visualAudioBgmLoop.value = String(bgmRule.loop);
     elements.visualAudioBgmFadeIn.value = String(bgmRule.fadeInMs);
     elements.visualAudioBgmFadeOut.value = String(bgmRule.fadeOutMs);
@@ -26881,6 +27004,7 @@ ${suffix}`;
     renderVisualInspector();
     renderVisualStage();
     renderVisualReleaseHistory();
+    renderAudioAssetLibrary();
     elements.visualDraftVersion.textContent = state.visualManifest ? `v${state.visualManifest.version || 0}` : "-";
     elements.visualPublishedVersion.textContent = state.visualPublishedVersion ? `v${state.visualPublishedVersion}` : "-";
     elements.visualUndoButton.disabled = state.visualHistoryPast.length === 0;
@@ -27271,6 +27395,19 @@ ${suffix}`;
       "success"
     );
   }
+  async function deleteAudioAsset(assetKey) {
+    const usage = getAudioAssetUsageMap().get(assetKey);
+    if (usage?.draft?.length || usage?.published?.length) {
+      throw new Error("\uD604\uC7AC \uCD08\uC548 \uB610\uB294 \uCD5C\uC2E0 \uBC30\uD3EC\uBCF8\uC5D0 \uC5F0\uACB0\uB41C \uC624\uB514\uC624\uB294 \uC0AD\uC81C\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.");
+    }
+    stopAudioPreview();
+    const { error } = await state.supabase.from("ui_assets").delete().eq("asset_key", assetKey);
+    if (error) {
+      throw error;
+    }
+    state.assets = await fetchAssets();
+    renderAll();
+  }
   async function loadWorkspace() {
     const [draft, latestRelease, releaseHistory, assets] = await Promise.all([
       fetchDraft(),
@@ -27334,6 +27471,7 @@ ${suffix}`;
     state.activeView = "ui";
     state.visualManifest = null;
     state.visualPublishedVersion = null;
+    state.visualPublishedManifest = null;
     state.visualReleaseHistory = [];
     state.visualSelectedScreenId = "level";
     state.visualSelectedElementId = "header";
@@ -27459,6 +27597,7 @@ ${suffix}`;
     state.activeView = "ui";
     state.visualManifest = createDefaultVisualManifest();
     state.visualPublishedVersion = null;
+    state.visualPublishedManifest = null;
     state.visualReleaseHistory = [];
     state.visualSelectedScreenId = "level";
     state.visualSelectedElementId = "header";
@@ -27643,17 +27782,51 @@ ${suffix}`;
       applyVisualDragPreset(VISUAL_DRAG_PRESETS.legacy);
     });
     [
-      elements.visualAudioMasterVolume,
-      elements.visualAudioSfxVolume,
-      elements.visualAudioBgmVolume,
+      [
+        elements.visualAudioMasterVolume,
+        elements.visualAudioMasterVolumeSlider,
+        elements.visualAudioMasterVolumeReadout
+      ],
+      [
+        elements.visualAudioSfxVolume,
+        elements.visualAudioSfxVolumeSlider,
+        elements.visualAudioSfxVolumeReadout
+      ],
+      [
+        elements.visualAudioBgmVolume,
+        elements.visualAudioBgmVolumeSlider,
+        elements.visualAudioBgmVolumeReadout
+      ],
+      [
+        elements.visualAudioSfxRuleVolume,
+        elements.visualAudioSfxRuleVolumeSlider,
+        elements.visualAudioSfxRuleVolumeReadout
+      ],
+      [
+        elements.visualAudioBgmRuleVolume,
+        elements.visualAudioBgmRuleVolumeSlider,
+        elements.visualAudioBgmRuleVolumeReadout
+      ]
+    ].forEach(([input, slider, readout]) => {
+      input.addEventListener("input", () => {
+        copyAudioVolumeValue(input, slider, readout);
+      });
+      slider.addEventListener("input", () => {
+        copyAudioVolumeValue(slider, input, readout);
+      });
+      input.addEventListener("change", commitVisualAudioChange);
+      slider.addEventListener("change", () => {
+        copyAudioVolumeValue(slider, input, readout);
+        commitVisualAudioChange();
+      });
+    });
+    [
       elements.visualAudioMuted,
       elements.visualAudioSfxAsset,
-      elements.visualAudioSfxRuleVolume,
       elements.visualAudioSfxCooldown,
       elements.visualAudioSfxOverlap,
       elements.visualAudioSfxEnabled,
       elements.visualAudioBgmAsset,
-      elements.visualAudioBgmRuleVolume,
       elements.visualAudioBgmLoop,
       elements.visualAudioBgmFadeIn,
       elements.visualAudioBgmFadeOut,
@@ -27673,7 +27846,7 @@ ${suffix}`;
       updateVisualAudioFromInputs();
       const audio = getVisualAudioConfig();
       const rule = audio.sfx[state.visualSelectedSfxEventId];
-      const volume = audio.muted ? 0 : audio.masterVolume * audio.sfxVolume * rule.volume;
+      const volume = audio.muted ? 0 : normalizeSfxPlaybackVolume(getVolume(audio.masterVolume, audio.sfxVolume, rule.volume));
       playAudioPreview(getAudioAssetDataUrl(rule.assetKey), volume, false);
     });
     elements.visualAudioBgmPreview.addEventListener("click", () => {
@@ -27693,6 +27866,28 @@ ${suffix}`;
         showToast("\uC624\uB514\uC624\uB97C \uC5C5\uB85C\uB4DC\uD588\uC2B5\uB2C8\uB2E4.");
       } catch (error) {
         showToast(getErrorMessage(error, "\uC624\uB514\uC624 \uC5C5\uB85C\uB4DC\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
+      }
+    });
+    elements.audioAssetLibrary?.addEventListener("click", async (event) => {
+      const button = event.target.closest(".asset-delete-button");
+      if (!button || button.disabled) {
+        return;
+      }
+      if (!requireAdminAccess("\uC624\uB514\uC624 \uC0AD\uC81C")) {
+        return;
+      }
+      const assetKey = button.dataset.assetKey;
+      if (!assetKey) {
+        return;
+      }
+      if (!window.confirm(`\uC624\uB514\uC624 ${assetKey}\uB97C \uC0AD\uC81C\uD560\uAE4C\uC694? \uBBF8\uC0AC\uC6A9 \uC790\uC0B0\uB9CC \uC0AD\uC81C\uB429\uB2C8\uB2E4.`)) {
+        return;
+      }
+      try {
+        await deleteAudioAsset(assetKey);
+        showToast(`\uC624\uB514\uC624 ${assetKey}\uB97C \uC0AD\uC81C\uD588\uC2B5\uB2C8\uB2E4.`);
+      } catch (error) {
+        showToast(getErrorMessage(error, "\uC624\uB514\uC624 \uC0AD\uC81C\uC5D0 \uC2E4\uD328\uD588\uC2B5\uB2C8\uB2E4."));
       }
     });
     elements.visualReferenceViewportButton?.addEventListener("click", () => {

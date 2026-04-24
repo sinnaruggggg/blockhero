@@ -14,6 +14,7 @@ import {
   loadGameSettings,
   type GameSettings,
 } from '../stores/gameSettings';
+import {normalizeSfxPlaybackVolume} from './gameAudioVolume';
 
 type GameAudioNativeModule = {
   playSound?: (
@@ -117,16 +118,11 @@ export function playGameAudioEvent(eventId: GameplaySfxEventId) {
   const snapshot = getSnapshot();
   const audio = getGameplayAudioConfig(snapshot.manifest);
   const rule = audio.sfx[eventId];
-  if (
-    audio.muted ||
-    !cachedSettings.sfx ||
-    !rule.enabled ||
-    getVolume(audio.masterVolume, audio.sfxVolume, rule.volume) <= 0
-  ) {
+  const mixedVolume = getVolume(audio.masterVolume, audio.sfxVolume, rule.volume);
+  const volume = normalizeSfxPlaybackVolume(mixedVolume);
+  if (audio.muted || !cachedSettings.sfx || !rule.enabled || volume <= 0) {
     return;
   }
-
-  const volume = getVolume(audio.masterVolume, audio.sfxVolume, rule.volume);
   if (!rule.assetKey) {
     return;
   }

@@ -23,6 +23,10 @@ const BEVEL = 2;
 const TRAY_SLOT_SIZE = 108;
 const TRAY_SLOT_SIZE_COMPACT = 96;
 
+export function getPickupCenteredOffset(slotSize: number, location: number) {
+  return location - slotSize / 2;
+}
+
 // Voxel helpers
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace('#', '');
@@ -292,13 +296,9 @@ export default function DraggablePiece({
           : pageY;
 
         return {
-          x:
-            adjustedPageX +
-            dragCenterOffsetRef.current.x +
-            centerOffsetX,
+          x: adjustedPageX + centerOffsetX,
           y:
             adjustedPageY +
-            dragCenterOffsetRef.current.y +
             dragOffsetY +
             centerOffsetY,
         };
@@ -330,8 +330,8 @@ export default function DraggablePiece({
               ? evt.nativeEvent.locationY
               : traySlotSize / 2;
           dragCenterOffsetRef.current = {
-            x: traySlotSize / 2 - locationX,
-            y: traySlotSize / 2 - locationY,
+            x: getPickupCenteredOffset(traySlotSize, locationX),
+            y: getPickupCenteredOffset(traySlotSize, locationY),
           };
           dragOriginRef.current = {
             x: evt.nativeEvent.pageX,

@@ -356,16 +356,28 @@
 
                 <div class="preview-tuning-panel audio-editor-panel">
                   <div class="form-grid two compact-fields">
-                    <label>
+                    <label class="range-field audio-volume-field">
                       <span>전체 볼륨</span>
+                      <div class="range-field-control">
+                        <input id="visualAudioMasterVolumeSlider" type="range" min="0" max="3" step="0.01" />
+                        <strong id="visualAudioMasterVolumeReadout">1.00</strong>
+                      </div>
                       <input id="visualAudioMasterVolume" type="number" step="0.01" min="0" max="3" />
                     </label>
-                    <label>
+                    <label class="range-field audio-volume-field">
                       <span>효과음 볼륨</span>
+                      <div class="range-field-control">
+                        <input id="visualAudioSfxVolumeSlider" type="range" min="0" max="3" step="0.01" />
+                        <strong id="visualAudioSfxVolumeReadout">1.00</strong>
+                      </div>
                       <input id="visualAudioSfxVolume" type="number" step="0.01" min="0" max="3" />
                     </label>
-                    <label>
+                    <label class="range-field audio-volume-field">
                       <span>BGM 볼륨</span>
+                      <div class="range-field-control">
+                        <input id="visualAudioBgmVolumeSlider" type="range" min="0" max="3" step="0.01" />
+                        <strong id="visualAudioBgmVolumeReadout">1.00</strong>
+                      </div>
                       <input id="visualAudioBgmVolume" type="number" step="0.01" min="0" max="3" />
                     </label>
                     <label>
@@ -404,8 +416,12 @@
                       <span>효과음 파일</span>
                       <select id="visualAudioSfxAsset"></select>
                     </label>
-                    <label>
+                    <label class="range-field audio-volume-field">
                       <span>개별 볼륨</span>
+                      <div class="range-field-control">
+                        <input id="visualAudioSfxRuleVolumeSlider" type="range" min="0" max="3" step="0.01" />
+                        <strong id="visualAudioSfxRuleVolumeReadout">3.00</strong>
+                      </div>
                       <input id="visualAudioSfxRuleVolume" type="number" step="0.01" min="0" max="3" />
                     </label>
                     <label>
@@ -444,8 +460,12 @@
                       <span>BGM 파일</span>
                       <select id="visualAudioBgmAsset"></select>
                     </label>
-                    <label>
+                    <label class="range-field audio-volume-field">
                       <span>개별 볼륨</span>
+                      <div class="range-field-control">
+                        <input id="visualAudioBgmRuleVolumeSlider" type="range" min="0" max="3" step="0.01" />
+                        <strong id="visualAudioBgmRuleVolumeReadout">1.50</strong>
+                      </div>
                       <input id="visualAudioBgmRuleVolume" type="number" step="0.01" min="0" max="3" />
                     </label>
                     <label>
@@ -475,6 +495,12 @@
                     <button id="visualAudioBgmPreview" class="ghost small">BGM 미리듣기</button>
                     <button id="visualAudioBgmStop" class="ghost small">미리듣기 정지</button>
                   </div>
+
+                  <div class="panel-subtitle compact-subtitle">
+                    <strong>오디오 파일 목록</strong>
+                    <small class="muted">현재 초안과 최신 배포본 기준으로 사용 중 여부를 구분합니다.</small>
+                  </div>
+                  <div id="audioAssetLibrary" class="audio-asset-library"></div>
                 </div>
 
                 <div class="panel-subtitle compact-subtitle">
