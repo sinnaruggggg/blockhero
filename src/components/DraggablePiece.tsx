@@ -23,12 +23,26 @@ const BEVEL = 2;
 const TRAY_SLOT_SIZE = 108;
 const TRAY_SLOT_SIZE_COMPACT = 96;
 
+type PickupAnchorFrame = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export function getFixedPickupAnchorPage(
   slotSize: number,
   page: number,
   location: number,
 ) {
   return page + (slotSize / 2 - location);
+}
+
+export function getFixedPickupAnchorFromFrame(frame: PickupAnchorFrame) {
+  return {
+    x: frame.x + frame.width / 2,
+    y: frame.y + frame.height / 2,
+  };
 }
 
 // Voxel helpers
@@ -176,6 +190,8 @@ export default function DraggablePiece({
 }: DraggablePieceProps) {
   const pan = useRef(new Animated.ValueXY()).current;
   const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<View | null>(null);
+  const containerFrameRef = useRef<PickupAnchorFrame | null>(null);
   const dragAnchorRef = useRef({ x: 0, y: 0 });
   const dragOriginRef = useRef({ x: 0, y: 0, active: false });
   const layoutScale = getGameplayLayoutScale(viewport);
@@ -275,6 +291,34 @@ export default function DraggablePiece({
     pieceRef.current = piece;
   });
 
+  const updateContainerFrame = useMemo(
+    () => () => {
+      const node = containerRef.current;
+      if (!node || typeof node.measureInWindow !== 'function') {
+        return;
+      }
+      node.measureInWindow((x, y, width, height) => {
+        if (
+          !Number.isFinite(x) ||
+          !Number.isFinite(y) ||
+          !Number.isFinite(width) ||
+          !Number.isFinite(height)
+        ) {
+          return;
+        }
+        containerFrameRef.current = { x, y, width, height };
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      updateContainerFrame();
+    }, 0);
+    return () => clearTimeout(handle);
+  }, [piece?.id, traySlotSize, updateContainerFrame]);
+
   const getLiftedPieceCenter = useMemo(
     () =>
       (evt: GestureResponderEvent, gs: Partial<PanResponderGestureState>) => {
@@ -326,6 +370,7 @@ export default function DraggablePiece({
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: evt => {
+          updateContainerFrame();
           const locationX =
             typeof evt.nativeEvent.locationX === 'number'
               ? evt.nativeEvent.locationX
@@ -334,18 +379,21 @@ export default function DraggablePiece({
             typeof evt.nativeEvent.locationY === 'number'
               ? evt.nativeEvent.locationY
               : traySlotSize / 2;
-          dragAnchorRef.current = {
-            x: getFixedPickupAnchorPage(
-              traySlotSize,
-              evt.nativeEvent.pageX,
-              locationX,
-            ),
-            y: getFixedPickupAnchorPage(
-              traySlotSize,
-              evt.nativeEvent.pageY,
-              locationY,
-            ),
-          };
+          const measuredFrame = containerFrameRef.current;
+          dragAnchorRef.current = measuredFrame
+            ? getFixedPickupAnchorFromFrame(measuredFrame)
+            : {
+                x: getFixedPickupAnchorPage(
+                  traySlotSize,
+                  evt.nativeEvent.pageX,
+                  locationX,
+                ),
+                y: getFixedPickupAnchorPage(
+                  traySlotSize,
+                  evt.nativeEvent.pageY,
+                  locationY,
+                ),
+              };
           dragOriginRef.current = {
             x: evt.nativeEvent.pageX,
             y: evt.nativeEvent.pageY,
@@ -421,6 +469,7 @@ export default function DraggablePiece({
 
   return (
     <Animated.View
+      ref={containerRef}
       style={[
         styles.container,
         {
@@ -429,6 +478,7 @@ export default function DraggablePiece({
           transform: [{ translateX: pan.x }, { translateY: pan.y }],
         },
       ]}
+      onLayout={updateContainerFrame}
       {...panResponder.panHandlers}
     >
       {piece.shape.map((row, r) => (
