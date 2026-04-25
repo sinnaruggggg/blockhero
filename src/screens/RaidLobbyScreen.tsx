@@ -1860,6 +1860,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           ),
           skipCooldown: true,
           partyId,
+          raidType: 'normal',
         },
       );
 
@@ -1930,6 +1931,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           skipCooldown: true,
           partyId,
           bypassBossWindow: isAdmin,
+          raidType: 'boss',
         },
       );
 

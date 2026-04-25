@@ -40,6 +40,26 @@ WHERE id IN (
   WHERE room_rank > 1
 );
 
+-- RAID_FIX: old normal raid attempts were stored as long-lived active
+-- raid_instances. Because raid_instances has no raid_type column yet, those
+-- stale public normal rooms can appear as "active boss raids" for admins.
+UPDATE public.raid_instances
+SET status = 'closed'
+WHERE party_id IS NULL
+  AND status IN ('active', 'battle', 'waiting', 'ready')
+  AND expires_at > NOW()
+  AND expires_at - started_at >= INTERVAL '24 hours'
+  AND created_at < NOW() - INTERVAL '30 minutes';
+
+-- RAID_FIX: close very old party raid rooms left behind by app termination or
+-- older builds before party-disband cleanup existed.
+UPDATE public.raid_instances
+SET status = 'closed'
+WHERE party_id IS NOT NULL
+  AND status IN ('active', 'battle', 'waiting', 'ready')
+  AND expires_at > NOW()
+  AND created_at < NOW() - INTERVAL '24 hours';
+
 -- RAID_FIX: clients subscribe to these tables with postgres_changes. If the
 -- tables are not in the Supabase realtime publication, one device may miss
 -- party/member updates and must wait for polling only.

@@ -12,10 +12,12 @@ interface StartRaidOptions {
   skipCooldown?: boolean;
   partyId?: string | null;
   bypassBossWindow?: boolean;
+  raidType?: 'normal' | 'boss';
 }
 
 interface RaidAccessOptions {
   bypassBossWindow?: boolean;
+  raidType?: 'normal' | 'boss';
 }
 
 interface RaidInstanceRecord {
@@ -88,6 +90,18 @@ function isNormalRaidInstance(
   instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
 ) {
   return getRaidDurationMs(instance) >= NORMAL_RAID_DURATION_THRESHOLD_MS;
+}
+
+function matchesRaidType(
+  instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
+  raidType?: RaidAccessOptions['raidType'],
+) {
+  if (!raidType) {
+    return true;
+  }
+
+  const isNormal = isNormalRaidInstance(instance);
+  return raidType === 'normal' ? isNormal : !isNormal;
 }
 
 function isCurrentBossWindowInstance(
@@ -184,6 +198,7 @@ export async function findJoinableRaidInstance(
   }
 
   const usableInstances = instances.filter(instance =>
+    matchesRaidType(instance, options.raidType) &&
     isUsableActiveRaidInstance(
       instance,
       Date.now(),
@@ -229,6 +244,7 @@ export async function getPartyActiveRaid(
   }
 
   const usableInstance = data.find(instance =>
+    matchesRaidType(instance, options.raidType) &&
     isUsableActiveRaidInstance(
       instance,
       Date.now(),
@@ -261,6 +277,26 @@ async function closeOtherActivePartyRaids(
     .neq('id', keepInstanceId);
 }
 
+async function closeExistingLongPublicRaidsForPlayer(
+  bossStage: number,
+  playerId: string,
+) {
+  const longDurationCutoff = new Date(
+    Date.now() + NORMAL_RAID_DURATION_THRESHOLD_MS,
+  ).toISOString();
+
+  // RAID_FIX: public normal raid attempts use long-lived timers for reconnect,
+  // but an abandoned attempt must not stay as another visible "boss raid" room.
+  return supabase
+    .from('raid_instances')
+    .update({ status: 'closed' })
+    .eq('starter_id', playerId)
+    .eq('boss_stage', bossStage)
+    .eq('status', 'active')
+    .is('party_id', null)
+    .gt('expires_at', longDurationCutoff);
+}
+
 export async function getActiveInstances(
   friendIds?: string[],
   options: RaidAccessOptions = {},
@@ -284,6 +320,9 @@ export async function getActiveInstances(
 
   return {
     data: data.filter(instance =>
+      // RAID_FIX: the public boss list must not include long-lived normal
+      // raid attempts. Admins can bypass boss windows, but not raid type.
+      matchesRaidType(instance, options.raidType ?? 'boss') &&
       isUsableActiveRaidInstance(
         instance,
         Date.now(),
@@ -571,12 +610,15 @@ export async function startRaid(
   const tier = getTierForStage(bossStage);
   const expiresInMs = options.expiresInMs ?? ATTACK_WINDOW_MS;
   const partyId = options.partyId ?? null;
+  const raidType =
+    options.raidType ??
+    (expiresInMs >= NORMAL_RAID_DURATION_THRESHOLD_MS ? 'normal' : 'boss');
 
   if (partyId) {
     const { data: partyInstance, error: partyError } = await getPartyActiveRaid(
       partyId,
       bossStage,
-      { bypassBossWindow: options.bypassBossWindow },
+      { bypassBossWindow: options.bypassBossWindow, raidType },
     );
     if (partyError) {
       return { data: null, error: partyError };
@@ -609,6 +651,7 @@ export async function startRaid(
     const { data: reusableInstance, error: reusableError } =
       await findJoinableRaidInstance(bossStage, partyId, {
         bypassBossWindow: options.bypassBossWindow,
+        raidType,
       });
     if (reusableError) {
       return { data: null, error: reusableError };
@@ -636,6 +679,16 @@ export async function startRaid(
       }
 
       return { data: reusableInstance, error: null };
+    }
+  }
+
+  if (!partyId && raidType === 'normal') {
+    const { error: closeError } = await closeExistingLongPublicRaidsForPlayer(
+      bossStage,
+      playerId,
+    );
+    if (closeError) {
+      return { data: null, error: closeError };
     }
   }
 
