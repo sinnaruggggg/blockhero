@@ -1,2 +1,2 @@
-export const CURRENT_VERSION_CODE = 211;
-export const CURRENT_VERSION_NAME = '1.3.84';
+export const CURRENT_VERSION_CODE = 212;
+export const CURRENT_VERSION_NAME = '1.3.85';

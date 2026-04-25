@@ -32,6 +32,9 @@ export interface PartyInviteRecord {
   updated_at: string;
 }
 
+const RAID_PARTY_STALE_MS = 60 * 60 * 1000;
+const RAID_PARTY_LEADER_PRESENCE_MAX_AGE_MS = 3 * 60 * 1000;
+
 function isMissingPartyTargetColumnError(error: unknown) {
   const message =
     error && typeof error === 'object' && 'message' in error
@@ -80,6 +83,29 @@ async function getPartyMemberCount(partyId: string) {
 
 async function getPartyById(partyId: string) {
   return supabase.from('parties').select('*').eq('id', partyId).maybeSingle();
+}
+
+function isStalePartyRecord(party: any) {
+  const updatedAt = Date.parse(party?.updated_at ?? party?.created_at ?? '');
+  return Number.isFinite(updatedAt) && Date.now() - updatedAt > RAID_PARTY_STALE_MS;
+}
+
+function isFreshOnlinePresence(presence: any) {
+  const lastSeen = Date.parse(presence?.last_seen ?? '');
+  return (
+    presence?.is_online === true &&
+    Number.isFinite(lastSeen) &&
+    Date.now() - lastSeen <= RAID_PARTY_LEADER_PRESENCE_MAX_AGE_MS
+  );
+}
+
+async function cleanupInvalidParty(partyId: string) {
+  // RAID_FIX: invalid raid parties must be removed instead of staying as
+  // joinable ghost rooms in the recruitment list.
+  const result = await disbandParty(partyId);
+  if (result.error) {
+    console.warn('partyService cleanupInvalidParty failed:', result.error);
+  }
 }
 
 async function updateInviteStatus(
@@ -264,6 +290,24 @@ export async function joinParty(
     return { data: null, error: { message: 'party_not_found' } };
   }
 
+  if (party.status && party.status !== 'recruiting') {
+    return { data: null, error: { message: 'party_not_found' } };
+  }
+
+  const { data: leaderMember, error: leaderMemberError } = await supabase
+    .from('party_members')
+    .select('player_id')
+    .eq('party_id', partyId)
+    .eq('player_id', party.leader_id)
+    .maybeSingle();
+  if (leaderMemberError) {
+    return { data: null, error: leaderMemberError };
+  }
+  if (!leaderMember || isStalePartyRecord(party)) {
+    await cleanupInvalidParty(partyId);
+    return { data: null, error: { message: 'party_not_found' } };
+  }
+
   const { count, error: countError } = await getPartyMemberCount(partyId);
   if (countError) {
     return { data: null, error: countError };
@@ -376,9 +420,27 @@ export async function listOpenPartiesForRaid(
   }
 
   const listings: RaidPartyListing[] = [];
+  const presenceResult =
+    parties && parties.length > 0
+      ? await supabase
+          .from('user_presence')
+          .select('player_id, is_online, last_seen')
+          .in(
+            'player_id',
+            Array.from(new Set(parties.map((party: any) => party.leader_id))),
+          )
+      : { data: [], error: null };
+  const presenceMap = new Map<string, any>();
+  (presenceResult.data ?? []).forEach((row: any) => {
+    presenceMap.set(row.player_id, row);
+  });
 
   for (const party of parties ?? []) {
     if (party.status && party.status !== 'recruiting') {
+      continue;
+    }
+    if (isStalePartyRecord(party)) {
+      await cleanupInvalidParty(party.id);
       continue;
     }
 
@@ -390,6 +452,10 @@ export async function listOpenPartiesForRaid(
     }
 
     const memberRows = members ?? [];
+    if (memberRows.length === 0) {
+      await cleanupInvalidParty(party.id);
+      continue;
+    }
     if (memberRows.some(member => member.player_id === excludePlayerId)) {
       continue;
     }
@@ -400,6 +466,10 @@ export async function listOpenPartiesForRaid(
     const leader = memberRows.find(
       member => member.player_id === party.leader_id,
     );
+    if (!leader || !isFreshOnlinePresence(presenceMap.get(party.leader_id))) {
+      await cleanupInvalidParty(party.id);
+      continue;
+    }
 
     listings.push({
       id: party.id,

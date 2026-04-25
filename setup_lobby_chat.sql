@@ -27,6 +27,19 @@ on public.lobby_chat_messages
 for insert
 with check (true);
 
+drop policy if exists lobby_chat_messages_delete_all on public.lobby_chat_messages;
+create policy lobby_chat_messages_delete_all
+on public.lobby_chat_messages
+for delete
+using (true);
+
+-- RAID_FIX: recruitment chat is only a short-lived invite surface. Old tokens
+-- must not keep producing join buttons or fake party listings.
+delete from public.lobby_chat_messages
+where mode = 'raid'
+  and text ilike '%BH_RAID_PARTY%'
+  and created_at < now() - interval '15 minutes';
+
 create or replace function public.trim_lobby_chat_messages()
 returns trigger
 language plpgsql

@@ -12,6 +12,7 @@ import {
   fetchLobbyChatMessages,
   getLobbyChatChannelKey,
   insertLobbyChatMessage,
+  isRaidPartyRecruitmentFresh,
   parseRaidPartyRecruitment,
   stripRaidPartyRecruitmentToken,
   type RaidPartyRecruitment,
@@ -25,6 +26,7 @@ export interface LobbyChatMessage {
   text: string;
   rawText?: string;
   partyRecruitment?: RaidPartyRecruitment;
+  createdAt?: string;
   self?: boolean;
 }
 
@@ -91,7 +93,11 @@ function normalizeLobbyChatMessage(
     ...message,
     rawText,
     text: stripRaidPartyRecruitmentToken(rawText),
-    partyRecruitment: parseRaidPartyRecruitment(rawText),
+    // RAID_FIX: old raid recruitment chat messages stay as plain chat only.
+    // They must not keep showing join buttons after the party is gone.
+    partyRecruitment: isRaidPartyRecruitmentFresh(message.createdAt)
+      ? parseRaidPartyRecruitment(rawText)
+      : undefined,
   };
 }
 
@@ -175,6 +181,10 @@ export function useLobbyChat({
                 nickname: incomingNickname,
                 rawText: incomingText,
                 text: incomingText,
+                createdAt:
+                  typeof payload?.createdAt === 'string'
+                    ? payload.createdAt
+                    : new Date().toISOString(),
                 self: payload?.userId === userId,
               }),
             );
@@ -216,6 +226,10 @@ export function useLobbyChat({
                   nickname: incomingNickname,
                   rawText: incomingText,
                   text: incomingText,
+                  createdAt:
+                    typeof payload?.new?.created_at === 'string'
+                      ? payload.new.created_at
+                      : new Date().toISOString(),
                   self: payload?.new?.user_id === userId,
                 }),
               );
@@ -271,6 +285,7 @@ export function useLobbyChat({
                 rawText: message.text,
                 text: message.displayText,
                 partyRecruitment: message.partyRecruitment,
+                createdAt: message.createdAt,
                 self: message.userId === userId,
               }));
               writeLobbyChatHistory(mode, targetChannelId, hydratedMessages);
@@ -397,12 +412,14 @@ export function useLobbyChat({
         return false;
       }
 
+      const createdAt = new Date().toISOString();
       const message = normalizeLobbyChatMessage({
         id: `${userId}-${Date.now()}`,
         userId,
         nickname,
         rawText: text,
         text,
+        createdAt,
         self: true,
       });
       setMessages(current => {
@@ -422,6 +439,7 @@ export function useLobbyChat({
             nickname,
             text: message.rawText ?? text,
             channelId: activeChannelId,
+            createdAt,
           },
         });
         broadcastSucceeded = result === 'ok';

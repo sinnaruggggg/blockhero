@@ -18,6 +18,17 @@ ALTER TABLE public.raid_participants REPLICA IDENTITY FULL;
 CREATE INDEX IF NOT EXISTS idx_raid_participants_ready
 ON public.raid_participants (raid_instance_id, is_ready);
 
+-- RAID_FIX: party recruitment lists must be DB-backed, not rebuilt from old
+-- chat messages. Ensure the party target/status columns exist.
+ALTER TABLE public.parties
+ADD COLUMN IF NOT EXISTS raid_type TEXT,
+ADD COLUMN IF NOT EXISTS boss_stage INTEGER,
+ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'recruiting',
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+CREATE INDEX IF NOT EXISTS idx_parties_raid_target_status
+ON public.parties (raid_type, boss_stage, status, updated_at DESC);
+
 -- RAID_FIX: clean up stale duplicate party raid rooms created before the
 -- single-active-party-raid guard. Keep the newest active room per party.
 WITH ranked_party_raids AS (
@@ -90,6 +101,29 @@ BEGIN
       USING (true);
   END IF;
 END $$;
+
+-- RAID_FIX: stale chat recruitment tokens used to recreate fake party rows in
+-- the client list. Remove old tokens and allow future cleanup.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'lobby_chat_messages'
+      AND policyname = 'Anyone can delete lobby_chat_messages'
+  ) THEN
+    CREATE POLICY "Anyone can delete lobby_chat_messages"
+      ON public.lobby_chat_messages
+      FOR DELETE
+      USING (true);
+  END IF;
+END $$;
+
+DELETE FROM public.lobby_chat_messages
+WHERE mode = 'raid'
+  AND text ILIKE '%BH_RAID_PARTY%'
+  AND created_at < NOW() - INTERVAL '15 minutes';
 
 -- RAID_FIX: actually remove old unused party raid rows after closing them.
 -- This keeps stale duplicate rooms from reappearing in later party/lobby flows.

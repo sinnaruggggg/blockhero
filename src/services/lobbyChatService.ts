@@ -30,6 +30,7 @@ interface LobbyChatMessageRow {
 }
 
 const RAID_PARTY_TOKEN_PATTERN = /\[BH_RAID_PARTY:([^\]]+)\]/;
+export const RAID_PARTY_RECRUITMENT_TTL_MS = 15 * 60 * 1000;
 
 export function getLobbyChatChannelKey(
   mode: LobbyChatMode,
@@ -101,10 +102,27 @@ export function stripRaidPartyRecruitmentToken(text: string) {
   return text.replace(RAID_PARTY_TOKEN_PATTERN, '').trim();
 }
 
+export function isRaidPartyRecruitmentFresh(createdAt?: string) {
+  if (!createdAt) {
+    return true;
+  }
+
+  const createdTime = Date.parse(createdAt);
+  if (!Number.isFinite(createdTime)) {
+    return false;
+  }
+
+  return Date.now() - createdTime <= RAID_PARTY_RECRUITMENT_TTL_MS;
+}
+
 function mapLobbyChatMessageRow(
   row: LobbyChatMessageRow,
 ): LobbyChatStoredMessage {
-  const partyRecruitment = parseRaidPartyRecruitment(row.text);
+  // RAID_FIX: stale chat recruitment tokens must not resurrect parties that
+  // were disbanded when the host left raid mode.
+  const partyRecruitment = isRaidPartyRecruitmentFresh(row.created_at)
+    ? parseRaidPartyRecruitment(row.text)
+    : undefined;
 
   return {
     id: row.id,
@@ -141,11 +159,16 @@ export async function fetchLobbyChatMessages(
 }
 
 export async function fetchRaidPartyRecruitmentMessages(limit = 50) {
+  const minCreatedAt = new Date(
+    Date.now() - RAID_PARTY_RECRUITMENT_TTL_MS,
+  ).toISOString();
+
   const { data, error } = await supabase
     .from('lobby_chat_messages')
     .select('id, user_id, nickname, text, created_at')
     .eq('mode', 'raid')
     .ilike('text', '%BH_RAID_PARTY%')
+    .gt('created_at', minCreatedAt)
     .order('created_at', { ascending: false })
     .limit(limit);
 

@@ -80,6 +80,7 @@ const SESSION_ID = `${Date.now()}_${Math.random()
 const UPDATE_CHECK_SUCCESS_INTERVAL_MS = 15 * 60 * 1000;
 const UPDATE_CHECK_FAILURE_RETRY_MS = 2 * 60 * 1000;
 const UPDATE_CHECK_DELAY_MS = 1200;
+const PRESENCE_HEARTBEAT_MS = 60 * 1000;
 
 installGameAlertBridge();
 
@@ -107,6 +108,21 @@ export default function AppNavigator() {
   const registerSession = useCallback(async (userId: string) => {
     presenceUserIdRef.current = userId;
     await updatePresence(userId, true, SESSION_ID);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const userId = presenceUserIdRef.current;
+      if (!userId) {
+        return;
+      }
+
+      // RAID_FIX: party recruitment must know whether the host is really still
+      // in the app. Without a heartbeat, killed clients can leave ghost parties.
+      void updatePresence(userId, true, SESSION_ID);
+    }, PRESENCE_HEARTBEAT_MS);
+
+    return () => clearInterval(timer);
   }, []);
 
   const setOfflinePresence = useCallback(async (userId?: string | null) => {

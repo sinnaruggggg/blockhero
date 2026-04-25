@@ -95,7 +95,6 @@ import {
 } from '../services/raidRuntimeCache';
 import {
   buildRaidPartyRecruitmentMessage,
-  fetchRaidPartyRecruitmentMessages,
 } from '../services/lobbyChatService';
 
 interface ActiveRaid {
@@ -1409,16 +1408,13 @@ export default function RaidLobbyScreen({ navigation }: any) {
     async (target: RaidPartyModalTarget) => {
       setRaidPartyLoading(true);
       try {
-        const [partyListResult, recruitmentResult] = await Promise.all([
-          listOpenPartiesForRaid(
-            {
-              raidType: target.raidType,
-              bossStage: target.bossStage,
-            },
-            playerIdRef.current,
-          ),
-          fetchRaidPartyRecruitmentMessages(),
-        ]);
+        const partyListResult = await listOpenPartiesForRaid(
+          {
+            raidType: target.raidType,
+            bossStage: target.bossStage,
+          },
+          playerIdRef.current,
+        );
 
         if (partyListResult.error) {
           console.warn(
@@ -1426,49 +1422,15 @@ export default function RaidLobbyScreen({ navigation }: any) {
             partyListResult.error,
           );
         }
-        if (recruitmentResult.error) {
-          console.warn(
-            'RaidLobbyScreen fetchRaidPartyRecruitmentMessages error:',
-            recruitmentResult.error,
-          );
-        }
 
-        const merged = new Map<string, RaidPartyListing>();
-        (partyListResult.data ?? []).forEach(listing => {
-          merged.set(listing.id, listing);
-        });
-        (recruitmentResult.data ?? []).forEach(message => {
-          const recruitment = message.partyRecruitment;
-          if (
-            !recruitment ||
-            recruitment.raidType !== target.raidType ||
-            recruitment.bossStage !== target.bossStage ||
-            recruitment.partyId === partyId
-          ) {
-            return;
-          }
-
-          if (!merged.has(recruitment.partyId)) {
-            merged.set(recruitment.partyId, {
-              id: recruitment.partyId,
-              leaderId: message.userId,
-              leaderNickname:
-                recruitment.leaderNickname || message.nickname || '파티장',
-              raidType: recruitment.raidType,
-              bossStage: recruitment.bossStage,
-              memberCount: 1,
-              createdAt: message.createdAt,
-              updatedAt: message.createdAt,
-            });
-          }
-        });
-
-        setRaidPartyListings(Array.from(merged.values()));
+        // RAID_FIX: never rebuild the party list from old chat recruitment
+        // messages. Only DB-backed parties with a live leader member can show.
+        setRaidPartyListings(partyListResult.data ?? []);
       } finally {
         setRaidPartyLoading(false);
       }
     },
-    [partyId],
+    [],
   );
 
   const openPartyManager = useCallback(
