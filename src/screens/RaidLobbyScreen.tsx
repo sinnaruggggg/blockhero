@@ -485,6 +485,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const partyChannelRef = useRef<any>(null);
   const keepPartyForRaidNavigationRef = useRef(false);
   const partyIdRef = useRef<string | null>(cachedCore?.partyId ?? null);
+  const isLeaderRef = useRef(cachedCore?.isLeader ?? false);
+  const autoEnteringPartyRaidRef = useRef<string | null>(null);
   const inviteChannelRef = useRef<any>(null);
   const socialChannelRef = useRef<any>(null);
   const mountedRef = useRef(true);
@@ -508,6 +510,10 @@ export default function RaidLobbyScreen({ navigation }: any) {
   useEffect(() => {
     partyIdRef.current = partyId;
   }, [partyId]);
+
+  useEffect(() => {
+    isLeaderRef.current = isLeader;
+  }, [isLeader]);
 
   const visibleRaidPartyListings = useMemo(() => {
     if (!partyModalTarget) {
@@ -624,6 +630,66 @@ export default function RaidLobbyScreen({ navigation }: any) {
     nicknameRef.current = cachedCore.nickname;
   }, [cachedCore]);
 
+  const enterPartyRaidFromSync = useCallback(
+    async (raid: ActiveRaid | null, source: string) => {
+      const currentPartyId = partyIdRef.current;
+      const currentPlayerId = playerIdRef.current;
+      const currentNickname = nicknameRef.current;
+      const raidStatus = raid?.status ?? 'active';
+
+      if (
+        !raid?.id ||
+        !currentPartyId ||
+        !currentPlayerId ||
+        !currentNickname ||
+        isLeaderRef.current ||
+        (raidStatus !== 'active' && raidStatus !== 'battle')
+      ) {
+        return;
+      }
+
+      if (autoEnteringPartyRaidRef.current === raid.id) {
+        return;
+      }
+
+      autoEnteringPartyRaidRef.current = raid.id;
+
+      // RAID_FIX: public raid entry remains manual, but a party member must
+      // follow the host automatically when this party's active raid appears
+      // through realtime, DB polling, or refresh restore.
+      const { error } = await joinRaidInstance(
+        raid.id,
+        currentPlayerId,
+        currentNickname,
+        { bypassBossWindow: isAdmin },
+      );
+
+      if (error) {
+        console.warn(
+          'RaidLobbyScreen party auto enter failed:',
+          source,
+          raid.id,
+          error.message,
+        );
+        autoEnteringPartyRaidRef.current = null;
+        return;
+      }
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      keepPartyForRaidNavigationRef.current = true;
+      cleanup();
+      navigation.replace('Raid', {
+        instanceId: raid.id,
+        bossStage: raid.boss_stage,
+        isNormalRaid: inferPartyRaidIsNormal(raid),
+      });
+    },
+    [cleanup, isAdmin, navigation],
+  );
+
   const rememberPartyActiveRaidStatus = useCallback(
     (raidPayload: {
       id?: string;
@@ -653,45 +719,40 @@ export default function RaidLobbyScreen({ navigation }: any) {
         return;
       }
 
-      // RAID_FIX: raid entry must be manual. Realtime/polling only exposes the
-      // active raid button; joinRaidInstance and navigation run on button press.
-      setPartyActiveRaid(currentRaid => {
-        if (currentRaid?.id === nextInstanceId) {
-          return {
-            ...currentRaid,
-            boss_stage: nextBossStage,
-            boss_current_hp:
-              raidPayload.boss_current_hp ?? currentRaid.boss_current_hp,
-            boss_max_hp: raidPayload.boss_max_hp ?? currentRaid.boss_max_hp,
-            started_at: raidPayload.started_at ?? currentRaid.started_at,
-            expires_at: raidPayload.expires_at ?? currentRaid.expires_at,
-            starter_id: raidPayload.starter_id ?? currentRaid.starter_id,
-            status,
-          };
-        }
+      const now = new Date();
+      const fallbackDurationMs = raidPayload.isNormalRaid
+        ? 365 * 24 * 60 * 60 * 1000
+        : BOSS_RAID_WINDOW_MS;
+      const startedAt = raidPayload.started_at ?? now.toISOString();
+      const expiresAt =
+        raidPayload.expires_at ??
+        new Date(now.getTime() + fallbackDurationMs).toISOString();
+      const nextRaid = {
+        id: nextInstanceId,
+        boss_stage: nextBossStage,
+        boss_current_hp: raidPayload.boss_current_hp ?? 0,
+        boss_max_hp: raidPayload.boss_max_hp ?? 0,
+        started_at: startedAt,
+        expires_at: expiresAt,
+        starter_id: raidPayload.starter_id ?? '',
+        status,
+      };
 
-        const now = new Date();
-        const fallbackDurationMs = raidPayload.isNormalRaid
-          ? 365 * 24 * 60 * 60 * 1000
-          : BOSS_RAID_WINDOW_MS;
-        const startedAt = raidPayload.started_at ?? now.toISOString();
-        const expiresAt =
-          raidPayload.expires_at ??
-          new Date(now.getTime() + fallbackDurationMs).toISOString();
-
-        return {
-          id: nextInstanceId,
-          boss_stage: nextBossStage,
-          boss_current_hp: raidPayload.boss_current_hp ?? 0,
-          boss_max_hp: raidPayload.boss_max_hp ?? 0,
-          started_at: startedAt,
-          expires_at: expiresAt,
-          starter_id: raidPayload.starter_id ?? '',
-          status,
-        };
-      });
+      setPartyActiveRaid(currentRaid =>
+        currentRaid?.id === nextInstanceId
+          ? {
+              ...currentRaid,
+              ...nextRaid,
+              boss_current_hp:
+                raidPayload.boss_current_hp ?? currentRaid.boss_current_hp,
+              boss_max_hp:
+                raidPayload.boss_max_hp ?? currentRaid.boss_max_hp,
+            }
+          : nextRaid,
+      );
+      void enterPartyRaidFromSync(nextRaid, 'party-active-raid-sync');
     },
-    [],
+    [enterPartyRaidFromSync],
   );
 
   const setupPartyChannel = useCallback(
@@ -735,7 +796,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
             filter: `party_id=eq.${nextPartyId}`,
           },
           payload => {
-            // RAID_FIX: DB room changes refresh the manual entry button only.
+            // RAID_FIX: DB room changes are a fallback start signal for
+            // devices that miss the party_raid_start broadcast.
             rememberPartyActiveRaidStatus((payload.new ?? {}) as any);
           },
         )
@@ -755,8 +817,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
     }
 
     // RAID_FIX: polling backs up Supabase realtime. Some devices miss
-    // postgres_changes, so party members and the active raid button must be
-    // restored from the DB without entering the raid automatically.
+    // postgres_changes/broadcasts, so party members must still follow the
+    // host once the party active raid exists in the DB.
     const timer = setInterval(() => {
       void Promise.all([
         getPartyMembers(partyId),
@@ -774,12 +836,16 @@ export default function RaidLobbyScreen({ navigation }: any) {
             partyMembers: nextPartyMembers,
           });
         }
-        setPartyActiveRaid(raidResult.data ?? null);
+        const nextRaid = raidResult.data ?? null;
+        setPartyActiveRaid(nextRaid);
+        if (nextRaid) {
+          void enterPartyRaidFromSync(nextRaid, 'party-active-raid-poll');
+        }
       });
     }, 2500);
 
     return () => clearInterval(timer);
-  }, [isAdmin, partyId]);
+  }, [enterPartyRaidFromSync, isAdmin, partyId]);
 
   const hasVisibleCoreData = useCallback(
     () =>
@@ -895,6 +961,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         mountedRef.current && partyRequestRef.current === requestId;
 
       if (!nextPartyId) {
+        partyIdRef.current = null;
         cleanupPartyChannel();
         clearRaidLobbyPartyCache();
         setPartyMembers([]);
@@ -903,6 +970,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         return;
       }
 
+      partyIdRef.current = nextPartyId;
       setPartyLoading(true);
       setupPartyChannel(nextPartyId);
 
@@ -964,9 +1032,15 @@ export default function RaidLobbyScreen({ navigation }: any) {
         });
 
         const partyActiveRaid = partyActiveRaidResult?.data ?? null;
-        // RAID_FIX: restore only the manual entry affordance after refresh.
-        // The player enters the raid only by pressing the active raid button.
+        // RAID_FIX: refresh restore also follows a party raid that the host
+        // already started while this client was reconnecting or polling late.
         setPartyActiveRaid(partyActiveRaid);
+        if (partyActiveRaid) {
+          void enterPartyRaidFromSync(
+            partyActiveRaid,
+            'party-active-raid-load',
+          );
+        }
 
         if (loadIssues.length > 0) {
           setLoadSummary(buildPartialLoadSummary(loadIssues));
@@ -977,7 +1051,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         }
       }
     },
-    [cleanupPartyChannel, isAdmin, setupPartyChannel],
+    [cleanupPartyChannel, enterPartyRaidFromSync, isAdmin, setupPartyChannel],
   );
 
   const refreshPartyState = useCallback(async () => {
@@ -1025,6 +1099,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
     if (partyResult.data) {
       const nextPartyId = partyResult.data.id;
+      partyIdRef.current = nextPartyId;
+      isLeaderRef.current = partyResult.data.leader_id === playerId;
       setPartyId(nextPartyId);
       setIsLeader(partyResult.data.leader_id === playerId);
       writeRaidLobbyCoreCache({
@@ -1039,6 +1115,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
       });
       await loadPartyData(nextPartyId);
     } else {
+      partyIdRef.current = null;
+      isLeaderRef.current = false;
       cleanupPartyChannel();
       clearRaidLobbyPartyCache();
       setPartyId(null);
@@ -1170,6 +1248,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
           partyResult.data && partyResult.data.leader_id === playerId,
         );
 
+        partyIdRef.current = nextPartyId;
+        isLeaderRef.current = nextIsLeader;
         setActiveRaids(filteredRaids);
         setNormalRaidProgress(raidProgress);
         setIsAdmin(adminStatus);
@@ -1878,7 +1958,16 @@ export default function RaidLobbyScreen({ navigation }: any) {
           event: 'party_raid_start',
           payload: {
             instanceId: instance.id,
+            id: instance.id,
             bossStage,
+            boss_stage: bossStage,
+            boss_current_hp: instance.boss_current_hp,
+            boss_max_hp: instance.boss_max_hp,
+            started_at: instance.started_at,
+            expires_at: instance.expires_at,
+            starter_id: instance.starter_id,
+            status: instance.status ?? 'active',
+            partyId,
             isNormalRaid: true,
           },
         });
@@ -1949,7 +2038,16 @@ export default function RaidLobbyScreen({ navigation }: any) {
           event: 'party_raid_start',
           payload: {
             instanceId: instance.id,
+            id: instance.id,
             bossStage,
+            boss_stage: bossStage,
+            boss_current_hp: instance.boss_current_hp,
+            boss_max_hp: instance.boss_max_hp,
+            started_at: instance.started_at,
+            expires_at: instance.expires_at,
+            starter_id: instance.starter_id,
+            status: instance.status ?? 'active',
+            partyId,
             isNormalRaid: false,
           },
         });

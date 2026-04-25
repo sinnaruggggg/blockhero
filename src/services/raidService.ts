@@ -45,6 +45,14 @@ const NORMAL_RAID_DURATION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 // RAID_FIX: Keep DB compatibility with the existing "active" battle status,
 // while allowing clients to understand the clearer raid state machine names.
 const RAID_BATTLE_COMPAT_STATUSES = new Set(['active', 'battle']);
+const RAID_ACTIVE_QUERY_STATUSES = ['active', 'battle'];
+const RAID_INACTIVE_DELETE_STATUSES = [
+  'closed',
+  'expired',
+  'failed',
+  'defeated',
+  'cleared',
+];
 
 function isMissingRaidRuntimeColumnError(error: unknown) {
   const message =
@@ -229,7 +237,7 @@ export async function getPartyActiveRaid(
     .from('raid_instances')
     .select('*')
     .eq('party_id', partyId)
-    .eq('status', 'active')
+    .in('status', RAID_ACTIVE_QUERY_STATUSES)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
     .limit(10);
@@ -269,12 +277,83 @@ async function closeOtherActivePartyRaids(
   // RAID_FIX: a party must have exactly one active raid room. If older party
   // rooms stay active, another phone can poll the wrong instanceId and join a
   // different realtime channel from the host.
-  return supabase
+  const closeResult = await supabase
     .from('raid_instances')
     .update({ status: 'closed' })
     .eq('party_id', partyId)
     .in('status', ['active', 'battle', 'waiting', 'ready'])
     .neq('id', keepInstanceId);
+
+  if (!closeResult.error) {
+    await deleteInactivePartyRaidRooms(partyId, keepInstanceId);
+  }
+
+  return closeResult;
+}
+
+async function deleteRaidInstancesByIds(instanceIds: string[]) {
+  if (instanceIds.length === 0) {
+    return { error: null };
+  }
+
+  // RAID_FIX: closed duplicate rooms must disappear instead of lingering in
+  // future room lists. Delete participants first for schemas without cascade.
+  const participantResult = await supabase
+    .from('raid_participants')
+    .delete()
+    .in('raid_instance_id', instanceIds);
+  if (participantResult.error) {
+    return { error: participantResult.error };
+  }
+
+  const instanceResult = await supabase
+    .from('raid_instances')
+    .delete()
+    .in('id', instanceIds);
+
+  return { error: instanceResult.error ?? null };
+}
+
+async function deleteInactivePartyRaidRooms(
+  partyId: string,
+  keepInstanceId: string,
+) {
+  const { data, error } = await supabase
+    .from('raid_instances')
+    .select('id')
+    .eq('party_id', partyId)
+    .in('status', RAID_INACTIVE_DELETE_STATUSES)
+    .neq('id', keepInstanceId);
+
+  if (error || !data) {
+    return { error };
+  }
+
+  return deleteRaidInstancesByIds(data.map(instance => instance.id));
+}
+
+async function deleteClosedLongPublicRaidsForPlayer(
+  bossStage: number,
+  playerId: string,
+) {
+  const longDurationCutoff = new Date(
+    Date.now() + NORMAL_RAID_DURATION_THRESHOLD_MS,
+  ).toISOString();
+
+  const { data, error } = await supabase
+    .from('raid_instances')
+    .select('id')
+    .eq('starter_id', playerId)
+    .eq('boss_stage', bossStage)
+    .is('party_id', null)
+    .in('status', RAID_INACTIVE_DELETE_STATUSES)
+    .gt('expires_at', longDurationCutoff);
+
+  if (error || !data) {
+    return { error };
+  }
+
+  return deleteRaidInstancesByIds(data.map(instance => instance.id));
 }
 
 async function closeExistingLongPublicRaidsForPlayer(
@@ -287,7 +366,7 @@ async function closeExistingLongPublicRaidsForPlayer(
 
   // RAID_FIX: public normal raid attempts use long-lived timers for reconnect,
   // but an abandoned attempt must not stay as another visible "boss raid" room.
-  return supabase
+  const closeResult = await supabase
     .from('raid_instances')
     .update({ status: 'closed' })
     .eq('starter_id', playerId)
@@ -295,6 +374,12 @@ async function closeExistingLongPublicRaidsForPlayer(
     .eq('status', 'active')
     .is('party_id', null)
     .gt('expires_at', longDurationCutoff);
+
+  if (!closeResult.error) {
+    await deleteClosedLongPublicRaidsForPlayer(bossStage, playerId);
+  }
+
+  return closeResult;
 }
 
 export async function getActiveInstances(
