@@ -786,6 +786,10 @@ export default function RaidScreen({ route, navigation }: any) {
       board: boardStateRef.current,
       battleStats: {
         ...localStats,
+        damageDealt: Math.max(
+          localStats.damageDealt,
+          participant?.totalDamage ?? 0,
+        ),
         isAlive,
       },
     };
@@ -979,7 +983,8 @@ export default function RaidScreen({ route, navigation }: any) {
           battleStats: next as unknown as Record<string, unknown>,
           isAlive: next.isAlive,
           currentHp: playerHpRef.current,
-          maxHp: baseMaxPlayerHpRef.current,
+          maxHp: maxPlayerHpRef.current,
+          boardState: boardStateRef.current,
         });
       }
     },
@@ -994,22 +999,55 @@ export default function RaidScreen({ route, navigation }: any) {
         if (typeof participant.is_ready === 'boolean') {
           nextReadyMap[participant.player_id] = participant.is_ready;
         }
+        if (participant.board_state) {
+          // RAID_FIX: board_state is the DB fallback for devices that miss
+          // realtime board_state/heartbeat broadcasts.
+          applyParticipantRuntimeSnapshot({
+            playerId: participant.player_id,
+            nickname: participant.nickname,
+            board: participant.board_state,
+            isReady: participant.is_ready,
+            isAlive: participant.is_alive,
+            currentHp: participant.current_hp,
+            maxHp: participant.max_hp,
+          });
+        }
         if (
           participant.battle_stats &&
           typeof participant.battle_stats === 'object'
         ) {
+          const currentStats =
+            nextStatsMap[participant.player_id] ??
+            createEmptyRaidBattleStats(participant.is_alive !== false);
+          const dbStats = participant.battle_stats as Partial<RaidBattleStats>;
           nextStatsMap[participant.player_id] = {
-            ...createEmptyRaidBattleStats(
-              participant.is_alive !== false,
+            ...createEmptyRaidBattleStats(participant.is_alive !== false),
+            ...currentStats,
+            ...dbStats,
+            damageDealt: Math.max(
+              currentStats.damageDealt ?? 0,
+              dbStats.damageDealt ?? 0,
+              participant.total_damage ?? 0,
             ),
-            ...nextStatsMap[participant.player_id],
-            ...participant.battle_stats,
             isAlive:
               typeof participant.is_alive === 'boolean'
                 ? participant.is_alive
-                : participant.battle_stats.isAlive ??
-                  nextStatsMap[participant.player_id]?.isAlive ??
-                  true,
+                : dbStats.isAlive ?? currentStats.isAlive ?? true,
+          };
+        } else if (typeof participant.total_damage === 'number') {
+          const currentStats =
+            nextStatsMap[participant.player_id] ??
+            createEmptyRaidBattleStats(participant.is_alive !== false);
+          nextStatsMap[participant.player_id] = {
+            ...currentStats,
+            damageDealt: Math.max(
+              currentStats.damageDealt,
+              participant.total_damage,
+            ),
+            isAlive:
+              typeof participant.is_alive === 'boolean'
+                ? participant.is_alive
+                : currentStats.isAlive,
           };
         }
       });
@@ -1078,7 +1116,7 @@ export default function RaidScreen({ route, navigation }: any) {
         alivePlayerIds: alivePlayersRef.current,
       });
     },
-    [instanceId],
+    [applyParticipantRuntimeSnapshot, instanceId],
   );
 
   const showSkillTriggerNotice = useCallback(
@@ -1411,6 +1449,7 @@ export default function RaidScreen({ route, navigation }: any) {
 
       // RAID_FIX: next battle starts from a clean local raid state so clear
       // stats, death state, summons, combo and boss hp do not leak forward.
+      boardStateRef.current = nextBoard;
       setBoard(nextBoard);
       setPieces(nextPieces);
       updateNextPieces(buildRaidPiecePack(nextBoard, 2));
@@ -1467,6 +1506,7 @@ export default function RaidScreen({ route, navigation }: any) {
         isAlive: true,
         currentHp: maxPlayerHp,
         maxHp: maxPlayerHp,
+        boardState: nextBoard,
         battleStats:
           (freshStats[playerIdRef.current] ??
             createEmptyRaidBattleStats(true)) as unknown as Record<
@@ -1722,7 +1762,8 @@ export default function RaidScreen({ route, navigation }: any) {
             isReady: false,
             isAlive: true,
             currentHp: playerHpRef.current,
-            maxHp: baseMaxPlayerHpRef.current,
+            maxHp: maxPlayerHpRef.current,
+            boardState: boardStateRef.current,
             battleStats:
               (battleStatsRef.current[
                 playerIdRef.current
@@ -1995,6 +2036,23 @@ export default function RaidScreen({ route, navigation }: any) {
           if (!runtime) {
             return;
           }
+
+          // RAID_FIX: persist the same snapshot to DB on every heartbeat so
+          // devices that miss realtime broadcasts can recover by polling.
+          persistLocalRaidRuntimeState({
+            avatarIcon: runtime.avatarIcon,
+            role: runtime.role,
+            isHost: runtime.isHost,
+            isReady: runtime.isReady,
+            isAlive: runtime.isAlive,
+            currentHp: runtime.currentHp,
+            maxHp: runtime.maxHp,
+            battleStats: runtime.battleStats as unknown as Record<
+              string,
+              unknown
+            >,
+            boardState: runtime.board,
+          });
 
           channel.send({
             type: 'broadcast',
@@ -2803,6 +2861,7 @@ export default function RaidScreen({ route, navigation }: any) {
       const totalBroken = blockCount + blocksFromLines;
       const gaugeBeforeTurn = skillGaugeRef.current;
 
+      boardStateRef.current = newBoard;
       setBoard(newBoard);
 
       const gainedGauge = getRaidSkillGaugeGain(
@@ -3080,6 +3139,20 @@ export default function RaidScreen({ route, navigation }: any) {
       }
       setPieces(newPieces);
 
+      // RAID_FIX: store latest board in DB as a fallback for devices that do
+      // not receive the board_state broadcast.
+      persistLocalRaidRuntimeState({
+        boardState: newBoard,
+        currentHp: playerHpRef.current,
+        maxHp: maxPlayerHpRef.current,
+        battleStats:
+          (battleStatsRef.current[playerIdRef.current] ??
+            createEmptyRaidBattleStats(!spectatorRef.current)) as unknown as Record<
+            string,
+            unknown
+          >,
+      });
+
       // Broadcast board state for spectators
       channelRef.current?.send({
         type: 'broadcast',
@@ -3136,6 +3209,7 @@ export default function RaidScreen({ route, navigation }: any) {
       getRaidEffects,
       instanceId,
       pieces,
+      persistLocalRaidRuntimeState,
       resetComboTimer,
       round,
       showPlacementEffect,
@@ -3553,6 +3627,10 @@ export default function RaidScreen({ route, navigation }: any) {
     setRematchReady(nextMap);
     persistLocalRaidRuntimeState({
       isReady: nextReady,
+      isAlive: !spectatorRef.current,
+      currentHp: playerHpRef.current,
+      maxHp: maxPlayerHpRef.current,
+      boardState: boardStateRef.current,
       battleStats:
         (battleStatsRef.current[playerId] ??
           createEmptyRaidBattleStats(true)) as unknown as Record<

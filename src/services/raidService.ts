@@ -36,6 +36,7 @@ interface RaidParticipantRuntimePatch {
   currentHp?: number | null;
   maxHp?: number | null;
   battleStats?: Record<string, unknown>;
+  boardState?: unknown;
 }
 
 const NORMAL_RAID_DURATION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
@@ -58,11 +59,18 @@ function isMissingRaidRuntimeColumnError(error: unknown) {
       message.includes('current_hp') ||
       message.includes('max_hp') ||
       message.includes('battle_stats') ||
+      message.includes('board_state') ||
       message.includes('updated_at')) &&
     (message.includes('schema cache') ||
       message.includes('column') ||
       message.includes('does not exist'))
   );
+}
+
+function getErrorMessage(error: unknown) {
+  return error && typeof error === 'object' && 'message' in error
+    ? String((error as { message?: unknown }).message ?? '')
+    : '';
 }
 
 function getRaidDurationMs(
@@ -406,6 +414,7 @@ export async function updateRaidParticipantRuntimeState(
   if (patch.currentHp !== undefined) payload.current_hp = patch.currentHp;
   if (patch.maxHp !== undefined) payload.max_hp = patch.maxHp;
   if (patch.battleStats !== undefined) payload.battle_stats = patch.battleStats;
+  if (patch.boardState !== undefined) payload.board_state = patch.boardState;
 
   if (Object.keys(payload).length === 0) {
     return { data: null, error: null };
@@ -420,6 +429,30 @@ export async function updateRaidParticipantRuntimeState(
     .eq('player_id', playerId)
     .select()
     .maybeSingle();
+
+  if (error && getErrorMessage(error).includes('board_state')) {
+    const fallbackPayload = {...payload};
+    delete fallbackPayload.board_state;
+
+    if (Object.keys(fallbackPayload).length > 0) {
+      // RAID_FIX: board_state was added after the first runtime migration.
+      // Keep hp/stats/ready sync working even before that column is applied.
+      const fallbackResult = await supabase
+        .from('raid_participants')
+        .update(fallbackPayload)
+        .eq('raid_instance_id', instanceId)
+        .eq('player_id', playerId)
+        .select()
+        .maybeSingle();
+
+      if (!fallbackResult.error) {
+        return fallbackResult;
+      }
+      if (isMissingRaidRuntimeColumnError(fallbackResult.error)) {
+        return { data: null, error: null };
+      }
+    }
+  }
 
   // RAID_FIX: runtime-state columns are an additive DB upgrade. Older DBs keep
   // working with realtime broadcasts until the migration is applied.
