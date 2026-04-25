@@ -56,8 +56,8 @@ import {
   declinePartyInvite,
   joinParty,
   listOpenPartiesForRaid,
-  leaveParty,
   disbandParty,
+  leaveOrDisbandParty,
   getIncomingPartyInvites,
   getMyParty,
   getPartyMembers,
@@ -103,8 +103,10 @@ interface ActiveRaid {
   boss_stage: number;
   boss_current_hp: number;
   boss_max_hp: number;
+  started_at?: string;
   expires_at: string;
   starter_id: string;
+  status?: string;
 }
 
 interface PartyMemberLocal {
@@ -481,6 +483,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const playerIdRef = useRef('');
   const nicknameRef = useRef('');
   const partyChannelRef = useRef<any>(null);
+  const keepPartyForRaidNavigationRef = useRef(false);
+  const partyIdRef = useRef<string | null>(cachedCore?.partyId ?? null);
   const inviteChannelRef = useRef<any>(null);
   const socialChannelRef = useRef<any>(null);
   const mountedRef = useRef(true);
@@ -501,42 +505,18 @@ export default function RaidLobbyScreen({ navigation }: any) {
   });
 
   const bossWindowInfo = getBossRaidWindowInfo(Date.now());
+  useEffect(() => {
+    partyIdRef.current = partyId;
+  }, [partyId]);
+
   const visibleRaidPartyListings = useMemo(() => {
     if (!partyModalTarget) {
       return raidPartyListings;
     }
-
-    const merged = new Map<string, RaidPartyListing>();
-    raidPartyListings.forEach(listing => {
-      merged.set(listing.id, listing);
-    });
-
-    lobbyChat.messages.forEach(message => {
-      const recruitment = message.partyRecruitment;
-      if (
-        !recruitment ||
-        recruitment.raidType !== partyModalTarget.raidType ||
-        recruitment.bossStage !== partyModalTarget.bossStage ||
-        recruitment.partyId === partyId
-      ) {
-        return;
-      }
-
-      if (!merged.has(recruitment.partyId)) {
-        merged.set(recruitment.partyId, {
-          id: recruitment.partyId,
-          leaderId: message.userId ?? '',
-          leaderNickname:
-            recruitment.leaderNickname || message.nickname || '파티장',
-          raidType: recruitment.raidType,
-          bossStage: recruitment.bossStage,
-          memberCount: 1,
-        });
-      }
-    });
-
-    return Array.from(merged.values());
-  }, [lobbyChat.messages, partyId, partyModalTarget, raidPartyListings]);
+    // RAID_FIX: only DB-backed open parties are listed. Old chat recruitment
+    // messages must not resurrect a disbanded party in the join list.
+    return raidPartyListings.filter(listing => listing.id !== partyId);
+  }, [partyId, partyModalTarget, raidPartyListings]);
 
   const resolveRaidDisplay = useCallback(
     (raidType: 'normal' | 'boss', stage: number) => {
@@ -603,6 +583,38 @@ export default function RaidLobbyScreen({ navigation }: any) {
     cleanupSocialChannel();
   }, [cleanupInviteChannel, cleanupPartyChannel, cleanupSocialChannel]);
 
+  const leaveCurrentPartyForRaidExit = useCallback(() => {
+    const currentPartyId = partyIdRef.current;
+    const currentPlayerId = playerIdRef.current;
+    if (!currentPartyId || !currentPlayerId) {
+      return;
+    }
+
+    // RAID_FIX: raid parties live only inside raid mode. Leaving the raid
+    // lobby disbands the party for hosts and removes normal members.
+    void leaveOrDisbandParty(currentPartyId, currentPlayerId);
+    partyIdRef.current = null;
+    cleanupPartyChannel();
+    clearRaidLobbyPartyCache();
+    setPartyId(null);
+    setPartyMembers([]);
+    setPartyActiveRaid(null);
+    setIsLeader(false);
+  }, [cleanupPartyChannel]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      if (keepPartyForRaidNavigationRef.current) {
+        keepPartyForRaidNavigationRef.current = false;
+        return;
+      }
+
+      leaveCurrentPartyForRaidExit();
+    });
+
+    return unsubscribe;
+  }, [leaveCurrentPartyForRaidExit, navigation]);
+
   useEffect(() => {
     if (!cachedCore) {
       return;
@@ -612,20 +624,83 @@ export default function RaidLobbyScreen({ navigation }: any) {
     nicknameRef.current = cachedCore.nickname;
   }, [cachedCore]);
 
+  const rememberPartyActiveRaidStatus = useCallback(
+    (raidPayload: {
+      id?: string;
+      instanceId?: string;
+      boss_stage?: number;
+      bossStage?: number;
+      boss_current_hp?: number;
+      boss_max_hp?: number;
+      started_at?: string;
+      expires_at?: string;
+      starter_id?: string;
+      isNormalRaid?: boolean;
+      status?: string;
+    }) => {
+      const nextInstanceId = raidPayload.instanceId ?? raidPayload.id;
+      const nextBossStage = raidPayload.bossStage ?? raidPayload.boss_stage;
+      const status = raidPayload.status ?? 'active';
+
+      if (!nextInstanceId || typeof nextBossStage !== 'number') {
+        return;
+      }
+
+      if (status !== 'active' && status !== 'battle') {
+        setPartyActiveRaid(currentRaid =>
+          currentRaid?.id === nextInstanceId ? null : currentRaid,
+        );
+        return;
+      }
+
+      // RAID_FIX: raid entry must be manual. Realtime/polling only exposes the
+      // active raid button; joinRaidInstance and navigation run on button press.
+      setPartyActiveRaid(currentRaid => {
+        if (currentRaid?.id === nextInstanceId) {
+          return {
+            ...currentRaid,
+            boss_stage: nextBossStage,
+            boss_current_hp:
+              raidPayload.boss_current_hp ?? currentRaid.boss_current_hp,
+            boss_max_hp: raidPayload.boss_max_hp ?? currentRaid.boss_max_hp,
+            started_at: raidPayload.started_at ?? currentRaid.started_at,
+            expires_at: raidPayload.expires_at ?? currentRaid.expires_at,
+            starter_id: raidPayload.starter_id ?? currentRaid.starter_id,
+            status,
+          };
+        }
+
+        const now = new Date();
+        const fallbackDurationMs = raidPayload.isNormalRaid
+          ? 365 * 24 * 60 * 60 * 1000
+          : BOSS_RAID_WINDOW_MS;
+        const startedAt = raidPayload.started_at ?? now.toISOString();
+        const expiresAt =
+          raidPayload.expires_at ??
+          new Date(now.getTime() + fallbackDurationMs).toISOString();
+
+        return {
+          id: nextInstanceId,
+          boss_stage: nextBossStage,
+          boss_current_hp: raidPayload.boss_current_hp ?? 0,
+          boss_max_hp: raidPayload.boss_max_hp ?? 0,
+          started_at: startedAt,
+          expires_at: expiresAt,
+          starter_id: raidPayload.starter_id ?? '',
+          status,
+        };
+      });
+    },
+    [],
+  );
+
   const setupPartyChannel = useCallback(
     (nextPartyId: string) => {
       cleanupPartyChannel();
       const channel = supabase
         .channel(`party:${nextPartyId}`)
         .on('broadcast', { event: 'party_raid_start' }, ({ payload }: any) => {
-          if (payload?.instanceId && payload?.bossStage) {
-            cleanup();
-            navigation.replace('Raid', {
-              instanceId: payload.instanceId,
-              bossStage: payload.bossStage,
-              isNormalRaid: Boolean(payload.isNormalRaid),
-            });
-          }
+          rememberPartyActiveRaidStatus(payload ?? {});
         })
         .on(
           'postgres_changes',
@@ -651,6 +726,19 @@ export default function RaidLobbyScreen({ navigation }: any) {
             void refreshPartyStateRef.current();
           },
         )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'raid_instances',
+            filter: `party_id=eq.${nextPartyId}`,
+          },
+          payload => {
+            // RAID_FIX: DB room changes refresh the manual entry button only.
+            rememberPartyActiveRaidStatus((payload.new ?? {}) as any);
+          },
+        )
         .subscribe(status => {
           if (status === 'CHANNEL_ERROR') {
             console.warn('RaidLobbyScreen party channel error:', nextPartyId);
@@ -658,8 +746,40 @@ export default function RaidLobbyScreen({ navigation }: any) {
         });
       partyChannelRef.current = channel;
     },
-    [cleanup, cleanupPartyChannel, navigation],
+    [cleanupPartyChannel, rememberPartyActiveRaidStatus],
   );
+
+  useEffect(() => {
+    if (!partyId) {
+      return;
+    }
+
+    // RAID_FIX: polling backs up Supabase realtime. Some devices miss
+    // postgres_changes, so party members and the active raid button must be
+    // restored from the DB without entering the raid automatically.
+    const timer = setInterval(() => {
+      void Promise.all([
+        getPartyMembers(partyId),
+        getPartyActiveRaid(partyId, undefined, {
+          bypassBossWindow: isAdmin,
+        }),
+      ]).then(([membersResult, raidResult]) => {
+        if (membersResult.data) {
+          const nextPartyMembers = membersResult.data.map((member: any) => ({
+            playerId: member.player_id,
+            nickname: member.nickname,
+          }));
+          setPartyMembers(nextPartyMembers);
+          writeRaidLobbyPartyCache({
+            partyMembers: nextPartyMembers,
+          });
+        }
+        setPartyActiveRaid(raidResult.data ?? null);
+      });
+    }, 2500);
+
+    return () => clearInterval(timer);
+  }, [isAdmin, partyId]);
 
   const hasVisibleCoreData = useCallback(
     () =>
@@ -844,6 +964,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
         });
 
         const partyActiveRaid = partyActiveRaidResult?.data ?? null;
+        // RAID_FIX: restore only the manual entry affordance after refresh.
+        // The player enters the raid only by pressing the active raid button.
         setPartyActiveRaid(partyActiveRaid);
 
         if (loadIssues.length > 0) {
@@ -855,7 +977,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         }
       }
     },
-    [cleanupPartyChannel, setupPartyChannel],
+    [cleanupPartyChannel, isAdmin, setupPartyChannel],
   );
 
   const refreshPartyState = useCallback(async () => {
@@ -1423,7 +1545,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       return;
     }
 
-    await leaveParty(partyId, playerIdRef.current);
+    await leaveOrDisbandParty(partyId, playerIdRef.current);
     cleanup();
     clearRaidLobbyPartyCache();
     setPartyId(null);
@@ -1761,6 +1883,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         });
       }
 
+      keepPartyForRaidNavigationRef.current = true;
       cleanup();
       navigation.replace('Raid', {
         instanceId: instance.id,
@@ -1830,6 +1953,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         });
       }
 
+      keepPartyForRaidNavigationRef.current = true;
       cleanup();
       navigation.replace('Raid', {
         instanceId: instance.id,
@@ -1881,6 +2005,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         return;
       }
 
+      keepPartyForRaidNavigationRef.current = true;
       cleanup();
       navigation.replace('Raid', {
         instanceId: raid.id,
@@ -1914,6 +2039,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       return;
     }
 
+    keepPartyForRaidNavigationRef.current = true;
     cleanup();
     navigation.replace('Raid', {
       instanceId: partyActiveRaid.id,
@@ -2400,7 +2526,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
               <Text style={styles.partyHintText}>
                 {isLeader
                   ? '파티장은 레이드를 시작하고 온라인 유저만 초대할 수 있습니다.'
-                  : '파티장이 지금 시작하면 자동 합류하고, 이미 진행 중인 레이드는 직접 입장할 수 있습니다.'}
+                  : '파티장이 시작하면 진행 중 레이드가 표시됩니다. 입장 버튼을 눌러 직접 합류하세요.'}
               </Text>
               {partyActiveRaid && partyActiveRaidDisplay ? (
                 <TouchableOpacity

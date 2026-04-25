@@ -292,7 +292,40 @@ export async function leaveParty(partyId: string, playerId: string) {
 }
 
 export async function disbandParty(partyId: string) {
+  // RAID_FIX: a disbanded raid party must disappear from recruitment and stop
+  // leaving an active party raid room behind.
+  await supabase
+    .from('raid_instances')
+    .update({ status: 'closed' })
+    .eq('party_id', partyId)
+    .in('status', ['active', 'battle', 'waiting', 'ready']);
+
+  await supabase
+    .from('party_invites')
+    .update({
+      status: 'cancelled',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('party_id', partyId)
+    .eq('status', 'pending');
+
   return supabase.from('parties').delete().eq('id', partyId);
+}
+
+export async function leaveOrDisbandParty(partyId: string, playerId: string) {
+  const { data: party, error } = await getPartyById(partyId);
+  if (error) {
+    return { data: null, error };
+  }
+  if (!party) {
+    return { data: null, error: null };
+  }
+
+  if (party.leader_id === playerId) {
+    return disbandParty(partyId);
+  }
+
+  return leaveParty(partyId, playerId);
 }
 
 export async function getMyParty(playerId: string) {

@@ -9,21 +9,14 @@ import {
 } from 'react-native';
 import { getSelectedCharacter } from '../stores/gameStore';
 
-const IMG_MISSIONS = require('../assets/ui/missions.png');
-const IMG_SHOP = require('../assets/ui/shop.png');
-const IMG_FRIENDS = require('../assets/ui/friends.png');
 const IMG_HOME = require('../assets/ui/home.png');
-const IMG_SKIN = require('../assets/ui/skin.png');
 const IMG_CODEX = require('../assets/ui/codex.png');
 
 export const GAME_BOTTOM_NAV_CHAT_OFFSET = 118;
 
 export type GameBottomNavItem =
-  | 'missions'
-  | 'shop'
-  | 'friends'
   | 'home'
-  | 'skin'
+  | 'bag'
   | 'skill'
   | 'codex';
 
@@ -41,11 +34,8 @@ const MENU_ITEMS: Array<{
   image?: any;
   emoji?: string;
 }> = [
-  { id: 'missions', label: '미션', image: IMG_MISSIONS },
-  { id: 'shop', label: '상점', image: IMG_SHOP },
-  { id: 'friends', label: '친구', image: IMG_FRIENDS },
   { id: 'home', label: '홈', image: IMG_HOME },
-  { id: 'skin', label: '스킨', image: IMG_SKIN },
+  { id: 'bag', label: '가방', emoji: '🎒' },
   { id: 'skill', label: '스킬', emoji: '✨' },
   { id: 'codex', label: '도감', image: IMG_CODEX },
 ];
@@ -105,21 +95,6 @@ export default function GameBottomNav({
   const handlePress = useCallback(
     async (itemId: GameBottomNavItem) => {
       switch (itemId) {
-        case 'missions':
-          if (activeItem !== 'missions') {
-            navigation.navigate('Missions');
-          }
-          return;
-        case 'shop':
-          if (activeItem !== 'shop') {
-            navigation.navigate('Shop');
-          }
-          return;
-        case 'friends':
-          if (activeItem !== 'friends') {
-            navigation.navigate('Friends');
-          }
-          return;
         case 'home':
           if (activeItem === 'home') {
             return;
@@ -127,9 +102,9 @@ export default function GameBottomNav({
           await onHomePress?.();
           navigation.replace('Home');
           return;
-        case 'skin':
-          if (activeItem !== 'skin') {
-            navigation.navigate('SkinCollection');
+        case 'bag':
+          if (activeItem !== 'bag') {
+            navigation.navigate('BlockWorldBag');
           }
           return;
         case 'skill':

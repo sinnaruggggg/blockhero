@@ -11,7 +11,9 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import {
   canAllocateSkill,
+  getCharacterAtk,
   getCharacterClass,
+  getCharacterHp,
   isSkillUnlocked,
   xpToNextLevel,
 } from '../constants/characters';
@@ -103,10 +105,8 @@ export default function SkillTreeScreen({route, navigation}: any) {
       : charData.partyAllocations;
   const xpRequired = xpToNextLevel(charData.level);
   const xpProgress = Math.max(0, Math.min(1, charData.xp / xpRequired));
-  const currentAttack =
-    characterClass.baseAtk + characterClass.atkPerLevel * (charData.level - 1);
-  const currentHp =
-    characterClass.baseHp + characterClass.hpPerLevel * (charData.level - 1);
+  const currentAttack = getCharacterAtk(characterId, charData.level);
+  const currentHp = getCharacterHp(characterId, charData.level);
   const detailContextNote =
     skills.length > 0
       ? getSkillEffectDetail(characterId, charData, activeTab, 0).contextNote

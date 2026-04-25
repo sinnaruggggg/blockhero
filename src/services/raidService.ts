@@ -27,7 +27,43 @@ interface RaidInstanceRecord {
   party_id?: string | null;
 }
 
+interface RaidParticipantRuntimePatch {
+  avatarIcon?: string | null;
+  role?: string | null;
+  isHost?: boolean;
+  isReady?: boolean;
+  isAlive?: boolean;
+  currentHp?: number | null;
+  maxHp?: number | null;
+  battleStats?: Record<string, unknown>;
+}
+
 const NORMAL_RAID_DURATION_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+// RAID_FIX: Keep DB compatibility with the existing "active" battle status,
+// while allowing clients to understand the clearer raid state machine names.
+const RAID_BATTLE_COMPAT_STATUSES = new Set(['active', 'battle']);
+
+function isMissingRaidRuntimeColumnError(error: unknown) {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+
+  return (
+    (message.includes('avatar_icon') ||
+      message.includes('role') ||
+      message.includes('is_host') ||
+      message.includes('is_ready') ||
+      message.includes('is_alive') ||
+      message.includes('current_hp') ||
+      message.includes('max_hp') ||
+      message.includes('battle_stats') ||
+      message.includes('updated_at')) &&
+    (message.includes('schema cache') ||
+      message.includes('column') ||
+      message.includes('does not exist'))
+  );
+}
 
 function getRaidDurationMs(
   instance: Pick<RaidInstanceRecord, 'started_at' | 'expires_at'>,
@@ -251,16 +287,7 @@ export async function joinRaidInstance(
     return { data: null, error: instanceError };
   }
 
-  if (
-    !instance ||
-    instance.status !== 'active' ||
-    new Date(instance.expires_at).getTime() <= Date.now() ||
-    !isUsableActiveRaidInstance(
-      instance,
-      Date.now(),
-      options.bypassBossWindow,
-    )
-  ) {
+  if (!instance) {
     return { data: null, error: { message: 'raid_expired' } };
   }
 
@@ -274,6 +301,28 @@ export async function joinRaidInstance(
 
   if (existingParticipantError) {
     return { data: null, error: existingParticipantError };
+  }
+
+  const isClearedStatus =
+    instance.status === 'defeated' || instance.status === 'cleared';
+
+  if (
+    !isClearedStatus &&
+    (!RAID_BATTLE_COMPAT_STATUSES.has(instance.status) ||
+      new Date(instance.expires_at).getTime() <= Date.now() ||
+      !isUsableActiveRaidInstance(
+        instance,
+        Date.now(),
+        options.bypassBossWindow,
+      ))
+  ) {
+    return { data: null, error: { message: 'raid_expired' } };
+  }
+
+  if (isClearedStatus && !existingParticipant) {
+    // RAID_FIX: cleared rooms can be restored by existing members, but new
+    // users cannot join after the battle has ended.
+    return { data: null, error: { message: 'raid_closed' } };
   }
 
   if (existingParticipant) {
@@ -327,6 +376,45 @@ export async function getRaidParticipants(instanceId: string) {
     .order('total_damage', { ascending: false });
 }
 
+export async function updateRaidParticipantRuntimeState(
+  instanceId: string,
+  playerId: string,
+  patch: RaidParticipantRuntimePatch,
+) {
+  const payload: Record<string, unknown> = {};
+
+  if (patch.avatarIcon !== undefined) payload.avatar_icon = patch.avatarIcon;
+  if (patch.role !== undefined) payload.role = patch.role;
+  if (patch.isHost !== undefined) payload.is_host = patch.isHost;
+  if (patch.isReady !== undefined) payload.is_ready = patch.isReady;
+  if (patch.isAlive !== undefined) payload.is_alive = patch.isAlive;
+  if (patch.currentHp !== undefined) payload.current_hp = patch.currentHp;
+  if (patch.maxHp !== undefined) payload.max_hp = patch.maxHp;
+  if (patch.battleStats !== undefined) payload.battle_stats = patch.battleStats;
+
+  if (Object.keys(payload).length === 0) {
+    return { data: null, error: null };
+  }
+
+  payload.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('raid_participants')
+    .update(payload)
+    .eq('raid_instance_id', instanceId)
+    .eq('player_id', playerId)
+    .select()
+    .maybeSingle();
+
+  // RAID_FIX: runtime-state columns are an additive DB upgrade. Older DBs keep
+  // working with realtime broadcasts until the migration is applied.
+  if (error && isMissingRaidRuntimeColumnError(error)) {
+    return { data: null, error: null };
+  }
+
+  return { data, error };
+}
+
 export async function dealRaidDamage(
   instanceId: string,
   playerId: string,
@@ -339,7 +427,7 @@ export async function dealRaidDamage(
     .eq('id', instanceId)
     .single();
 
-  if (!instance || instance.status !== 'active') {
+  if (!instance || !RAID_BATTLE_COMPAT_STATUSES.has(instance.status)) {
     return { data: null, error: { message: 'instance_not_active' } };
   }
 
@@ -395,6 +483,30 @@ export async function resetBossHp(instanceId: string, maxHp: number) {
     .from('raid_instances')
     .update({ boss_current_hp: maxHp })
     .eq('id', instanceId);
+}
+
+export async function restartRaidInstance(
+  instanceId: string,
+  maxHp: number,
+  expiresInMs: number = ATTACK_WINDOW_MS,
+) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + expiresInMs);
+
+  // RAID_FIX: A follow-up raid reuses the current instance so party members
+  // stay subscribed, but fully resets the server boss state for the next run.
+  return supabase
+    .from('raid_instances')
+    .update({
+      boss_current_hp: maxHp,
+      boss_max_hp: maxHp,
+      status: 'active',
+      started_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+    })
+    .eq('id', instanceId)
+    .select()
+    .single();
 }
 
 export function getRaidChannel(instanceId: string) {

@@ -51,6 +51,9 @@ export function buildVisualElementStyle(rule: {
   return {
     opacity: rule.opacity,
     zIndex: rule.zIndex,
+    // RAID_FIX: Android stacking needs elevation as well as zIndex for
+    // editor-controlled overlap order to be reflected on device.
+    elevation: Math.max(0, rule.zIndex),
     transform: [
       {translateX: resolvedOffset.x},
       {translateY: resolvedOffset.y},

@@ -59,6 +59,12 @@ react {
  */
 def enableProguardInReleaseBuilds = true
 
+def optionalBuildString = { String propertyName ->
+    def rawValue = project.findProperty(propertyName)
+    def safeValue = rawValue == null ? "" : rawValue.toString().replace("\\", "\\\\").replace("\"", "\\\"")
+    return "\"${safeValue}\""
+}
+
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
  *
@@ -78,14 +84,45 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.blockhero.game"
+    flavorDimensions "app"
     defaultConfig {
         applicationId "com.blockhero.game"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 204
-        versionName "1.3.77"
+        versionCode 205
+        versionName "1.3.78"
+        buildConfigField "boolean", "IS_ADMIN_APP", "false"
+        buildConfigField "String", "APP_MODE", "\"game\""
+        buildConfigField "String", "ADMIN_AUTO_EMAIL", "\"\""
+        buildConfigField "String", "ADMIN_AUTO_ACCESS_TOKEN", "\"\""
+        buildConfigField "String", "ADMIN_AUTO_REFRESH_TOKEN", "\"\""
+        manifestPlaceholders = [
+            usesCleartextTraffic: "false",
+            screenOrientation: "portrait",
+        ]
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a"
+        }
+    }
+    productFlavors {
+        game {
+            dimension "app"
+            resValue "string", "app_name", "BlockHero"
+        }
+        admin {
+            dimension "app"
+            applicationIdSuffix ".admin"
+            versionNameSuffix "-admin"
+            manifestPlaceholders = [
+                usesCleartextTraffic: "false",
+                screenOrientation: "fullSensor",
+            ]
+            buildConfigField "boolean", "IS_ADMIN_APP", "true"
+            buildConfigField "String", "APP_MODE", "\"admin\""
+            buildConfigField "String", "ADMIN_AUTO_EMAIL", optionalBuildString("ADMIN_AUTO_EMAIL")
+            buildConfigField "String", "ADMIN_AUTO_ACCESS_TOKEN", optionalBuildString("ADMIN_AUTO_ACCESS_TOKEN")
+            buildConfigField "String", "ADMIN_AUTO_REFRESH_TOKEN", optionalBuildString("ADMIN_AUTO_REFRESH_TOKEN")
+            resValue "string", "app_name", "BlockHero Admin"
         }
     }
     signingConfigs {

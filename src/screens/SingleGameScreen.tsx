@@ -140,7 +140,7 @@ import {
   buildSkillTriggerNotice,
 } from '../game/skillTriggerNotice';
 import {
-  loadSkillTriggerNoticeMode,
+  loadGameSettings,
   type SkillTriggerNoticeMode,
 } from '../stores/gameSettings';
 import {
@@ -548,6 +548,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const startedAtRef = useRef(Date.now());
   const levelPieceDifficulty = getLevelPieceDifficulty(activeWorldId);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
+  const screenShakeEnabledRef = useRef(true);
   const {
     message: battleNoticeMessage,
     messageKey: battleNoticeKey,
@@ -701,6 +702,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
   );
 
   const triggerLineClearBoardShake = useCallback(() => {
+    if (!screenShakeEnabledRef.current) {
+      return;
+    }
+
     lineClearBoardShakeX.stopAnimation();
     lineClearBoardShakeX.setValue(0);
     Animated.sequence([
@@ -859,12 +864,12 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
     (async () => {
       try {
-        const [loadedGameData, skinData, charId, noticeMode, isAdmin] =
+        const [loadedGameData, skinData, charId, settings, isAdmin] =
           await Promise.all([
             loadGameData(),
             loadSkinData(),
             getSelectedCharacter(),
-            loadSkillTriggerNoticeMode(),
+            loadGameSettings(),
             getAdminStatus().catch(() => false),
           ]);
 
@@ -874,7 +879,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
         gameDataRef.current = loadedGameData;
         isAdminRef.current = isAdmin;
-        skillNoticeModeRef.current = noticeMode;
+        skillNoticeModeRef.current = settings.skillTriggerNoticeMode;
+        screenShakeEnabledRef.current = settings.screenShake;
         setGameData(loadedGameData);
         setRunItemLoadout(buildRunItemLoadout(loadedGameData));
         setActiveSkin(skinData.activeSkinId);
@@ -1104,13 +1110,16 @@ export default function SingleGameScreen({ route, navigation }: any) {
       stopComboShakeAnimation();
       setComboBurstValue(nextCombo);
 
-      const comboShakeAnimation = Animated.parallel([
+      const animations: Animated.CompositeAnimation[] = [
         Animated.timing(comboBurstAnim, {
           toValue: 1,
           duration: 1000,
           useNativeDriver: true,
         }),
-        Animated.sequence([
+      ];
+
+      if (screenShakeEnabledRef.current) {
+        animations.push(Animated.sequence([
           Animated.timing(screenShakeX, {
             toValue: intensity,
             duration: 34,
@@ -1136,8 +1145,8 @@ export default function SingleGameScreen({ route, navigation }: any) {
             duration: 38,
             useNativeDriver: true,
           }),
-        ]),
-        Animated.sequence([
+        ]));
+        animations.push(Animated.sequence([
           Animated.timing(screenShakeY, {
             toValue: -verticalIntensity,
             duration: 38,
@@ -1158,8 +1167,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
             duration: 34,
             useNativeDriver: true,
           }),
-        ]),
-      ]);
+        ]));
+      }
+
+      const comboShakeAnimation = Animated.parallel(animations);
 
       comboShakeAnimationRef.current = comboShakeAnimation;
       comboShakeAnimation.start(() => {
@@ -1651,7 +1662,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         clearInterval(comboTickerRef.current);
         comboTickerRef.current = null;
       }
-    }, 50);
+    }, 100);
 
     comboTimerRef.current = setTimeout(() => {
       setCombo(0);

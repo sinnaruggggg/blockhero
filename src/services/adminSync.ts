@@ -17,6 +17,12 @@ function setCachedAdminStatus(userId: string | null, next: boolean) {
   adminStatusCache = next;
 }
 
+export function resetAdminStatusCache() {
+  adminStatusCache = null;
+  adminStatusCacheUserId = null;
+  adminStatusInFlight = null;
+}
+
 export async function getAdminStatus(): Promise<boolean> {
   const cachedUserId = await getCurrentUserId();
   if (adminStatusCache !== null && adminStatusCacheUserId === cachedUserId) {

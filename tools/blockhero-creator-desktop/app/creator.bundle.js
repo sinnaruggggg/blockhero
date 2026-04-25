@@ -23484,6 +23484,15 @@ ${suffix}`;
       return acc;
     }, {});
   }
+  function createRaidRules(ids) {
+    const rules = createRules(ids);
+    // RAID_FIX: keep the raid board as the lowest default layer while HUD
+    // elements remain adjustable from PC edit mode through zIndex.
+    rules.board.zIndex = -20;
+    rules.skill_effect.zIndex = 20;
+    rules.combo_gauge.zIndex = 40;
+    return rules;
+  }
   var DEFAULT_VISUAL_CONFIG_MANIFEST = {
     version: 0,
     referenceViewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
@@ -23527,7 +23536,7 @@ ${suffix}`;
         ])
       },
       raidNormal: {
-        elements: createRules([
+        elements: createRaidRules([
           "top_panel",
           "skill_bar",
           "info_bar",
@@ -23541,7 +23550,7 @@ ${suffix}`;
         }
       },
       raidBoss: {
-        elements: createRules([
+        elements: createRaidRules([
           "top_panel",
           "skill_bar",
           "info_bar",
@@ -24483,6 +24492,19 @@ ${suffix}`;
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
+  function createElementRules(screenId) {
+    const rules = Object.fromEntries(
+      ELEMENT_DEFS[screenId].map(({ id }) => [id, clone(DEFAULT_RULE)])
+    );
+    if (screenId === "raidNormal" || screenId === "raidBoss") {
+      // RAID_FIX: match the app's default raid layer order; the PC editor's
+      // "겹침 순서" field can still adjust these values.
+      rules.board.zIndex = -20;
+      rules.skill_effect.zIndex = 20;
+      rules.combo_gauge.zIndex = 40;
+    }
+    return rules;
+  }
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
   }
@@ -24536,31 +24558,21 @@ ${suffix}`;
       studioSnapshots: {},
       screens: {
         level: {
-          elements: Object.fromEntries(
-            ELEMENT_DEFS.level.map(({ id }) => [id, clone(DEFAULT_RULE)])
-          ),
+          elements: createElementRules("level"),
           backgrounds: { byWorld: {}, byLevel: {} }
         },
         endless: {
-          elements: Object.fromEntries(
-            ELEMENT_DEFS.endless.map(({ id }) => [id, clone(DEFAULT_RULE)])
-          )
+          elements: createElementRules("endless")
         },
         battle: {
-          elements: Object.fromEntries(
-            ELEMENT_DEFS.battle.map(({ id }) => [id, clone(DEFAULT_RULE)])
-          )
+          elements: createElementRules("battle")
         },
         raidNormal: {
-          elements: Object.fromEntries(
-            ELEMENT_DEFS.raidNormal.map(({ id }) => [id, clone(DEFAULT_RULE)])
-          ),
+          elements: createElementRules("raidNormal"),
           backgrounds: { byBossStage: {} }
         },
         raidBoss: {
-          elements: Object.fromEntries(
-            ELEMENT_DEFS.raidBoss.map(({ id }) => [id, clone(DEFAULT_RULE)])
-          ),
+          elements: createElementRules("raidBoss"),
           backgrounds: { byBossStage: {} }
         }
       }
@@ -24971,6 +24983,92 @@ ${suffix}`;
     level: "\uB808\uBCA8",
     raid: "\uB808\uC774\uB4DC"
   };
+  var BALANCE_CATEGORY_LABELS = {
+    monster: "몬스터",
+    boss: "보스",
+    character: "캐릭터",
+    skill: "스킬"
+  };
+  var ENCOUNTER_BALANCE_FIELD_DEFINITIONS = [
+    { key: "baseHp", label: "체력" },
+    { key: "baseAttack", label: "공격력" },
+    { key: "attackIntervalMs", label: "공격 주기(ms)" }
+  ];
+  var CHARACTER_BALANCE_FIELD_DEFINITIONS = [
+    { key: "baseAtk", label: "기본 공격력" },
+    { key: "atkPerLevel", label: "레벨당 공격력" },
+    { key: "baseHp", label: "기본 체력" },
+    { key: "hpPerLevel", label: "레벨당 체력" }
+  ];
+  var DEFAULT_CHARACTER_BALANCE = {
+    knight: { id: "knight", name: "기사", baseAtk: 10, atkPerLevel: 2, baseHp: 200, hpPerLevel: 20 },
+    mage: { id: "mage", name: "매지션", baseAtk: 15, atkPerLevel: 5, baseHp: 120, hpPerLevel: 10 },
+    archer: { id: "archer", name: "궁수", baseAtk: 13, atkPerLevel: 3, baseHp: 150, hpPerLevel: 15 },
+    rogue: { id: "rogue", name: "도적", baseAtk: 14, atkPerLevel: 4, baseHp: 130, hpPerLevel: 13 },
+    healer: { id: "healer", name: "힐러", baseAtk: 11, atkPerLevel: 2, baseHp: 110, hpPerLevel: 12 }
+  };
+  var SKILL_EFFECT_FIELD_DEFINITIONS = [
+    { key: "baseAttackMultiplier", label: "기본 공격 배율", type: "float" },
+    { key: "maxHpMultiplier", label: "최대 HP 배율", type: "float" },
+    { key: "damageTakenReduction", label: "받는 피해 감소", type: "float" },
+    { key: "raidSkillChargeGainMultiplier", label: "레이드 스킬 게이지 배율", type: "float" },
+    { key: "comboDamageBonus", label: "콤보 피해 보너스", type: "float" },
+    { key: "comboWindowBonusMs", label: "콤보 시간 보너스", type: "int" },
+    { key: "feverRequirementMultiplier", label: "피버 요구량 배율", type: "float" },
+    { key: "feverGaugeGainMultiplier", label: "피버 게이지 배율", type: "float" },
+    { key: "feverDurationBonusMs", label: "피버 지속시간 보너스", type: "int" },
+    { key: "feverDamageBonus", label: "피버 피해 보너스", type: "float" },
+    { key: "raidDamageMultiplier", label: "레이드 피해 배율", type: "float" },
+    { key: "lineClearDamageBonus", label: "줄 지우기 피해", type: "float" },
+    { key: "smallPieceChanceBonus", label: "소형 블록 확률", type: "float" },
+    { key: "diamondChanceBonus", label: "다이아 확률", type: "float" },
+    { key: "extraDiamondChance", label: "추가 다이아 확률", type: "float" },
+    { key: "itemBlockChanceBonus", label: "아이템 블록 확률", type: "float" },
+    { key: "endlessDifficultySlowRate", label: "무한 모드 속도 완화", type: "float" },
+    { key: "endlessObstacleSpawnMultiplier", label: "장애물 생성 배율", type: "float" },
+    { key: "jackpotDoubleChance", label: "잭팟 2배 확률", type: "float" },
+    { key: "dodgeChance", label: "회피 확률", type: "float" },
+    { key: "reviveOnce", label: "부활 허용", type: "boolean" },
+    { key: "heartCapacityBonus", label: "하트 최대치", type: "int" },
+    { key: "heartRegenMultiplier", label: "하트 회복 배율", type: "float" },
+    { key: "healPerLineClearPercent", label: "줄당 회복 비율", type: "float" },
+    { key: "healEveryTwoLinesPercent", label: "2줄 회복 비율", type: "float" },
+    { key: "healEveryFiveClearsPercent", label: "5회 회복 비율", type: "float" },
+    { key: "autoHealIntervalMs", label: "자동 회복 주기", type: "int" },
+    { key: "autoHealPercent", label: "자동 회복 비율", type: "float" },
+    { key: "placeHealChance", label: "배치 회복 확률", type: "float" },
+    { key: "placeHealPercent", label: "배치 회복 비율", type: "float" },
+    { key: "itemPreserveChance", label: "아이템 보존 확률", type: "float" },
+    { key: "shopGoldDiscount", label: "상점 골드 할인", type: "float" },
+    { key: "shopRefreshDiscount", label: "상점 새로고침 할인", type: "float" },
+    { key: "rewardGoldMultiplier", label: "골드 보상 배율", type: "float" },
+    { key: "rewardDiamondMultiplier", label: "다이아 보상 배율", type: "float" },
+    { key: "raidTimeBonusMs", label: "레이드 시간 보너스", type: "int" },
+    { key: "doubleAttackChance", label: "2회 공격 확률", type: "float" },
+    { key: "previewCountBonus", label: "미리보기 개수", type: "int" },
+    { key: "itemCapacityPerTypeBonus", label: "아이템 종류별 최대치", type: "int" },
+    { key: "adjacentLineClearChance", label: "인접 줄 정리 확률", type: "float" },
+    { key: "extraLineClearChance", label: "추가 줄 정리 확률", type: "float" },
+    { key: "blockSummonChance", label: "보조 블록 소환 확률", type: "float" },
+    { key: "blockSummonMaxCells", label: "보조 블록 최대 칸수", type: "int" },
+    { key: "magicTransformChance", label: "마법 변환 확률", type: "float" },
+    { key: "magicTransformCellCount", label: "마법 변환 칸수", type: "int" },
+    { key: "randomLineClearChance", label: "무작위 줄 정리 확률", type: "float" },
+    { key: "randomLineClearComboThreshold", label: "무작위 줄 정리 콤보 조건", type: "int" },
+    { key: "fastPlacementDamageBonus", label: "빠른 배치 피해", type: "float" },
+    { key: "fastPlacementWindowMs", label: "빠른 배치 판정시간", type: "int" },
+    { key: "multiLineDamageBonus", label: "다중 줄 피해", type: "float" },
+    { key: "placementDamageReduction", label: "배치 피해 감소", type: "float" },
+    { key: "placementDamageReductionWindowMs", label: "배치 피해 감소 시간", type: "int" },
+    { key: "rewardJackpotChance", label: "보상 잭팟 확률", type: "float" },
+    { key: "rewardJackpotMultiplier", label: "보상 잭팟 배율", type: "float" },
+    { key: "raidActiveSkillDamageBonus", label: "레이드 액티브 피해", type: "float" },
+    { key: "battleExtraAttackLineChance", label: "대전 추가 공격줄 확률", type: "float" },
+    { key: "battleCounterAttackChance", label: "대전 반격 확률", type: "float" },
+    { key: "levelModeBreakthroughAttackPerClear", label: "레벨 돌파 공격 증가", type: "float" }
+  ];
+  var SKILL_EFFECT_NUMERIC_FIELDS = SKILL_EFFECT_FIELD_DEFINITIONS.filter((field) => field.type !== "boolean");
+  var SKILL_EFFECT_BOOLEAN_FIELDS = SKILL_EFFECT_FIELD_DEFINITIONS.filter((field) => field.type === "boolean");
   var $ = (selector) => document.querySelector(selector);
   var elements = {
     activeViewStatus: $("#activeViewStatus"),
@@ -25144,7 +25242,15 @@ ${suffix}`;
     addBossRaidButton: $("#addBossRaidButton"),
     addEncounterButton: $("#addEncounterButton"),
     cloneButton: $("#cloneButton"),
-    deleteButton: $("#deleteButton")
+    deleteButton: $("#deleteButton"),
+    balanceCategoryTabs: $("#balanceCategoryTabs"),
+    balanceScope: $("#balanceScope"),
+    balancePercent: $("#balancePercent"),
+    balanceFields: $("#balanceFields"),
+    balancePreview: $("#balancePreview"),
+    balanceApplyButton: $("#balanceApplyButton"),
+    balanceList: $("#balanceList"),
+    balanceEditor: $("#balanceEditor")
   };
   var state = {
     activeView: "ui",
@@ -25190,7 +25296,9 @@ ${suffix}`;
     publishedVersion: null,
     releaseHistory: [],
     assets: [],
-    selected: null
+    selected: null,
+    balanceCategory: "monster",
+    balanceSelectedId: ""
   };
   var localDesktopConfig = typeof window !== "undefined" ? window.__BLOCKHERO_CREATOR_LOCAL_CONFIG__ ?? null : null;
   var VISUAL_RUNTIME_APPLY_SUPPORT = {
@@ -25383,18 +25491,36 @@ ${suffix}`;
       return null;
     }
     if (state.selected.kind === "level") {
-      return state.manifest.levels?.[state.selected.id] ?? null;
+      return state.manifest.levels?.[state.selected.id] ?? Object.values(state.manifest.levels || {}).find((item) => item.id === state.selected.id) ?? null;
     }
     if (state.selected.kind === "raidNormal") {
-      return state.manifest.raids?.normal?.[state.selected.id] ?? null;
+      return state.manifest.raids?.normal?.[state.selected.id] ?? Object.values(state.manifest.raids?.normal || {}).find((item) => item.id === state.selected.id) ?? null;
     }
     if (state.selected.kind === "raidBoss") {
-      return state.manifest.raids?.boss?.[state.selected.id] ?? null;
+      return state.manifest.raids?.boss?.[state.selected.id] ?? Object.values(state.manifest.raids?.boss || {}).find((item) => item.id === state.selected.id) ?? null;
     }
     if (state.selected.kind === "encounter") {
-      return state.manifest.encounters?.[state.selected.id] ?? null;
+      return state.manifest.encounters?.[state.selected.id] ?? Object.values(state.manifest.encounters || {}).find((item) => item.id === state.selected.id) ?? null;
     }
     return null;
+  }
+  function getSelectedStorageKey(record = getSelectedRecord()) {
+    if (!state.manifest || !state.selected || !record) {
+      return "";
+    }
+    if (state.selected.kind === "level") {
+      return getObjectStorageKey(state.manifest.levels, record);
+    }
+    if (state.selected.kind === "raidNormal") {
+      return getObjectStorageKey(state.manifest.raids?.normal, record);
+    }
+    if (state.selected.kind === "raidBoss") {
+      return getObjectStorageKey(state.manifest.raids?.boss, record);
+    }
+    if (state.selected.kind === "encounter") {
+      return getObjectStorageKey(state.manifest.encounters, record);
+    }
+    return "";
   }
   function formatEncounterReference(encounterId) {
     const encounter = state.manifest?.encounters?.[encounterId];
@@ -25524,7 +25650,7 @@ ${suffix}`;
     </div>`;
   }
   function renderLevelEditor(level) {
-    const path = `levels.${level.id}`;
+    const path = `levels.${getObjectStorageKey(state.manifest.levels, level)}`;
     return `
     <div class="section-card">
       <div><h3>\uAE30\uBCF8 \uC815\uBCF4</h3><p>\uB808\uBCA8 \uC774\uB984, \uC6D4\uB4DC, \uC2A4\uD14C\uC774\uC9C0 \uBC88\uD638, \uBAA9\uD45C \uC218\uCE58, \uC5F0\uACB0\uB41C \uC801 \uD15C\uD50C\uB9BF\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
@@ -25550,7 +25676,7 @@ ${suffix}`;
     <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC774 \uB808\uBCA8\uC5D0 \uB300\uD55C \uB0B4\uBD80 \uBA54\uBAA8\uB97C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>\uBA54\uBAA8</span><textarea data-path="${path}.notes" rows="4">${level.notes ?? ""}</textarea></label></div>`;
   }
   function renderRaidEditor(raid, scope) {
-    const path = `raids.${scope}.${raid.id}`;
+    const path = `raids.${scope}.${getObjectStorageKey(state.manifest.raids?.[scope], raid)}`;
     return `
     <div class="section-card">
       <div><h3>\uAE30\uBCF8 \uC815\uBCF4</h3><p>\uB808\uC774\uB4DC \uC774\uB984, \uB2E8\uACC4, \uC5F0\uACB0 \uD15C\uD50C\uB9BF, \uC2DC\uAC04 \uC81C\uD55C\uACFC \uCC38\uAC00 \uADDC\uCE59\uC744 \uC870\uC815\uD569\uB2C8\uB2E4.</p></div>
@@ -25577,7 +25703,7 @@ ${suffix}`;
     <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uB808\uC774\uB4DC \uAE30\uD68D \uBA54\uBAA8\uB97C \uC815\uB9AC\uD569\uB2C8\uB2E4.</p></div><label><span>\uBA54\uBAA8</span><textarea data-path="${path}.notes" rows="4">${raid.notes ?? ""}</textarea></label></div>`;
   }
   function renderEncounterEditor(encounter) {
-    const path = `encounters.${encounter.id}`;
+    const path = `encounters.${getObjectStorageKey(state.manifest.encounters, encounter)}`;
     return `
     <div class="section-card">
       <div><h3>\uD15C\uD50C\uB9BF \uC815\uBCF4</h3><p>\uB808\uBCA8\uACFC \uB808\uC774\uB4DC\uAC00 \uACF5\uD1B5\uC73C\uB85C \uCC38\uC870\uD558\uB294 \uC801 \uAE30\uBCF8 \uD15C\uD50C\uB9BF\uC785\uB2C8\uB2E4.</p></div>
@@ -25603,6 +25729,440 @@ ${suffix}`;
       </div>
     </div>
     <div class="section-card"><div><h3>\uC6B4\uC601 \uBA54\uBAA8</h3><p>\uC801 \uBC38\uB7F0\uC2A4\uB098 \uAE30\uD68D \uC758\uB3C4\uB97C \uB0B4\uBD80 \uBA54\uBAA8\uB85C \uB0A8\uAE41\uB2C8\uB2E4.</p></div><label><span>\uBA54\uBAA8</span><textarea data-path="${path}.notes" rows="4">${encounter.notes ?? ""}</textarea></label></div>`;
+  }
+  function createEmptySkillBalance() {
+    return { numeric: {}, booleans: {} };
+  }
+  function ensureCreatorBalance(manifest) {
+    if (!manifest || typeof manifest !== "object") {
+      return manifest;
+    }
+    manifest.balance = isPlainObject(manifest.balance) ? manifest.balance : {};
+    manifest.balance.characters = isPlainObject(manifest.balance.characters) ? manifest.balance.characters : {};
+    Object.entries(DEFAULT_CHARACTER_BALANCE).forEach(([id, fallback]) => {
+      const current = isPlainObject(manifest.balance.characters[id]) ? manifest.balance.characters[id] : {};
+      manifest.balance.characters[id] = {
+        id,
+        name: typeof current.name === "string" && current.name.trim() ? current.name : fallback.name,
+        baseAtk: Number.isFinite(Number(current.baseAtk)) ? Number(current.baseAtk) : fallback.baseAtk,
+        atkPerLevel: Number.isFinite(Number(current.atkPerLevel)) ? Number(current.atkPerLevel) : fallback.atkPerLevel,
+        baseHp: Number.isFinite(Number(current.baseHp)) ? Number(current.baseHp) : fallback.baseHp,
+        hpPerLevel: Number.isFinite(Number(current.hpPerLevel)) ? Number(current.hpPerLevel) : fallback.hpPerLevel,
+        notes: typeof current.notes === "string" ? current.notes : void 0
+      };
+    });
+    manifest.balance.skillEffects = isPlainObject(manifest.balance.skillEffects) ? manifest.balance.skillEffects : {};
+    manifest.balance.skillEffects.global = isPlainObject(manifest.balance.skillEffects.global) ? manifest.balance.skillEffects.global : createEmptySkillBalance();
+    manifest.balance.skillEffects.global.numeric = isPlainObject(manifest.balance.skillEffects.global.numeric) ? manifest.balance.skillEffects.global.numeric : {};
+    manifest.balance.skillEffects.global.booleans = isPlainObject(manifest.balance.skillEffects.global.booleans) ? manifest.balance.skillEffects.global.booleans : {};
+    manifest.balance.skillEffects.characters = isPlainObject(manifest.balance.skillEffects.characters) ? manifest.balance.skillEffects.characters : {};
+    Object.keys(DEFAULT_CHARACTER_BALANCE).forEach((characterId) => {
+      const current = isPlainObject(manifest.balance.skillEffects.characters[characterId]) ? manifest.balance.skillEffects.characters[characterId] : createEmptySkillBalance();
+      manifest.balance.skillEffects.characters[characterId] = {
+        numeric: isPlainObject(current.numeric) ? current.numeric : {},
+        booleans: isPlainObject(current.booleans) ? current.booleans : {}
+      };
+    });
+    return manifest;
+  }
+  function getObjectStorageKey(map, record) {
+    if (!map || !record) {
+      return "";
+    }
+    const directKey = record.id != null ? String(record.id) : "";
+    if (directKey && map[directKey] === record) {
+      return directKey;
+    }
+    const found = Object.entries(map).find(([, value]) => value === record || value?.id === record.id);
+    return found?.[0] ?? directKey;
+  }
+  function getEncounterStorageKey(encounter) {
+    return getObjectStorageKey(state.manifest?.encounters, encounter);
+  }
+  function getLevelBalanceEntries() {
+    if (!state.manifest) {
+      return [];
+    }
+    return Object.entries(state.manifest.levels || {}).map(([levelKey, level]) => {
+      const encounter = state.manifest.encounters?.[level.enemyTemplateId] ?? Object.values(state.manifest.encounters || {}).find((item) => item.id === level.enemyTemplateId);
+      return {
+        levelKey,
+        level,
+        encounter,
+        encounterKey: getEncounterStorageKey(encounter)
+      };
+    }).filter((entry) => entry.level && entry.encounter && entry.encounterKey);
+  }
+  function getRaidBalanceEntries() {
+    if (!state.manifest) {
+      return [];
+    }
+    return ["normal", "boss"].flatMap((raidType) => Object.entries(state.manifest.raids?.[raidType] || {}).map(([raidKey, raid]) => {
+      const encounter = state.manifest.encounters?.[raid.encounterTemplateId] ?? Object.values(state.manifest.encounters || {}).find((item) => item.id === raid.encounterTemplateId);
+      return {
+        raidKey,
+        raidType,
+        raid,
+        encounter,
+        encounterKey: getEncounterStorageKey(encounter)
+      };
+    })).filter((entry) => entry.raid && entry.encounter && entry.encounterKey);
+  }
+  function getBossBalanceEntries() {
+    const levelBosses = getLevelBalanceEntries().filter((entry) => entry.encounter.tier === "boss" || Number(entry.level.stageNumberInWorld) === 30).map((entry) => ({
+      id: `level:${entry.levelKey}`,
+      bossType: "level",
+      title: `월드 ${entry.level.worldId} 보스 · ${entry.level.name}`,
+      subtitlePrefix: "레벨 월드 보스",
+      encounter: entry.encounter,
+      encounterKey: entry.encounterKey,
+      source: entry
+    }));
+    const raidBosses = getRaidBalanceEntries().map((entry) => ({
+      id: `${entry.raidType}:${entry.raidKey}`,
+      bossType: entry.raidType,
+      title: `${entry.raidType === "normal" ? "일반 레이드" : "보스 레이드"} ${entry.raid.stage}단계`,
+      subtitlePrefix: entry.raidType === "normal" ? "일반 레이드" : "보스 레이드",
+      encounter: entry.encounter,
+      encounterKey: entry.encounterKey,
+      source: entry
+    }));
+    return [...levelBosses, ...raidBosses];
+  }
+  function uniqueValues(values) {
+    return Array.from(new Set(values.filter((value) => value != null && String(value).length > 0)));
+  }
+  function getBalanceFieldDefinitions(category = state.balanceCategory) {
+    if (category === "character") {
+      return CHARACTER_BALANCE_FIELD_DEFINITIONS;
+    }
+    if (category === "skill") {
+      return SKILL_EFFECT_NUMERIC_FIELDS;
+    }
+    return ENCOUNTER_BALANCE_FIELD_DEFINITIONS;
+  }
+  function renderBalanceScopeOptions() {
+    if (!elements.balanceScope) {
+      return;
+    }
+    const category = state.balanceCategory;
+    const levelEntries = getLevelBalanceEntries();
+    const raidEntries = getRaidBalanceEntries();
+    const bossEntries = getBossBalanceEntries();
+    let options = [];
+    if (category === "monster") {
+      const worldIds = uniqueValues(levelEntries.map((entry) => entry.level.worldId)).sort((a, b) => Number(a) - Number(b));
+      const monsterGroups = [];
+      const seen = new Set();
+      levelEntries.forEach((entry) => {
+        const key = `${entry.level.worldId}::${entry.encounter.monsterName}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        const count = levelEntries.filter((candidate) => candidate.level.worldId === entry.level.worldId && candidate.encounter.monsterName === entry.encounter.monsterName).length;
+        monsterGroups.push({
+          value: `monster:${entry.level.worldId}:${encodeURIComponent(entry.encounter.monsterName)}`,
+          label: `월드 ${entry.level.worldId} · ${entry.encounter.monsterName} (${count})`
+        });
+      });
+      options = [
+        { value: "all", label: `전체 몬스터 (${levelEntries.length})` },
+        ...worldIds.map((worldId) => ({
+          value: `world:${worldId}`,
+          label: `월드 ${worldId} 몬스터`
+        })),
+        ...monsterGroups
+      ];
+    } else if (category === "boss") {
+      options = [
+        { value: "all", label: `전체 보스 (${bossEntries.length})` },
+        { value: "level", label: "레벨 월드 보스" },
+        { value: "normal", label: "일반 레이드 보스" },
+        { value: "boss", label: "보스 레이드 보스" }
+      ];
+    } else if (category === "character") {
+      const characters = Object.values(state.manifest?.balance?.characters || {});
+      options = [
+        { value: "all", label: `전체 캐릭터 (${characters.length})` },
+        ...characters.map((character) => ({ value: character.id, label: character.name }))
+      ];
+    } else {
+      const characters = Object.values(state.manifest?.balance?.characters || {});
+      options = [
+        { value: "global", label: "전체 공통 스킬 배율" },
+        { value: "all", label: `전체 캐릭터 스킬 (${characters.length})` },
+        ...characters.map((character) => ({ value: character.id, label: `${character.name} 스킬` }))
+      ];
+    }
+    elements.balanceScope.innerHTML = options.map((option, index) => `<option value="${option.value}" ${index === 0 ? "selected" : ""}>${option.label}</option>`).join("");
+  }
+  function renderBalanceFieldOptions() {
+    if (!elements.balanceFields) {
+      return;
+    }
+    elements.balanceFields.innerHTML = getBalanceFieldDefinitions().map((field, index) => `
+      <label class="checkbox-item">
+        <input type="checkbox" data-balance-field="${field.key}" ${index === 0 ? "checked" : ""} />
+        ${field.label}
+      </label>`).join("");
+  }
+  function getBalanceTargets(category = state.balanceCategory, scope = elements.balanceScope?.value || "all") {
+    if (!state.manifest) {
+      return [];
+    }
+    if (category === "monster") {
+      const entries = getLevelBalanceEntries();
+      if (scope === "all") {
+        return uniqueValues(entries.map((entry) => entry.encounterKey));
+      }
+      if (scope.startsWith("world:")) {
+        const worldId = Number(scope.slice("world:".length));
+        return uniqueValues(entries.filter((entry) => Number(entry.level.worldId) === worldId).map((entry) => entry.encounterKey));
+      }
+      if (scope.startsWith("monster:")) {
+        const [, worldRaw, encodedName] = scope.split(":");
+        const worldId = Number(worldRaw);
+        const monsterName = decodeURIComponent(encodedName || "");
+        return uniqueValues(entries.filter((entry) => Number(entry.level.worldId) === worldId && entry.encounter.monsterName === monsterName).map((entry) => entry.encounterKey));
+      }
+    }
+    if (category === "boss") {
+      const entries = getBossBalanceEntries();
+      if (scope === "level" || scope === "normal" || scope === "boss") {
+        return uniqueValues(entries.filter((entry) => entry.bossType === scope).map((entry) => entry.encounterKey));
+      }
+      return uniqueValues(entries.map((entry) => entry.encounterKey));
+    }
+    if (category === "character") {
+      const ids = Object.keys(state.manifest.balance?.characters || {});
+      return scope === "all" ? ids : ids.filter((id) => id === scope);
+    }
+    if (category === "skill") {
+      const ids = Object.keys(state.manifest.balance?.characters || {});
+      if (scope === "global") {
+        return ["global"];
+      }
+      return scope === "all" ? ids : ids.filter((id) => id === scope);
+    }
+    return [];
+  }
+  function updateBalancePreview() {
+    if (!elements.balancePreview) {
+      return;
+    }
+    const targets = getBalanceTargets();
+    const fields = getCheckedBalanceFields();
+    const percent = Number(elements.balancePercent?.value || 0);
+    const sign = percent > 0 ? "+" : "";
+    elements.balancePreview.textContent = `${BALANCE_CATEGORY_LABELS[state.balanceCategory]} ${targets.length}개 대상, ${fields.length}개 수치에 ${sign}${percent}%를 적용합니다.`;
+  }
+  function renderBalanceList() {
+    if (!elements.balanceList) {
+      return;
+    }
+    let items = [];
+    if (state.balanceCategory === "monster") {
+      items = getLevelBalanceEntries().map((entry) => ({
+        id: entry.levelKey,
+        title: `${entry.level.levelId}. ${entry.level.name}`,
+        subtitle: `${entry.encounter.monsterName} · 체력 ${entry.encounter.baseHp} · 공격 ${entry.encounter.baseAttack} · 주기 ${entry.encounter.attackIntervalMs}ms`
+      }));
+    } else if (state.balanceCategory === "boss") {
+      items = getBossBalanceEntries().map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        subtitle: `${entry.subtitlePrefix} · ${entry.encounter.monsterName} · 체력 ${entry.encounter.baseHp} · 공격 ${entry.encounter.baseAttack} · 주기 ${entry.encounter.attackIntervalMs}ms`
+      }));
+    } else if (state.balanceCategory === "character") {
+      items = Object.values(state.manifest?.balance?.characters || {}).map((character) => ({
+        id: character.id,
+        title: character.name,
+        subtitle: `공격 ${character.baseAtk} / +${character.atkPerLevel} · 체력 ${character.baseHp} / +${character.hpPerLevel}`
+      }));
+    } else {
+      items = [
+        { id: "global", title: "전체 공통 스킬 배율", subtitle: "모든 캐릭터 스킬 효과에 먼저 곱해지는 공통 배율" },
+        ...Object.values(state.manifest?.balance?.characters || {}).map((character) => ({
+          id: character.id,
+          title: `${character.name} 스킬`,
+          subtitle: "해당 캐릭터에게만 적용되는 스킬 효과 배율"
+        }))
+      ];
+    }
+    if (!items.length) {
+      state.balanceSelectedId = "";
+      elements.balanceList.innerHTML = `<div class="release-card"><strong>대상이 없습니다.</strong><p>관리자 manifest에 편집 가능한 대상이 없습니다.</p></div>`;
+      return;
+    }
+    if (!items.some((item) => item.id === state.balanceSelectedId)) {
+      state.balanceSelectedId = items[0].id;
+    }
+    elements.balanceList.innerHTML = items.map((item) => `<button class="balance-item ${item.id === state.balanceSelectedId ? "active" : ""}" data-balance-id="${item.id}"><strong>${item.title}</strong><span>${item.subtitle}</span></button>`).join("");
+  }
+  function renderBalanceNumberField(label, path, value, step = "1") {
+    return `<label><span>${label}</span><input data-balance-path="${path}" type="number" step="${step}" value="${value ?? ""}" /></label>`;
+  }
+  function renderEncounterBalanceEditor(entry, title) {
+    const path = `encounters.${entry.encounterKey}`;
+    return `
+      <div class="section-card">
+        <div><h3>${title}</h3><p class="balance-editor-note">낮은 공격 주기(ms)는 더 빠른 공격입니다. 같은 몬스터 종류 전체 변경은 왼쪽 퍼센트 적용을 사용하세요.</p></div>
+        <div class="field-grid three">
+          ${renderBalanceNumberField("체력", `${path}.baseHp`, entry.encounter.baseHp)}
+          ${renderBalanceNumberField("공격력", `${path}.baseAttack`, entry.encounter.baseAttack)}
+          ${renderBalanceNumberField("공격 주기(ms)", `${path}.attackIntervalMs`, entry.encounter.attackIntervalMs)}
+        </div>
+      </div>`;
+  }
+  function renderCharacterBalanceEditor(character) {
+    const path = `balance.characters.${character.id}`;
+    return `
+      <div class="section-card">
+        <div><h3>${character.name}</h3><p class="balance-editor-note">기본값과 레벨당 성장값을 직접 입력합니다.</p></div>
+        <div class="field-grid">
+          ${renderBalanceNumberField("기본 공격력", `${path}.baseAtk`, character.baseAtk)}
+          ${renderBalanceNumberField("레벨당 공격력", `${path}.atkPerLevel`, character.atkPerLevel)}
+          ${renderBalanceNumberField("기본 체력", `${path}.baseHp`, character.baseHp)}
+          ${renderBalanceNumberField("레벨당 체력", `${path}.hpPerLevel`, character.hpPerLevel)}
+        </div>
+      </div>`;
+  }
+  function renderSkillBalanceEditor(targetId) {
+    const target = targetId === "global" ? state.manifest.balance.skillEffects.global : state.manifest.balance.skillEffects.characters[targetId];
+    const title = targetId === "global" ? "전체 공통 스킬 배율" : `${state.manifest.balance.characters[targetId]?.name || targetId} 스킬 배율`;
+    const basePath = targetId === "global" ? "balance.skillEffects.global" : `balance.skillEffects.characters.${targetId}`;
+    return `
+      <div class="section-card">
+        <div><h3>${title}</h3><p class="balance-editor-note">숫자 1.00은 기존 효과 그대로입니다. 1.20은 20% 강화, 0.80은 20% 약화입니다.</p></div>
+        <div class="skill-balance-grid">
+          ${SKILL_EFFECT_NUMERIC_FIELDS.map((field) => renderBalanceNumberField(field.label, `${basePath}.numeric.${field.key}`, target.numeric?.[field.key] ?? 1, "0.01")).join("")}
+        </div>
+        <div class="field-grid">
+          ${SKILL_EFFECT_BOOLEAN_FIELDS.map((field) => `<label><span>${field.label}</span><select data-balance-path="${basePath}.booleans.${field.key}"><option value="false" ${target.booleans?.[field.key] ? "" : "selected"}>꺼짐</option><option value="true" ${target.booleans?.[field.key] ? "selected" : ""}>켜짐</option></select></label>`).join("")}
+        </div>
+      </div>`;
+  }
+  function renderBalanceEditor() {
+    if (!elements.balanceEditor) {
+      return;
+    }
+    if (!state.manifest) {
+      elements.balanceEditor.className = "editor-form empty-state";
+      elements.balanceEditor.innerHTML = "<p>관리자 데이터를 먼저 불러오세요.</p>";
+      return;
+    }
+    let html = "";
+    if (state.balanceCategory === "monster") {
+      const entry = getLevelBalanceEntries().find((item) => item.levelKey === state.balanceSelectedId);
+      html = entry ? renderEncounterBalanceEditor(entry, `${entry.level.levelId}. ${entry.level.name}`) : "";
+    } else if (state.balanceCategory === "boss") {
+      const entry = getBossBalanceEntries().find((item) => item.id === state.balanceSelectedId);
+      html = entry ? renderEncounterBalanceEditor(entry, entry.title) : "";
+    } else if (state.balanceCategory === "character") {
+      const character = state.manifest.balance.characters[state.balanceSelectedId];
+      html = character ? renderCharacterBalanceEditor(character) : "";
+    } else {
+      html = renderSkillBalanceEditor(state.balanceSelectedId || "global");
+    }
+    elements.balanceEditor.className = html ? "editor-form" : "editor-form empty-state";
+    elements.balanceEditor.innerHTML = html || "<p>전투 밸런스 목록에서 항목을 선택하세요.</p>";
+  }
+  function renderBalanceWorkspace() {
+    if (!state.manifest || !elements.balanceCategoryTabs) {
+      return;
+    }
+    ensureCreatorBalance(state.manifest);
+    elements.balanceCategoryTabs.querySelectorAll("[data-balance-category]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.balanceCategory === state.balanceCategory);
+    });
+    renderBalanceScopeOptions();
+    renderBalanceFieldOptions();
+    renderBalanceList();
+    renderBalanceEditor();
+    updateBalancePreview();
+  }
+  function getCheckedBalanceFields() {
+    return Array.from(elements.balanceFields?.querySelectorAll("[data-balance-field]:checked") || []).map((input) => input.dataset.balanceField);
+  }
+  function applyPercentValue(value, percent) {
+    return Number(value || 0) * (1 + percent / 100);
+  }
+  function roundEncounterBalanceValue(field, value) {
+    if (field === "attackIntervalMs") {
+      return Math.max(250, Math.round(value));
+    }
+    return Math.max(1, Math.round(value));
+  }
+  function roundCharacterBalanceValue(_field, value) {
+    return Math.max(1, Math.round(value));
+  }
+  function roundSkillBalanceValue(fieldKey, value) {
+    const field = SKILL_EFFECT_FIELD_DEFINITIONS.find((item) => item.key === fieldKey);
+    const clamped = Math.max(0, Math.min(10, Number(value) || 0));
+    return field?.type === "int" ? Number(clamped.toFixed(2)) : Number(clamped.toFixed(3));
+  }
+  function applyBalanceBulk() {
+    if (!state.manifest) {
+      return;
+    }
+    ensureCreatorBalance(state.manifest);
+    const fields = getCheckedBalanceFields();
+    const targets = getBalanceTargets();
+    const percent = normalizeNumber(elements.balancePercent?.value, 0);
+    if (!fields.length) {
+      showToast("적용할 수치를 하나 이상 선택하세요.");
+      return;
+    }
+    if (!targets.length) {
+      showToast("적용 대상이 없습니다.");
+      return;
+    }
+    if (state.balanceCategory === "monster" || state.balanceCategory === "boss") {
+      targets.forEach((encounterKey) => {
+        const encounter = state.manifest.encounters[encounterKey];
+        if (!encounter) {
+          return;
+        }
+        fields.forEach((field) => {
+          encounter[field] = roundEncounterBalanceValue(field, applyPercentValue(encounter[field], percent));
+        });
+      });
+    } else if (state.balanceCategory === "character") {
+      targets.forEach((characterId) => {
+        const character = state.manifest.balance.characters[characterId];
+        if (!character) {
+          return;
+        }
+        fields.forEach((field) => {
+          character[field] = roundCharacterBalanceValue(field, applyPercentValue(character[field], percent));
+        });
+      });
+    } else {
+      targets.forEach((targetId) => {
+        const target = targetId === "global" ? state.manifest.balance.skillEffects.global : state.manifest.balance.skillEffects.characters[targetId];
+        if (!target) {
+          return;
+        }
+        fields.forEach((field) => {
+          const current = target.numeric?.[field] ?? 1;
+          target.numeric[field] = roundSkillBalanceValue(field, applyPercentValue(current, percent));
+        });
+      });
+    }
+    renderAll();
+    bindDynamicEvents();
+    showToast("선택한 전투 밸런스 값을 적용했습니다. 배포하려면 초안 저장 후 배포를 누르세요.");
+  }
+  function parseBalanceInputValue(input) {
+    if (input.tagName === "SELECT") {
+      if (input.value === "true") return true;
+      if (input.value === "false") return false;
+    }
+    if (input.type === "number") {
+      return normalizeNumber(input.value, 0);
+    }
+    return input.value;
   }
   function renderTree() {
     if (!state.manifest) {
@@ -25727,6 +26287,8 @@ ${suffix}`;
     elements.userEmail.textContent = state.profile?.email || state.session?.user?.email || "-";
     elements.draftVersion.textContent = state.manifest ? `v${getManifestVersion(state.manifest)}` : "-";
     elements.publishedVersion.textContent = state.publishedVersion ? `v${state.publishedVersion}` : "-";
+    ensureCreatorBalance(state.manifest);
+    renderBalanceWorkspace();
     renderTree();
     renderEditor();
     renderAssets();
@@ -25776,6 +26338,39 @@ ${suffix}`;
     elements.editorForm.querySelectorAll("[data-path]").forEach((input) => {
       input.addEventListener("change", () => {
         writePath(state.manifest, input.dataset.path, parseInputValue(input));
+        renderAll();
+        bindDynamicEvents();
+      });
+    });
+    elements.balanceCategoryTabs?.querySelectorAll("[data-balance-category]").forEach((button) => {
+      button.onclick = () => {
+        state.balanceCategory = button.dataset.balanceCategory || "monster";
+        state.balanceSelectedId = "";
+        renderAll();
+        bindDynamicEvents();
+      };
+    });
+    elements.balanceList?.querySelectorAll("[data-balance-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.balanceSelectedId = button.dataset.balanceId || "";
+        renderAll();
+        bindDynamicEvents();
+      });
+    });
+    [elements.balanceScope, elements.balancePercent].filter(Boolean).forEach((input) => {
+      input.onchange = updateBalancePreview;
+      input.oninput = updateBalancePreview;
+    });
+    elements.balanceFields?.querySelectorAll("[data-balance-field]").forEach((input) => {
+      input.addEventListener("change", updateBalancePreview);
+    });
+    if (elements.balanceApplyButton) {
+      elements.balanceApplyButton.onclick = applyBalanceBulk;
+    }
+    elements.balanceEditor?.querySelectorAll("[data-balance-path]").forEach((input) => {
+      input.addEventListener("change", () => {
+        ensureCreatorBalance(state.manifest);
+        writePath(state.manifest, input.dataset.balancePath, parseBalanceInputValue(input));
         renderAll();
         bindDynamicEvents();
       });
@@ -27128,6 +27723,7 @@ ${suffix}`;
     return data ?? [];
   }
   async function saveDraft() {
+    ensureCreatorBalance(state.manifest);
     const { error } = await state.supabase.from("creator_draft").upsert(
       {
         id: DEFAULT_DRAFT_ID,
@@ -27141,7 +27737,9 @@ ${suffix}`;
   async function publishDraft() {
     const latest = await fetchLatestRelease();
     const nextVersion = Number(latest?.version || 0) + 1;
+    ensureCreatorBalance(state.manifest);
     const payload = deepClone2(state.manifest);
+    ensureCreatorBalance(payload);
     payload.version = nextVersion;
     payload.meta = {
       ...payload.meta || {},
@@ -27297,14 +27895,19 @@ ${suffix}`;
     state.selected = { kind: "encounter", id: nextId };
   }
   function deleteSelected() {
+    const storageKey = getSelectedStorageKey();
+    if (!storageKey) {
+      showToast("\uC0AD\uC81C\uD560 \uD56D\uBAA9\uC744 \uCC3E\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.");
+      return;
+    }
     if (!state.selected || !window.confirm("\uC120\uD0DD\uD55C \uD56D\uBAA9\uC744 \uC0AD\uC81C\uD560\uAE4C\uC694?")) return;
     if (state.selected.kind === "level")
-      delete state.manifest.levels[state.selected.id];
+      delete state.manifest.levels[storageKey];
     else if (state.selected.kind === "raidNormal")
-      delete state.manifest.raids.normal[state.selected.id];
+      delete state.manifest.raids.normal[storageKey];
     else if (state.selected.kind === "raidBoss")
-      delete state.manifest.raids.boss[state.selected.id];
-    else delete state.manifest.encounters[state.selected.id];
+      delete state.manifest.raids.boss[storageKey];
+    else delete state.manifest.encounters[storageKey];
     state.selected = null;
   }
   async function uploadAsset() {
@@ -27424,6 +28027,7 @@ ${suffix}`;
     if (!state.manifest) {
       state.manifest = await loadDefaultManifest();
     }
+    ensureCreatorBalance(state.manifest);
     if (!draftManifest) {
       await saveDraft();
     }
@@ -27492,6 +28096,8 @@ ${suffix}`;
     state.releaseHistory = [];
     state.assets = [];
     state.selected = null;
+    state.balanceCategory = "monster";
+    state.balanceSelectedId = "";
   }
   async function enterWorkspace() {
     resetWorkspaceState();
@@ -27554,6 +28160,7 @@ ${suffix}`;
   function applyManifestJson() {
     try {
       state.manifest = JSON.parse(elements.manifestJson.value);
+      ensureCreatorBalance(state.manifest);
       state.adminWorkspaceLoaded = true;
       renderAll();
       bindDynamicEvents();
@@ -28208,6 +28815,33 @@ ${suffix}`;
       }
     });
   }
+  function installCreatorTestHooks() {
+    if (typeof window === "undefined" || !window.__BLOCKHERO_CREATOR_TEST__) {
+      return;
+    }
+    window.__BLOCKHERO_CREATOR_TEST_API__ = {
+      loadAdminManifest(manifest) {
+        state.manifest = deepClone2(manifest);
+        ensureCreatorBalance(state.manifest);
+        state.adminWorkspaceLoaded = true;
+        state.assets = [];
+        state.releaseHistory = [];
+        state.publishedVersion = null;
+        if (!state.selected || !getSelectedRecord()) {
+          const firstLevel = Object.values(state.manifest.levels || {}).sort(
+            (a, b) => a.levelId - b.levelId
+          )[0];
+          state.selected = firstLevel ? { kind: "level", id: firstLevel.id } : null;
+        }
+        renderAll();
+        bindDynamicEvents();
+        return true;
+      },
+      getAdminManifest() {
+        return deepClone2(state.manifest);
+      }
+    };
+  }
   async function bootstrap() {
     elements.supabaseUrl.value = DEFAULT_SUPABASE_URL;
     elements.supabaseAnonKey.value = DEFAULT_SUPABASE_ANON_KEY;
@@ -28244,6 +28878,7 @@ ${suffix}`;
     bindVisualEvents();
     bindAdminEvents();
     bindSharedEvents();
+    installCreatorTestHooks();
     await initializePreviewWorkspace();
     elements.loginButton.addEventListener(
       "click",

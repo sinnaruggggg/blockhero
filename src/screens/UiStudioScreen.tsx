@@ -953,6 +953,193 @@ export default function UiStudioScreen({navigation}: any) {
         </GamePanel>
 
         <GamePanel>
+          <Text style={styles.sectionTitle}>빠른 조정</Text>
+          <Text style={styles.supportText}>
+            위치와 크기처럼 자주 만지는 값은 여기서 바로 수정합니다. 아래 긴 세부 패널까지
+            내릴 필요가 없도록 위쪽에 고정했습니다.
+          </Text>
+          <View style={styles.chipRow}>
+            {VISUAL_ELEMENT_LABELS[activeScreen].map(option => (
+              <TouchableOpacity
+                key={`quick-${option.id}`}
+                style={[
+                  styles.chip,
+                  selectedElementId === option.id && styles.chipActive,
+                ]}
+                onPress={() => setSelectedElementId(option.id as VisualElementId)}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    selectedElementId === option.id && styles.chipTextActive,
+                  ]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.inputGrid}>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>X</Text>
+              <TextInput
+                value={String(selectedRule.offsetX)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {offsetX: clampInteger(value, selectedRule.offsetX, -999, 999)},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="number-pad"
+                style={styles.numberInput}
+              />
+            </View>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>Y</Text>
+              <TextInput
+                value={String(selectedRule.offsetY)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {offsetY: clampInteger(value, selectedRule.offsetY, -999, 999)},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="number-pad"
+                style={styles.numberInput}
+              />
+            </View>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>전체 크기</Text>
+              <TextInput
+                value={selectedRule.scale.toFixed(2)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {scale: Number.parseFloat(value) || selectedRule.scale},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="decimal-pad"
+                style={styles.numberInput}
+              />
+            </View>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>가로 크기</Text>
+              <TextInput
+                value={selectedRule.widthScale.toFixed(2)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {widthScale: Number.parseFloat(value) || selectedRule.widthScale},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="decimal-pad"
+                style={styles.numberInput}
+              />
+            </View>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>세로 크기</Text>
+              <TextInput
+                value={selectedRule.heightScale.toFixed(2)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {heightScale: Number.parseFloat(value) || selectedRule.heightScale},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="decimal-pad"
+                style={styles.numberInput}
+              />
+            </View>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>투명도</Text>
+              <TextInput
+                value={selectedRule.opacity.toFixed(2)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {opacity: Number.parseFloat(value) || selectedRule.opacity},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="decimal-pad"
+                style={styles.numberInput}
+              />
+            </View>
+            <View style={styles.inputCell}>
+              <Text style={styles.controlLabel}>Z</Text>
+              <TextInput
+                value={String(selectedRule.zIndex)}
+                onChangeText={value =>
+                  patchElementRule(
+                    activeScreen,
+                    selectedElementId,
+                    {zIndex: clampInteger(value, selectedRule.zIndex, -99, 99)},
+                    activeCharacterVariant,
+                  )
+                }
+                keyboardType="number-pad"
+                style={styles.numberInput}
+              />
+            </View>
+          </View>
+
+          <View style={styles.nudgeRow}>
+            <TouchableOpacity
+              style={[
+                styles.smallActionButton,
+                selectedRule.visible && styles.quickToggleActive,
+              ]}
+              onPress={() =>
+                patchElementRule(
+                  activeScreen,
+                  selectedElementId,
+                  {visible: !selectedRule.visible},
+                  activeCharacterVariant,
+                )
+              }>
+              <Text
+                style={[
+                  styles.smallActionText,
+                  selectedRule.visible && styles.quickToggleTextActive,
+                ]}>
+                표시 {selectedRule.visible ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.smallActionButton,
+                selectedRule.safeAreaAware && styles.quickToggleActive,
+              ]}
+              onPress={() =>
+                patchElementRule(
+                  activeScreen,
+                  selectedElementId,
+                  {safeAreaAware: !selectedRule.safeAreaAware},
+                  activeCharacterVariant,
+                )
+              }>
+              <Text
+                style={[
+                  styles.smallActionText,
+                  selectedRule.safeAreaAware && styles.quickToggleTextActive,
+                ]}>
+                안전 영역 {selectedRule.safeAreaAware ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </GamePanel>
+
+        <GamePanel>
           <Text style={styles.sectionTitle}>요소 선택</Text>
           <View style={styles.chipRow}>
             {VISUAL_ELEMENT_LABELS[activeScreen].map(option => (
@@ -1530,6 +1717,13 @@ const styles = StyleSheet.create({
     color: '#6f4e2a',
     fontSize: 12,
     fontWeight: '900',
+  },
+  quickToggleActive: {
+    backgroundColor: '#7f5a32',
+    borderColor: '#4f3118',
+  },
+  quickToggleTextActive: {
+    color: '#fff7ef',
   },
   inputRow: {
     flexDirection: 'row',

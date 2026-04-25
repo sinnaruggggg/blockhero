@@ -1,4 +1,9 @@
 import type { CharacterData } from '../stores/gameStore';
+import {
+  SKILL_EFFECT_BOOLEAN_FIELDS,
+  SKILL_EFFECT_FIELD_DEFINITIONS,
+  SKILL_EFFECT_NUMERIC_FIELDS,
+} from './skillEffectCatalog';
 
 export interface SkillEffectContext {
   mode?: 'level' | 'endless' | 'raid' | 'battle';
@@ -192,6 +197,76 @@ function getMagicTransformCellCount(points: number): number {
   }
 
   return 1;
+}
+
+function applyCreatorSkillBalance(
+  characterId: string,
+  effects: CharacterSkillEffects,
+): CharacterSkillEffects {
+  try {
+    const {getCachedCreatorManifest} = require('../services/creatorService') as {
+      getCachedCreatorManifest: () => {
+        balance?: {
+          skillEffects?: {
+            global?: {
+              numeric?: Partial<Record<string, number>>;
+              booleans?: Partial<Record<string, boolean>>;
+            };
+            characters?: Record<
+              string,
+              {
+                numeric?: Partial<Record<string, number>>;
+                booleans?: Partial<Record<string, boolean>>;
+              }
+            >;
+          };
+        };
+      };
+    };
+    const manifest = getCachedCreatorManifest?.();
+    const globalBalance = manifest?.balance?.skillEffects?.global;
+    const characterBalance =
+      manifest?.balance?.skillEffects?.characters?.[characterId];
+    const nextEffects: CharacterSkillEffects = {...effects};
+
+    SKILL_EFFECT_NUMERIC_FIELDS.forEach(field => {
+      const definition = SKILL_EFFECT_FIELD_DEFINITIONS.find(
+        entry => entry.key === field,
+      );
+      const neutralValue = Number(definition?.neutral ?? 0);
+      const currentValue = Number(nextEffects[field]);
+      if (!Number.isFinite(currentValue)) {
+        return;
+      }
+
+      const globalMultiplier = Number(globalBalance?.numeric?.[field] ?? 1);
+      const characterMultiplier = Number(
+        characterBalance?.numeric?.[field] ?? 1,
+      );
+      const nextValue =
+        neutralValue +
+        (currentValue - neutralValue) * globalMultiplier * characterMultiplier;
+
+      nextEffects[field] =
+        definition?.type === 'int'
+          ? Math.round(nextValue)
+          : nextValue;
+    });
+
+    SKILL_EFFECT_BOOLEAN_FIELDS.forEach(field => {
+      if (typeof characterBalance?.booleans?.[field] === 'boolean') {
+        nextEffects[field] = characterBalance.booleans[field];
+        return;
+      }
+      if (typeof globalBalance?.booleans?.[field] === 'boolean') {
+        nextEffects[field] = globalBalance.booleans[field];
+      }
+    });
+
+    return nextEffects;
+  } catch {
+    return effects;
+  }
 }
 
 export function getCharacterSkillEffects(
@@ -447,7 +522,7 @@ export function getCharacterSkillEffects(
       break;
   }
 
-  return effects;
+  return applyCreatorSkillBalance(characterId, effects);
 }
 
 export function applyDamageTakenReduction(

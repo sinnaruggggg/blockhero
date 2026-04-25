@@ -1,7 +1,15 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import GamePanel from '../components/GamePanel';
 import MenuScreenFrame from '../components/MenuScreenFrame';
+import {formatBlockWorldToolName} from '../game/blockWorldTools';
 import {
   fetchLeaderboard,
   fetchMyLeaderboardEntry,
@@ -9,6 +17,7 @@ import {
   type RankingMode,
   type RankingPeriod,
 } from '../services/rankingService';
+import {claimBlockWorldRankingReward} from '../stores/blockWorldToolStore';
 
 const PERIOD_TABS: Array<{value: RankingPeriod; label: string}> = [
   {value: 'daily', label: '일간'},
@@ -62,6 +71,7 @@ export default function RankingScreen({navigation}: any) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [myEntry, setMyEntry] = useState<LeaderboardEntry | null>(null);
   const [loading, setLoading] = useState(true);
+  const [claimingReward, setClaimingReward] = useState(false);
   const [errorText, setErrorText] = useState('');
 
   const loadLeaderboard = useCallback(async () => {
@@ -88,7 +98,7 @@ export default function RankingScreen({navigation}: any) {
   }, [mode, period]);
 
   useEffect(() => {
-    void loadLeaderboard();
+    loadLeaderboard();
   }, [loadLeaderboard]);
 
   const showMyPanel = useMemo(() => {
@@ -97,6 +107,34 @@ export default function RankingScreen({navigation}: any) {
     }
     return !entries.some(entry => entry.user_id === myEntry.user_id);
   }, [entries, myEntry]);
+
+  const handleClaimBlockWorldReward = useCallback(async () => {
+    if (!myEntry) {
+      return;
+    }
+
+    setClaimingReward(true);
+    try {
+      const result = await claimBlockWorldRankingReward({
+        mode,
+        period,
+        rank: myEntry.rank,
+      });
+      if (result.alreadyClaimed || !result.tool) {
+        Alert.alert('이미 받음', '이번 기간의 블록월드 보상은 이미 받았습니다.');
+        return;
+      }
+
+      Alert.alert(
+        '블록월드 보상 획득',
+        `${formatBlockWorldToolName(result.tool)}을(를) 획득했습니다.`,
+      );
+    } catch (error: any) {
+      Alert.alert('보상 오류', error?.message || '보상을 받을 수 없습니다.');
+    } finally {
+      setClaimingReward(false);
+    }
+  }, [mode, myEntry, period]);
 
   return (
     <MenuScreenFrame
@@ -138,6 +176,28 @@ export default function RankingScreen({navigation}: any) {
           })}
         </View>
       </GamePanel>
+
+      {!loading && myEntry ? (
+        <GamePanel>
+          <Text style={styles.sectionTitle}>블록월드 랭킹 보상</Text>
+          <Text style={styles.rewardDescription}>
+            현재 기간 내 순위 #{myEntry.rank} 기준으로 특별 삽/도끼/곡괭이 중
+            하나를 받습니다.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.82}
+            disabled={claimingReward}
+            onPress={handleClaimBlockWorldReward}
+            style={[
+              styles.rewardButton,
+              claimingReward && styles.rewardButtonDisabled,
+            ]}>
+            <Text style={styles.rewardButtonText}>
+              {claimingReward ? '지급 중...' : '보상 받기'}
+            </Text>
+          </TouchableOpacity>
+        </GamePanel>
+      ) : null}
 
       <GamePanel>
         <Text style={styles.sectionTitle}>상위 100명</Text>
@@ -186,9 +246,9 @@ export default function RankingScreen({navigation}: any) {
             <View
               style={[
                 styles.rankBadge,
-                {backgroundColor: '#7f5a3222', borderColor: '#7f5a32'},
+                styles.myRankBadge,
               ]}>
-              <Text style={[styles.rankText, {color: '#7f5a32'}]}>
+              <Text style={[styles.rankText, styles.myRankText]}>
                 #{myEntry.rank}
               </Text>
             </View>
@@ -267,6 +327,30 @@ const styles = StyleSheet.create({
   modeTextActive: {
     color: '#fff8ec',
   },
+  rewardDescription: {
+    color: '#876346',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  rewardButton: {
+    minHeight: 46,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#4f3118',
+    backgroundColor: '#7f5a32',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardButtonDisabled: {
+    opacity: 0.58,
+  },
+  rewardButtonText: {
+    color: '#fff8ec',
+    fontSize: 15,
+    fontWeight: '900',
+  },
   centerState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -308,9 +392,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
+  myRankBadge: {
+    backgroundColor: '#7f5a3222',
+    borderColor: '#7f5a32',
+  },
   rankText: {
     fontSize: 14,
     fontWeight: '900',
+  },
+  myRankText: {
+    color: '#7f5a32',
   },
   entryMain: {
     flex: 1,

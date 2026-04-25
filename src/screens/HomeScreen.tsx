@@ -32,6 +32,7 @@ import {
 } from 'react-native-sensors';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {fetchAnnouncements, claimPendingGrants} from '../services/adminSync';
+import {getPendingRequests} from '../services/friendService';
 import {
   getEconomyErrorCode,
   purchaseShopItem,
@@ -39,6 +40,12 @@ import {
 import {t} from '../i18n';
 import {
   loadGameData,
+  loadDailyStats,
+  loadMissionData,
+  loadAchievements,
+  loadEndlessStats,
+  loadLevelProgress,
+  getPlayerId,
   getSelectedCharacter,
   setSelectedCharacter,
   GameData,
@@ -48,6 +55,8 @@ import {
   HEART_REGEN_MS,
   INFINITE_HEARTS_VALUE,
   MAX_HEARTS,
+  ACHIEVEMENTS,
+  DAILY_MISSIONS,
   formatHeartStatus,
   getConfiguredMaxHearts,
 } from '../constants';
@@ -66,6 +75,8 @@ const IMG_BG = require('../assets/ui/background.jpg');
 const IMG_TITLE = require('../assets/ui/title.png');
 const IMG_PROFILE = require('../assets/ui/profile.png');
 const IMG_SETTINGS = require('../assets/ui/settings.png');
+const IMG_SHOP = require('../assets/ui/shop.png');
+const IMG_FRIENDS = require('../assets/ui/friends.png');
 const IMG_REWARD = require('../assets/ui/reward.png');
 const IMG_LEVEL = require('../assets/ui/level.png');
 const IMG_ENDLESS = require('../assets/ui/endless.png');
@@ -86,6 +97,55 @@ const CHARACTERS = CHARACTER_CLASSES.map(characterClass => ({
   emoji: characterClass.emoji,
   description: characterClass.description,
 }));
+
+type LobbyNoticeState = {
+  friends: boolean;
+  missions: boolean;
+  shop: boolean;
+};
+
+const EMPTY_LOBBY_NOTICES: LobbyNoticeState = {
+  friends: false,
+  missions: false,
+  shop: false,
+};
+
+function NoticeBadge({visible}: {visible: boolean}) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <View style={styles.noticeBadge}>
+      <Text style={styles.noticeBadgeText}>!</Text>
+    </View>
+  );
+}
+
+function LobbyShortcutButton({
+  image,
+  label,
+  onPress,
+  showNotice,
+}: {
+  image: any;
+  label: string;
+  onPress: () => void;
+  showNotice: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.84}
+      onPress={onPress}
+      style={styles.topShortcutButton}>
+      <Image source={image} style={styles.topShortcutIcon} resizeMode="contain" />
+      <Text numberOfLines={1} style={styles.topShortcutLabel}>
+        {label}
+      </Text>
+      <NoticeBadge visible={showNotice} />
+    </TouchableOpacity>
+  );
+}
 
 const CHARACTER_THEMES: Record<
   string,
@@ -137,6 +197,8 @@ export default function HomeScreen({navigation}: any) {
     content: string;
     imageUrl?: string | null;
   } | null>(null);
+  const [lobbyNotices, setLobbyNotices] =
+    useState<LobbyNoticeState>(EMPTY_LOBBY_NOTICES);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [showEndlessLoadoutModal, setShowEndlessLoadoutModal] = useState(false);
   const [selectedChar, setSelectedCharState] = useState<string | null>(null);
@@ -459,6 +521,67 @@ export default function HomeScreen({navigation}: any) {
     };
     hydrateCharacterRoster().catch(() => {});
 
+    const hydrateLobbyNotices = async () => {
+      try {
+        const [
+          loadedDailyStats,
+          loadedMissionData,
+          loadedAchievementData,
+          endlessStats,
+          levelProgress,
+        ] = await Promise.all([
+          loadDailyStats(),
+          loadMissionData(),
+          loadAchievements(),
+          loadEndlessStats(),
+          loadLevelProgress(),
+        ]);
+        const totalLevelClears = Object.values(levelProgress).filter(
+          progress => progress.cleared,
+        ).length;
+        const allStats: Record<string, number> = {
+          dailyGames: loadedDailyStats.games,
+          dailyScore: loadedDailyStats.score,
+          dailyLines: loadedDailyStats.lines,
+          dailyMaxCombo: loadedDailyStats.maxCombo,
+          dailyLevelClears: loadedDailyStats.levelClears,
+          totalLevelClears,
+          endlessHighScore: endlessStats.highScore,
+          totalLines: endlessStats.totalLines + loadedDailyStats.lines,
+          maxCombo: Math.max(endlessStats.maxCombo, loadedDailyStats.maxCombo),
+          totalGames: endlessStats.totalGames + loadedDailyStats.games,
+          endlessMaxLevel: endlessStats.maxLevel,
+        };
+        const hasMissionReward = DAILY_MISSIONS.some(mission => {
+          const currentValue = allStats[mission.stat] || 0;
+          return currentValue >= mission.target && !loadedMissionData.claimed[mission.id];
+        });
+        const hasAchievementReward = ACHIEVEMENTS.some(achievement => {
+          const currentValue = allStats[achievement.stat] || 0;
+          return (
+            currentValue >= achievement.target &&
+            !loadedAchievementData[achievement.id]
+          );
+        });
+        let hasFriendRequest = false;
+
+        try {
+          const playerId = await getPlayerId();
+          const {data: pendingRequests} = await getPendingRequests(playerId);
+          hasFriendRequest = pendingRequests.length > 0;
+        } catch {}
+
+        setLobbyNotices({
+          friends: hasFriendRequest,
+          missions: hasMissionReward || hasAchievementReward,
+          shop: false,
+        });
+      } catch {
+        setLobbyNotices(EMPTY_LOBBY_NOTICES);
+      }
+    };
+    hydrateLobbyNotices().catch(() => {});
+
     if (!pendingGrantsCheckedRef.current) {
       pendingGrantsCheckedRef.current = true;
       const claimGrants = async () => {
@@ -635,15 +758,50 @@ export default function HomeScreen({navigation}: any) {
         />
 
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-            <Image source={IMG_PROFILE} style={styles.topIcon} resizeMode="contain" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-            <Image source={IMG_SETTINGS} style={styles.topIcon} resizeMode="contain" />
-          </TouchableOpacity>
+          <View style={styles.topCluster}>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              onPress={() => navigation.navigate('Profile')}>
+              <Image source={IMG_PROFILE} style={styles.topIcon} resizeMode="contain" />
+            </TouchableOpacity>
+            <View style={styles.leftShortcutStack}>
+              <LobbyShortcutButton
+                image={IMG_FRIENDS}
+                label="친구"
+                onPress={() => navigation.navigate('Friends')}
+                showNotice={lobbyNotices.friends}
+              />
+            </View>
+          </View>
+
+          <View style={[styles.topCluster, styles.topClusterRight]}>
+            <TouchableOpacity
+              activeOpacity={0.84}
+              onPress={() => navigation.navigate('Settings')}>
+              <Image source={IMG_SETTINGS} style={styles.topIcon} resizeMode="contain" />
+            </TouchableOpacity>
+            <View style={styles.rightShortcutStack}>
+              <LobbyShortcutButton
+                image={IMG_SHOP}
+                label="상점"
+                onPress={() => navigation.navigate('Shop')}
+                showNotice={lobbyNotices.shop}
+              />
+              <LobbyShortcutButton
+                image={IMG_REWARD}
+                label="보상"
+                onPress={() => navigation.navigate('Missions')}
+                showNotice={lobbyNotices.missions}
+              />
+            </View>
+          </View>
         </View>
 
-        <Image source={IMG_TITLE} style={styles.titleImage} resizeMode="contain" />
+        <TouchableOpacity
+          activeOpacity={0.94}
+          onLongPress={() => navigation.navigate('HiddenBlockWorld')}>
+          <Image source={IMG_TITLE} style={styles.titleImage} resizeMode="contain" />
+        </TouchableOpacity>
 
         {announcement && (
           <TouchableOpacity
@@ -720,12 +878,7 @@ export default function HomeScreen({navigation}: any) {
           </Animated.View>
 
           <View style={styles.modeRow}>
-            <TouchableOpacity
-              style={styles.modeBtnWrapper}
-              onPress={() => navigation.navigate('Missions')}>
-              <Image source={IMG_REWARD} style={styles.modeIcon} resizeMode="contain" />
-              <Text style={styles.modeLabel}>보상</Text>
-            </TouchableOpacity>
+            <View style={styles.modeBtnPlaceholder} />
             <View style={styles.characterSpace} />
             <TouchableOpacity
               style={styles.modeBtnWrapper}
@@ -988,13 +1141,77 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: W * 0.035,
     paddingTop: H * 0.005,
+    zIndex: 30,
+  },
+  topCluster: {
+    position: 'relative',
+    width: TOP_ICON_SIZE * 1.1,
+  },
+  topClusterRight: {
+    alignItems: 'flex-end',
   },
   topIcon: {
     width: TOP_ICON_SIZE,
     height: TOP_ICON_SIZE,
+  },
+  leftShortcutStack: {
+    position: 'absolute',
+    left: 0,
+    top: TOP_ICON_SIZE + 4,
+    gap: 5,
+  },
+  rightShortcutStack: {
+    position: 'absolute',
+    right: 0,
+    top: TOP_ICON_SIZE + 4,
+    gap: 5,
+  },
+  topShortcutButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: TOP_ICON_SIZE * 0.92,
+    minHeight: TOP_ICON_SIZE * 0.82,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 244, 222, 0.82)',
+    borderColor: 'rgba(118, 73, 34, 0.28)',
+    borderWidth: 1,
+    shadowColor: '#2b1608',
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 2,
+    paddingVertical: 3,
+  },
+  topShortcutIcon: {
+    width: TOP_ICON_SIZE * 0.54,
+    height: TOP_ICON_SIZE * 0.54,
+  },
+  topShortcutLabel: {
+    color: '#583820',
+    fontSize: 9,
+    fontWeight: '900',
+    marginTop: -1,
+  },
+  noticeBadge: {
+    position: 'absolute',
+    right: -2,
+    top: -3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ef1f2d',
+    borderWidth: 1,
+    borderColor: '#ffffff',
+  },
+  noticeBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+    lineHeight: 12,
   },
   titleImage: {
     width: W * 0.9,
@@ -1057,6 +1274,10 @@ const styles = StyleSheet.create({
     height: MODE_BTN_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modeBtnPlaceholder: {
+    width: MODE_BTN_SIZE,
+    height: MODE_BTN_SIZE,
   },
   modeIcon: {
     width: '100%',

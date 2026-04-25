@@ -44,7 +44,6 @@ import {
   createDefaultStartingItemLoadout,
   isActiveItemKey,
   normalizeStartingItemLoadout,
-  type ActiveItemKey,
   type StartingItemLoadoutSlot,
 } from '../constants/itemCatalog';
 import {
@@ -53,6 +52,10 @@ import {
   shouldResetLevelModeBreakthroughOnChallenge,
   type LevelModeBreakthroughState,
 } from '../game/levelModeBreakthrough';
+import {
+  maybeGrantRareBlockWorldTool,
+  type BlockWorldToolInstance,
+} from './blockWorldToolStore';
 
 // Types
 export interface GameData {
@@ -753,6 +756,7 @@ export interface SpecialBlockRewardResult {
   diamondsGained: number;
   itemsCollected: Array<keyof GameData['items']>;
   itemsSkipped: Array<keyof GameData['items']>;
+  blockWorldToolFound: BlockWorldToolInstance | null;
 }
 
 export async function collectSpecialBlockRewards(
@@ -790,11 +794,17 @@ export async function collectSpecialBlockRewards(
   }
 
   await save('gameData', updated);
+  const blockWorldToolFound =
+    gemsFound > 0 || itemsCollected.length > 0
+      ? await maybeGrantRareBlockWorldTool()
+      : null;
+
   return {
     data: updated,
     diamondsGained: gemsFound,
     itemsCollected,
     itemsSkipped,
+    blockWorldToolFound,
   };
 }
 

@@ -6,6 +6,7 @@ export interface GameSettings {
   bgm: boolean;
   sfx: boolean;
   vibration: boolean;
+  screenShake: boolean;
   notification: boolean;
   skillTriggerNoticeMode: SkillTriggerNoticeMode;
 }
@@ -16,6 +17,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   bgm: true,
   sfx: true,
   vibration: true,
+  screenShake: true,
   notification: true,
   skillTriggerNoticeMode: 'triggered_only',
 };

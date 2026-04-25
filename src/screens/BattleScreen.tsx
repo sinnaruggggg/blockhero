@@ -51,7 +51,7 @@ import {
   getSelectedCharacter,
   loadCharacterData,
 } from '../stores/gameStore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {loadGameSettings} from '../stores/gameSettings';
 import { supabase } from '../services/supabase';
 import { playGameBgm, stopGameBgm } from '../services/gameAudio';
 import { playGameSfx } from '../services/gameSfx';
@@ -400,15 +400,14 @@ function MissileEffect({
 function useShake() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const vibrationRef = useRef(true);
+  const screenShakeRef = useRef(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const settings = await AsyncStorage.getItem('gameSettings');
-        if (settings) {
-          const parsed = JSON.parse(settings);
-          if (parsed.vibration === false) vibrationRef.current = false;
-        }
+        const settings = await loadGameSettings();
+        vibrationRef.current = settings.vibration;
+        screenShakeRef.current = settings.screenShake;
       } catch {}
     })();
   }, []);
@@ -416,6 +415,9 @@ function useShake() {
   const triggerShake = useCallback((withVibration = true) => {
     if (withVibration && vibrationRef.current) {
       Vibration.vibrate([0, 100, 50, 100]);
+    }
+    if (!screenShakeRef.current) {
+      return;
     }
     Animated.sequence([
       Animated.timing(shakeAnim, {

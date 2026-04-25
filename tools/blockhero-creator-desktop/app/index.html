@@ -597,6 +597,41 @@
                   </label>
                 </section>
 
+                <section class="panel compact-panel balance-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>전투 밸런스</h2>
+                      <p>JSON을 직접 만지지 않고 몬스터, 보스, 캐릭터, 스킬 수치를 조정합니다.</p>
+                    </div>
+                  </div>
+
+                  <div id="balanceCategoryTabs" class="segmented-control balance-tabs">
+                    <button class="active" data-balance-category="monster">몬스터</button>
+                    <button data-balance-category="boss">보스</button>
+                    <button data-balance-category="character">캐릭터</button>
+                    <button data-balance-category="skill">스킬</button>
+                  </div>
+
+                  <div class="balance-bulk-box">
+                    <label>
+                      <span>그룹 범위</span>
+                      <select id="balanceScope"></select>
+                    </label>
+                    <label>
+                      <span>퍼센트 변경</span>
+                      <input id="balancePercent" type="number" step="1" value="10" />
+                    </label>
+                    <div>
+                      <strong class="mini-title">적용 수치</strong>
+                      <div id="balanceFields" class="checkbox-grid"></div>
+                    </div>
+                    <small id="balancePreview" class="inline-note">적용 대상을 선택하세요.</small>
+                    <button id="balanceApplyButton" class="primary">선택 그룹에 퍼센트 적용</button>
+                  </div>
+
+                  <div id="balanceList" class="balance-list"></div>
+                </section>
+
                 <section class="panel compact-panel">
                   <div class="panel-header compact-header">
                     <div>
@@ -615,6 +650,18 @@
               </aside>
 
               <main class="editor">
+                <section class="panel hero-panel compact-panel">
+                  <div class="panel-header compact-header">
+                    <div>
+                      <h2>전투 밸런스 직접 입력</h2>
+                      <p>왼쪽 전투 밸런스 목록에서 항목을 고르면 여기에서 체력, 공격력, 공격 주기, 성장값, 스킬 배율을 바로 입력합니다.</p>
+                    </div>
+                  </div>
+                  <div id="balanceEditor" class="editor-form empty-state">
+                    <p>전투 밸런스 목록에서 항목을 선택하세요.</p>
+                  </div>
+                </section>
+
                 <section class="panel hero-panel compact-panel">
                   <div class="panel-header compact-header">
                     <div>

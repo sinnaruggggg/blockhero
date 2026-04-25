@@ -715,8 +715,48 @@ export function getCharacterClass(id: string): CharacterClass | undefined {
   return CHARACTER_CLASSES.find(character => character.id === id);
 }
 
+function getBalancedCharacterStats(characterId: string) {
+  const fallback = getCharacterClass(characterId);
+  if (!fallback) {
+    return null;
+  }
+
+  try {
+    const {getCachedCreatorManifest} = require('../services/creatorService') as {
+      getCachedCreatorManifest: () => {
+        balance?: {
+          characters?: Record<
+            string,
+            {
+              baseAtk?: number;
+              atkPerLevel?: number;
+              baseHp?: number;
+              hpPerLevel?: number;
+            }
+          >;
+        };
+      };
+    };
+    const manifest = getCachedCreatorManifest?.();
+    const override = manifest?.balance?.characters?.[characterId];
+    if (!override) {
+      return fallback;
+    }
+
+    return {
+      ...fallback,
+      baseAtk: override.baseAtk ?? fallback.baseAtk,
+      atkPerLevel: override.atkPerLevel ?? fallback.atkPerLevel,
+      baseHp: override.baseHp ?? fallback.baseHp,
+      hpPerLevel: override.hpPerLevel ?? fallback.hpPerLevel,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 export function getCharacterAtk(characterId: string, level: number): number {
-  const characterClass = getCharacterClass(characterId);
+  const characterClass = getBalancedCharacterStats(characterId);
   if (!characterClass) {
     return 10;
   }
@@ -725,7 +765,7 @@ export function getCharacterAtk(characterId: string, level: number): number {
 }
 
 export function getCharacterHp(characterId: string, level: number): number {
-  const characterClass = getCharacterClass(characterId);
+  const characterClass = getBalancedCharacterStats(characterId);
   if (!characterClass) {
     return 200;
   }

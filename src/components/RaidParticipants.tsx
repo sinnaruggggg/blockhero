@@ -6,6 +6,16 @@ export interface RaidParticipant {
   nickname: string;
   totalDamage: number;
   rank: number;
+  // RAID_FIX: raid member rendering can now share the same participant shape
+  // across lobby, battle, spectator and result views.
+  avatarIcon?: string;
+  role?: string;
+  isHost?: boolean;
+  isReady?: boolean;
+  isAlive?: boolean;
+  currentHp?: number;
+  maxHp?: number;
+  joinedAt?: string;
 }
 
 interface RaidParticipantsProps {

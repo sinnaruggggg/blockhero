@@ -665,6 +665,129 @@ button.small {
   gap: 8px;
 }
 
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.segmented-control button {
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(26, 40, 70, 0.8);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.segmented-control button.active {
+  background: linear-gradient(180deg, rgba(38, 83, 155, 0.96), rgba(24, 56, 108, 0.96));
+  border-color: rgba(133, 198, 255, 0.42);
+}
+
+.balance-panel {
+  gap: 10px;
+}
+
+.balance-tabs,
+.balance-bulk-box,
+.balance-list {
+  margin-top: 8px;
+}
+
+.balance-bulk-box {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(9, 16, 31, 0.54);
+}
+
+.mini-title {
+  display: block;
+  margin-bottom: 6px;
+  color: #cbd8eb;
+  font-size: 11px;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.58);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.checkbox-item input {
+  width: auto;
+  min-height: auto;
+  margin: 0;
+}
+
+.balance-list {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.balance-item {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  min-height: 0;
+  padding: 9px 10px;
+  border-radius: 12px;
+  text-align: left;
+  background: rgba(15, 23, 42, 0.62);
+  color: var(--text);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.balance-item.active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.38);
+}
+
+.balance-item strong {
+  font-size: 11px;
+}
+
+.balance-item span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.balance-editor-note {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.skill-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .tree-group {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.12);
@@ -958,11 +1081,17 @@ input[type="range"] {
   .form-grid.two,
   .field-grid,
   .field-grid.three,
+  .skill-balance-grid,
   .compact-toggle-grid,
   .nudge-grid,
   .history-grid,
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .segmented-control,
+  .checkbox-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .topbar-tabs {

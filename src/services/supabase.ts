@@ -34,6 +34,10 @@ export async function getCurrentUserId(): Promise<string | null> {
   return cachedSessionUserId;
 }
 
+export function primeCurrentUserIdCache(userId: string | null) {
+  cachedSessionUserId = userId;
+}
+
 // Get profile
 export async function getProfile(userId: string) {
   return supabase.from('profiles').select('*').eq('id', userId).single();

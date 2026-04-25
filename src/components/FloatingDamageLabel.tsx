@@ -6,6 +6,7 @@ interface FloatingDamageLabelProps {
   stackIndex?: number;
   baseTop?: number;
   stackGap?: number;
+  variant?: 'player' | 'summon';
 }
 
 export default function FloatingDamageLabel({
@@ -13,6 +14,7 @@ export default function FloatingDamageLabel({
   stackIndex = 0,
   baseTop = 0,
   stackGap = 16,
+  variant = 'player',
 }: FloatingDamageLabelProps) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -51,6 +53,7 @@ export default function FloatingDamageLabel({
       pointerEvents="none"
       style={[
         styles.damageFlash,
+        variant === 'summon' && styles.damageFlashSummon,
         {
           top: baseTop - stackIndex * stackGap,
           opacity,
@@ -78,6 +81,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 5,
     elevation: 12,
+  },
+  damageFlashSummon: {
+    // RAID_FIX: summon damage is shown separately from player damage.
+    backgroundColor: 'rgba(37,99,235,0.94)',
   },
   damageFlashText: {
     color: '#fff',

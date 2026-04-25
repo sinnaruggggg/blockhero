@@ -82,6 +82,7 @@ export default function SettingsScreen({navigation}: any) {
   const [bgmEnabled, setBgmEnabled] = useState(true);
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [screenShakeEnabled, setScreenShakeEnabled] = useState(true);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const [skillNoticeMode, setSkillNoticeMode] =
     useState<SkillTriggerNoticeMode>('triggered_only');
@@ -103,6 +104,7 @@ export default function SettingsScreen({navigation}: any) {
       setBgmEnabled(settings.bgm);
       setSfxEnabled(settings.sfx);
       setVibrationEnabled(settings.vibration);
+      setScreenShakeEnabled(settings.screenShake);
       setNotificationEnabled(settings.notification);
       setSkillNoticeMode(settings.skillTriggerNoticeMode);
       setVisualConfigVersion(getCachedVisualConfigManifest().version);
@@ -110,7 +112,7 @@ export default function SettingsScreen({navigation}: any) {
   }, []);
 
   const handleToggleSetting = async (
-    key: 'bgm' | 'sfx' | 'vibration' | 'notification',
+    key: 'bgm' | 'sfx' | 'vibration' | 'screenShake' | 'notification',
     value: boolean,
   ) => {
     await saveGameSettings({[key]: value});
@@ -262,6 +264,14 @@ export default function SettingsScreen({navigation}: any) {
           onChange={async value => {
             setVibrationEnabled(value);
             await handleToggleSetting('vibration', value);
+          }}
+        />
+        <ToggleRow
+          label="화면 떨림"
+          value={screenShakeEnabled}
+          onChange={async value => {
+            setScreenShakeEnabled(value);
+            await handleToggleSetting('screenShake', value);
           }}
         />
       </GamePanel>

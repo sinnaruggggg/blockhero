@@ -294,6 +294,20 @@ export function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function createElementRules(screenId) {
+  const rules = Object.fromEntries(
+    ELEMENT_DEFS[screenId].map(({ id }) => [id, clone(DEFAULT_RULE)]),
+  );
+  if (screenId === 'raidNormal' || screenId === 'raidBoss') {
+    // RAID_FIX: match the app's default raid layer order; the PC editor's
+    // "겹침 순서" field can still adjust these values.
+    rules.board.zIndex = -20;
+    rules.skill_effect.zIndex = 20;
+    rules.combo_gauge.zIndex = 40;
+  }
+  return rules;
+}
+
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -351,31 +365,21 @@ export function createDefaultVisualManifest() {
     studioSnapshots: {},
     screens: {
       level: {
-        elements: Object.fromEntries(
-          ELEMENT_DEFS.level.map(({ id }) => [id, clone(DEFAULT_RULE)]),
-        ),
+        elements: createElementRules('level'),
         backgrounds: { byWorld: {}, byLevel: {} },
       },
       endless: {
-        elements: Object.fromEntries(
-          ELEMENT_DEFS.endless.map(({ id }) => [id, clone(DEFAULT_RULE)]),
-        ),
+        elements: createElementRules('endless'),
       },
       battle: {
-        elements: Object.fromEntries(
-          ELEMENT_DEFS.battle.map(({ id }) => [id, clone(DEFAULT_RULE)]),
-        ),
+        elements: createElementRules('battle'),
       },
       raidNormal: {
-        elements: Object.fromEntries(
-          ELEMENT_DEFS.raidNormal.map(({ id }) => [id, clone(DEFAULT_RULE)]),
-        ),
+        elements: createElementRules('raidNormal'),
         backgrounds: { byBossStage: {} },
       },
       raidBoss: {
-        elements: Object.fromEntries(
-          ELEMENT_DEFS.raidBoss.map(({ id }) => [id, clone(DEFAULT_RULE)]),
-        ),
+        elements: createElementRules('raidBoss'),
         backgrounds: { byBossStage: {} },
       },
     },

@@ -495,6 +495,16 @@ function createRules<T extends string>(ids: T[]): Record<T, VisualElementRule> {
   }, {} as Record<T, VisualElementRule>);
 }
 
+function createRaidRules(ids: RaidElementId[]): Record<RaidElementId, VisualElementRule> {
+  const rules = createRules<RaidElementId>(ids);
+  // RAID_FIX: raid board starts as the lowest layer, while combo and skill
+  // overlays stay visible and remain adjustable in PC edit mode via zIndex.
+  rules.board.zIndex = -20;
+  rules.skill_effect.zIndex = 20;
+  rules.combo_gauge.zIndex = 40;
+  return rules;
+}
+
 export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
   version: 0,
   referenceViewport: DEFAULT_VISUAL_REFERENCE_VIEWPORT,
@@ -546,7 +556,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
       characterElements: {},
     },
     raidNormal: {
-      elements: createRules<RaidElementId>([
+      elements: createRaidRules([
         'top_panel',
         'skill_bar',
         'info_bar',
@@ -562,7 +572,7 @@ export const DEFAULT_VISUAL_CONFIG_MANIFEST: VisualConfigManifest = {
       },
     },
     raidBoss: {
-      elements: createRules<RaidElementId>([
+      elements: createRaidRules([
         'top_panel',
         'skill_bar',
         'info_bar',

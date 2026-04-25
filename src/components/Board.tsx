@@ -433,17 +433,7 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
                 />
                 {isClearGuide && (
                   <View
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      borderRadius: 3,
-                      backgroundColor: 'rgba(255,255,255,0.15)',
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.3)',
-                    }}
+                    style={styles.clearGuideOverlay}
                   />
                 )}
               </View>
@@ -523,6 +513,13 @@ const styles = StyleSheet.create({
   placementCellFlash: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255,255,220,0.72)',
+  },
+  clearGuideOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 214, 80, 0.62)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 244, 170, 0.95)',
   },
   corner: {
     position: 'absolute',

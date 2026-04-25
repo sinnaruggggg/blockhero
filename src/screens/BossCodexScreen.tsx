@@ -53,6 +53,17 @@ export default function BossCodexScreen({navigation}: any) {
           <Text style={styles.progressText}>{defeatedCount} / 10</Text>
         </View>
 
+        <TouchableOpacity
+          activeOpacity={0.84}
+          style={styles.skinEntry}
+          onPress={() => navigation.navigate('SkinCollection')}>
+          <View>
+            <Text style={styles.skinEntryTitle}>스킨</Text>
+            <Text style={styles.skinEntryText}>수집한 스킨을 도감 안에서 확인합니다.</Text>
+          </View>
+          <Text style={styles.skinEntryAction}>보기</Text>
+        </TouchableOpacity>
+
         <View style={styles.bossGrid}>
           {RAID_BOSSES.map(boss => {
             const entry = codex[boss.stage];
@@ -156,6 +167,26 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
   },
+  skinEntry: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(30,27,75,0.9)',
+    borderColor: 'rgba(251,191,36,0.55)',
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  skinEntryTitle: {color: '#fbbf24', fontSize: 15, fontWeight: '900'},
+  skinEntryText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  skinEntryAction: {color: '#fff', fontSize: 13, fontWeight: '900'},
   bossGrid: {flexDirection: 'row', flexWrap: 'wrap', gap: 6},
   bossCard: {
     alignItems: 'center',

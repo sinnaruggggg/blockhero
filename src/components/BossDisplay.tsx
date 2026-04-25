@@ -91,6 +91,7 @@ interface BossDisplayProps {
   expandedStandings?: boolean;
   onToggleStandings?: () => void;
   damageHits?: FloatingDamageHit[];
+  summonDamageHits?: FloatingDamageHit[];
   activeDamageHit?: FloatingDamageHit | null;
   onClearActiveDamageHit?: (hitId: number) => void;
   overlay?: React.ReactNode;
@@ -133,6 +134,7 @@ export default function BossDisplay({
   expandedStandings = false,
   onToggleStandings,
   damageHits = [],
+  summonDamageHits = [],
   activeDamageHit = null,
   onClearActiveDamageHit,
   overlay,
@@ -205,6 +207,19 @@ export default function BossDisplay({
               />
             )}
             <View pointerEvents="none" style={styles.damageHost}>
+              {summonDamageHits
+                .slice()
+                .reverse()
+                .map((hit, index) => (
+                  <FloatingDamageLabel
+                    key={`boss-summon-damage-${hit.id}`}
+                    damage={hit.damage}
+                    stackIndex={index}
+                    baseTop={34}
+                    stackGap={22}
+                    variant="summon"
+                  />
+                ))}
               {damageHits
                 .slice()
                 .reverse()

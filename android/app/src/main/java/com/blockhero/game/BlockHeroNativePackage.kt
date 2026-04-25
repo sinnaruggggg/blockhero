@@ -7,10 +7,17 @@ import com.facebook.react.uimanager.ViewManager
 
 class BlockHeroNativePackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-    return listOf(PlacementSoundModule(reactContext))
+    return listOf(
+      PlacementSoundModule(reactContext),
+      AppModeModule(reactContext),
+      ScreenOrientationModule(reactContext),
+    )
   }
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
-    return listOf(BlockPlacementVfxManager())
+    return listOf(
+      BlockPlacementVfxManager(),
+      VoxelWorldManager(),
+    )
   }
 }

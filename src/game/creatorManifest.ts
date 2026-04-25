@@ -7,6 +7,7 @@ import {
   WORLDS,
   type LevelDef,
 } from '../constants';
+import {CHARACTER_CLASSES} from '../constants/characters';
 import {
   RAID_BOSSES,
   getBossRaidMaxHp,
@@ -19,6 +20,12 @@ import {
   type EnemyTier,
 } from './battleBalance';
 import { getLevelClearRewards } from './levelProgress';
+import {
+  SKILL_EFFECT_BOOLEAN_FIELDS,
+  SKILL_EFFECT_NUMERIC_FIELDS,
+  type SkillEffectBooleanField,
+  type SkillEffectNumericField,
+} from './skillEffectCatalog';
 
 export type CreatorRaidType = 'normal' | 'boss';
 export type CreatorGoalType = 'defeat_enemy';
@@ -113,6 +120,37 @@ export type CreatorRaidConfig = {
   notes?: string;
 };
 
+export type CreatorCharacterBalanceConfig = {
+  id: string;
+  name: string;
+  baseAtk: number;
+  atkPerLevel: number;
+  baseHp: number;
+  hpPerLevel: number;
+  notes?: string;
+};
+
+export type CreatorSkillNumericBalanceConfig = Partial<
+  Record<SkillEffectNumericField, number>
+>;
+
+export type CreatorSkillBooleanBalanceConfig = Partial<
+  Record<SkillEffectBooleanField, boolean>
+>;
+
+export type CreatorSkillBalanceConfig = {
+  numeric: CreatorSkillNumericBalanceConfig;
+  booleans: CreatorSkillBooleanBalanceConfig;
+};
+
+export type CreatorBalanceConfig = {
+  characters: Record<string, CreatorCharacterBalanceConfig>;
+  skillEffects: {
+    global: CreatorSkillBalanceConfig;
+    characters: Record<string, CreatorSkillBalanceConfig>;
+  };
+};
+
 export type CreatorManifest = {
   version: number;
   levels: Record<string, CreatorLevelConfig>;
@@ -121,6 +159,7 @@ export type CreatorManifest = {
     boss: Record<string, CreatorRaidConfig>;
   };
   encounters: Record<string, CreatorEncounterTemplate>;
+  balance: CreatorBalanceConfig;
   meta: {
     generatedAt: string;
     seededFromCode: boolean;
@@ -176,6 +215,11 @@ export const DEFAULT_CREATOR_BACKGROUND_RULE: CreatorBackgroundRule = {
   removeImage: false,
 };
 
+export const DEFAULT_CREATOR_SKILL_BALANCE_CONFIG: CreatorSkillBalanceConfig = {
+  numeric: {},
+  booleans: {},
+};
+
 function cloneBackgroundRule(
   value: Partial<CreatorBackgroundRule> | null | undefined,
 ): CreatorBackgroundRule {
@@ -211,6 +255,46 @@ function buildLevelConfigId(levelId: number) {
 
 function buildRaidConfigId(raidType: CreatorRaidType, stage: number) {
   return `${raidType}_${stage}`;
+}
+
+function createDefaultCreatorSkillBalanceConfig(): CreatorSkillBalanceConfig {
+  return {
+    numeric: {},
+    booleans: {},
+  };
+}
+
+function createDefaultCharacterBalanceConfig(): Record<
+  string,
+  CreatorCharacterBalanceConfig
+> {
+  return CHARACTER_CLASSES.reduce(
+    (acc, characterClass) => {
+      acc[characterClass.id] = {
+        id: characterClass.id,
+        name: characterClass.name,
+        baseAtk: characterClass.baseAtk,
+        atkPerLevel: characterClass.atkPerLevel,
+        baseHp: characterClass.baseHp,
+        hpPerLevel: characterClass.hpPerLevel,
+      };
+      return acc;
+    },
+    {} as Record<string, CreatorCharacterBalanceConfig>,
+  );
+}
+
+function createDefaultCharacterSkillBalanceConfig(): Record<
+  string,
+  CreatorSkillBalanceConfig
+> {
+  return CHARACTER_CLASSES.reduce(
+    (acc, characterClass) => {
+      acc[characterClass.id] = createDefaultCreatorSkillBalanceConfig();
+      return acc;
+    },
+    {} as Record<string, CreatorSkillBalanceConfig>,
+  );
 }
 
 function buildDefaultLevelEntry(level: LevelDef): {
@@ -340,6 +424,13 @@ export function buildDefaultCreatorManifest(): CreatorManifest {
       boss: {},
     },
     encounters: {},
+    balance: {
+      characters: createDefaultCharacterBalanceConfig(),
+      skillEffects: {
+        global: createDefaultCreatorSkillBalanceConfig(),
+        characters: createDefaultCharacterSkillBalanceConfig(),
+      },
+    },
     meta: {
       generatedAt: new Date(0).toISOString(),
       seededFromCode: true,
@@ -664,6 +755,66 @@ function sanitizeRaidConfig(
   };
 }
 
+function sanitizeCharacterBalanceConfig(
+  fallback: CreatorCharacterBalanceConfig,
+  value: Partial<CreatorCharacterBalanceConfig> | null | undefined,
+): CreatorCharacterBalanceConfig {
+  const merged = {
+    ...fallback,
+    ...(value ?? {}),
+  };
+
+  return {
+    ...fallback,
+    ...merged,
+    id: fallback.id,
+    name:
+      typeof merged.name === 'string' && merged.name.trim().length > 0
+        ? merged.name.trim()
+        : fallback.name,
+    baseAtk: Math.max(1, Math.round(Number(merged.baseAtk) || fallback.baseAtk)),
+    atkPerLevel: Math.max(
+      0,
+      Math.round(Number(merged.atkPerLevel) || fallback.atkPerLevel),
+    ),
+    baseHp: Math.max(1, Math.round(Number(merged.baseHp) || fallback.baseHp)),
+    hpPerLevel: Math.max(
+      0,
+      Math.round(Number(merged.hpPerLevel) || fallback.hpPerLevel),
+    ),
+    notes:
+      typeof merged.notes === 'string' && merged.notes.trim().length > 0
+        ? merged.notes.trim()
+        : fallback.notes,
+  };
+}
+
+function sanitizeCreatorSkillBalanceConfig(
+  value: Partial<CreatorSkillBalanceConfig> | null | undefined,
+): CreatorSkillBalanceConfig {
+  const numeric: CreatorSkillNumericBalanceConfig = {};
+  const booleans: CreatorSkillBooleanBalanceConfig = {};
+
+  SKILL_EFFECT_NUMERIC_FIELDS.forEach(field => {
+    const nextValue = value?.numeric?.[field];
+    if (typeof nextValue === 'number' && Number.isFinite(nextValue)) {
+      numeric[field] = Math.max(0, Math.min(10, nextValue));
+    }
+  });
+
+  SKILL_EFFECT_BOOLEAN_FIELDS.forEach(field => {
+    const nextValue = value?.booleans?.[field];
+    if (typeof nextValue === 'boolean') {
+      booleans[field] = nextValue;
+    }
+  });
+
+  return {
+    numeric,
+    booleans,
+  };
+}
+
 export function sanitizeCreatorManifest(
   input?: Partial<CreatorManifest> | null,
 ): CreatorManifest {
@@ -678,6 +829,15 @@ export function sanitizeCreatorManifest(
       boss: {},
     },
     encounters: {},
+    balance: {
+      characters: {},
+      skillEffects: {
+        global: sanitizeCreatorSkillBalanceConfig(
+          value.balance?.skillEffects?.global,
+        ),
+        characters: {},
+      },
+    },
     meta: {
       generatedAt:
         typeof value.meta?.generatedAt === 'string' &&
@@ -717,6 +877,21 @@ export function sanitizeCreatorManifest(
   Object.entries(fallback.raids.boss).forEach(([key, config]) => {
     next.raids.boss[key] = sanitizeRaidConfig(config, value.raids?.boss?.[key]);
   });
+
+  Object.entries(fallback.balance.characters).forEach(([key, config]) => {
+    next.balance.characters[key] = sanitizeCharacterBalanceConfig(
+      config,
+      value.balance?.characters?.[key],
+    );
+  });
+
+  Object.entries(fallback.balance.skillEffects.characters).forEach(
+    ([key, config]) => {
+      next.balance.skillEffects.characters[key] = sanitizeCreatorSkillBalanceConfig(
+        value.balance?.skillEffects?.characters?.[key] ?? config,
+      );
+    },
+  );
 
   return next;
 }
@@ -766,6 +941,26 @@ export function getCreatorEncounter(
   }
 
   return manifest.encounters[encounterId] ?? null;
+}
+
+export function getCreatorCharacterBalance(
+  manifest: CreatorManifest,
+  characterId: string,
+) {
+  return manifest.balance.characters[characterId] ?? null;
+}
+
+export function getCreatorSkillBalance(
+  manifest: CreatorManifest,
+  characterId: string | null,
+) {
+  return {
+    global: manifest.balance.skillEffects.global,
+    character: characterId
+      ? manifest.balance.skillEffects.characters[characterId] ??
+        DEFAULT_CREATOR_SKILL_BALANCE_CONFIG
+      : DEFAULT_CREATOR_SKILL_BALANCE_CONFIG,
+  };
 }
 
 function applyEncounterOverrides(

@@ -39,10 +39,12 @@ import { getAdminStatus } from '../services/adminSync';
 import { updatePresence } from '../services/friendService';
 import AdminScreen from '../screens/AdminScreen';
 import BattleScreen from '../screens/BattleScreen';
+import BlockWorldBagScreen from '../screens/BlockWorldBagScreen';
 import BossCodexScreen from '../screens/BossCodexScreen';
 import EndlessScreen from '../screens/EndlessScreen';
 import FriendChatScreen from '../screens/FriendChatScreen';
 import FriendsScreen from '../screens/FriendsScreen';
+import HiddenBlockWorldScreen from '../screens/HiddenBlockWorldScreen';
 import HomeScreen from '../screens/HomeScreen';
 import IntroScreen from '../screens/IntroScreen';
 import KnightSpriteTunerScreen from '../screens/KnightSpriteTunerScreen';
@@ -60,6 +62,13 @@ import SingleGameScreen from '../screens/SingleGameScreen';
 import SkillTreeScreen from '../screens/SkillTreeScreen';
 import SkinCollectionScreen from '../screens/SkinCollectionScreen';
 import UiStudioScreen from '../screens/UiStudioScreen';
+import AdminAppNavigator from './AdminAppNavigator';
+import {
+  getAdminAutoSessionSeed,
+  getRuntimeAppMode,
+} from '../services/appMode';
+import {resetAdminStatusCache} from '../services/adminSync';
+import {primeCurrentUserIdCache} from '../services/supabase';
 
 const Stack = createNativeStackNavigator();
 
@@ -75,6 +84,8 @@ const UPDATE_CHECK_DELAY_MS = 1200;
 installGameAlertBridge();
 
 export default function AppNavigator() {
+  const runtimeAppMode = getRuntimeAppMode();
+  const adminAutoSessionSeed = getAdminAutoSessionSeed();
   const [appState, setAppState] = useState<AppState>('intro');
   const [introReadyToExit, setIntroReadyToExit] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
@@ -273,13 +284,50 @@ export default function AppNavigator() {
     }
   }, [preloadHomeEntryData]);
 
+  const restoreAdminAutoSessionIfNeeded = useCallback(async () => {
+    if (runtimeAppMode !== 'admin' || !adminAutoSessionSeed) {
+      return false;
+    }
+
+    const {
+      data: {session: existingSession},
+    } = await supabase.auth.getSession();
+
+    if (existingSession?.user) {
+      return true;
+    }
+
+    const {data, error} = await supabase.auth.setSession({
+      access_token: adminAutoSessionSeed.accessToken,
+      refresh_token: adminAutoSessionSeed.refreshToken,
+    });
+
+    if (error || !data.session?.user) {
+      console.warn('Admin auto session restore failed:', error);
+      return false;
+    }
+
+    primeCurrentUserIdCache(data.session.user.id);
+    resetAdminStatusCache();
+    void registerSession(data.session.user.id);
+    return true;
+  }, [adminAutoSessionSeed, registerSession, runtimeAppMode]);
+
   const checkAuth = useCallback(
     async ({
       blockOnBootstrap = false,
     }: { blockOnBootstrap?: boolean } = {}) => {
-      const {
-        data: { session },
+      let {
+        data: {session},
       } = await supabase.auth.getSession();
+
+      if (!session?.user && runtimeAppMode === 'admin') {
+        const restored = await restoreAdminAutoSessionIfNeeded();
+        if (restored) {
+          const restoredSessionResult = await supabase.auth.getSession();
+          session = restoredSessionResult.data.session;
+        }
+      }
 
       if (session?.user) {
         void registerSession(session.user.id);
@@ -304,7 +352,9 @@ export default function AppNavigator() {
     },
     [
       registerSession,
+      restoreAdminAutoSessionIfNeeded,
       runStartupBootstrap,
+      runtimeAppMode,
       scheduleUpdateCheck,
       setOfflinePresence,
     ],
@@ -320,6 +370,10 @@ export default function AppNavigator() {
     void (async () => {
       let hasSessionUser = false;
       try {
+        if (runtimeAppMode === 'admin') {
+          await restoreAdminAutoSessionIfNeeded();
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -349,7 +403,9 @@ export default function AppNavigator() {
   }, [
     appState,
     registerSession,
+    restoreAdminAutoSessionIfNeeded,
     runStartupBootstrap,
+    runtimeAppMode,
     scheduleUpdateCheck,
     setOfflinePresence,
   ]);
@@ -382,6 +438,22 @@ export default function AppNavigator() {
           clearInterval(sessionCheckRef.current);
           sessionCheckRef.current = null;
         }
+
+        if (runtimeAppMode === 'admin') {
+          const restored = await restoreAdminAutoSessionIfNeeded();
+          if (restored) {
+            const restoredSessionResult = await supabase.auth.getSession();
+            const restoredSession = restoredSessionResult.data.session;
+            if (restoredSession?.user) {
+              void registerSession(restoredSession.user.id);
+              scheduleUpdateCheck();
+              await runStartupBootstrap();
+              setAppState('app');
+              return;
+            }
+          }
+        }
+
         setAppState('login');
         scheduleUpdateCheck();
       }
@@ -390,7 +462,9 @@ export default function AppNavigator() {
     return () => subscription.unsubscribe();
   }, [
     registerSession,
+    restoreAdminAutoSessionIfNeeded,
     runStartupBootstrap,
+    runtimeAppMode,
     scheduleUpdateCheck,
     setOfflinePresence,
   ]);
@@ -484,41 +558,50 @@ export default function AppNavigator() {
   return (
     <>
       <NavigationContainer>
-        <Stack.Navigator
-          initialRouteName="Home"
-          screenOptions={{
-            headerShown: false,
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Missions" component={MissionsScreen} />
-          <Stack.Screen name="Levels" component={LevelsScreen} />
-          <Stack.Screen name="Ranking" component={RankingScreen} />
-          <Stack.Screen
-            name="KnightSpriteTuner"
-            component={KnightSpriteTunerScreen}
-          />
-          <Stack.Screen name="UiStudio" component={UiStudioScreen} />
-          <Stack.Screen name="SingleGame" component={SingleGameScreen} />
-          <Stack.Screen name="Endless" component={EndlessScreen} />
-          <Stack.Screen name="Lobby" component={LobbyScreen} />
-          <Stack.Screen name="Battle" component={BattleScreen} />
-          <Stack.Screen name="RaidLobby" component={RaidLobbyScreen} />
-          <Stack.Screen name="Raid" component={RaidScreen} />
-          <Stack.Screen name="Shop" component={ShopScreen} />
-          <Stack.Screen name="Friends" component={FriendsScreen} />
-          <Stack.Screen name="FriendChat" component={FriendChatScreen} />
-          <Stack.Screen name="BossCodex" component={BossCodexScreen} />
-          <Stack.Screen
-            name="SkinCollection"
-            component={SkinCollectionScreen}
-          />
-          <Stack.Screen name="SkillTree" component={SkillTreeScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Admin" component={AdminScreen} />
-        </Stack.Navigator>
+        {runtimeAppMode === 'admin' ? (
+          <AdminAppNavigator />
+        ) : (
+          <Stack.Navigator
+            initialRouteName="Home"
+            screenOptions={{
+              headerShown: false,
+              animation: 'fade',
+            }}
+          >
+            <Stack.Screen name="Home" component={HomeScreen} />
+            <Stack.Screen name="Missions" component={MissionsScreen} />
+            <Stack.Screen name="Levels" component={LevelsScreen} />
+            <Stack.Screen name="Ranking" component={RankingScreen} />
+            <Stack.Screen
+              name="KnightSpriteTuner"
+              component={KnightSpriteTunerScreen}
+            />
+            <Stack.Screen name="UiStudio" component={UiStudioScreen} />
+            <Stack.Screen name="SingleGame" component={SingleGameScreen} />
+            <Stack.Screen name="Endless" component={EndlessScreen} />
+            <Stack.Screen name="Lobby" component={LobbyScreen} />
+            <Stack.Screen name="Battle" component={BattleScreen} />
+            <Stack.Screen name="RaidLobby" component={RaidLobbyScreen} />
+            <Stack.Screen name="Raid" component={RaidScreen} />
+            <Stack.Screen name="Shop" component={ShopScreen} />
+            <Stack.Screen name="Friends" component={FriendsScreen} />
+            <Stack.Screen name="FriendChat" component={FriendChatScreen} />
+            <Stack.Screen name="BlockWorldBag" component={BlockWorldBagScreen} />
+            <Stack.Screen name="BossCodex" component={BossCodexScreen} />
+            <Stack.Screen
+              name="SkinCollection"
+              component={SkinCollectionScreen}
+            />
+            <Stack.Screen name="SkillTree" component={SkillTreeScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen
+              name="HiddenBlockWorld"
+              component={HiddenBlockWorldScreen}
+            />
+            <Stack.Screen name="Admin" component={AdminScreen} />
+          </Stack.Navigator>
+        )}
       </NavigationContainer>
       <GameDialogHost />
       <UpdateProgressOverlay downloadProgress={downloadProgress} />

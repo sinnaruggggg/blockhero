@@ -102,7 +102,7 @@ import {
   buildSkillTriggerNotice,
 } from '../game/skillTriggerNotice';
 import {
-  loadSkillTriggerNoticeMode,
+  loadGameSettings,
   type SkillTriggerNoticeMode,
 } from '../stores/gameSettings';
 import {
@@ -210,6 +210,7 @@ export default function EndlessScreen({ navigation }: any) {
   const skinBattleEffectsRef = useRef(getActiveSkinLoadout(null).effects);
   const nextPiecesRef = useRef<Piece[]>([]);
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
+  const screenShakeEnabledRef = useRef(true);
   const {
     message: battleNoticeMessage,
     messageKey: battleNoticeKey,
@@ -297,6 +298,10 @@ export default function EndlessScreen({ navigation }: any) {
   );
 
   const triggerBoardShake = useCallback(() => {
+    if (!screenShakeEnabledRef.current) {
+      return;
+    }
+
     boardShakeAnim.setValue(0);
     Animated.sequence([
       Animated.timing(boardShakeAnim, {
@@ -446,16 +451,17 @@ export default function EndlessScreen({ navigation }: any) {
     setPieces(initialPack);
     updateNextPieces(buildPiecePack('easy', initialBoard));
     (async () => {
-      const [loadedGameData, skinData, charId, noticeMode] = await Promise.all([
+      const [loadedGameData, skinData, charId, settings] = await Promise.all([
         loadGameData(),
         loadSkinData(),
         getSelectedCharacter(),
-        loadSkillTriggerNoticeMode(),
+        loadGameSettings(),
       ]);
       setGameData(loadedGameData);
       gameDataRef.current = loadedGameData;
       setRunItemLoadout(buildRunItemLoadout(loadedGameData));
-      skillNoticeModeRef.current = noticeMode;
+      skillNoticeModeRef.current = settings.skillTriggerNoticeMode;
+      screenShakeEnabledRef.current = settings.screenShake;
       setSelectedCharacterId(charId ?? 'knight');
 
       setActiveSkin(skinData.activeSkinId);
@@ -612,7 +618,7 @@ export default function EndlessScreen({ navigation }: any) {
         clearInterval(comboTickerRef.current);
         comboTickerRef.current = null;
       }
-    }, 50);
+    }, 100);
 
     comboTimerRef.current = setTimeout(() => {
       setCombo(0);
