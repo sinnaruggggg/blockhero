@@ -467,6 +467,10 @@ button.small {
   gap: 8px;
 }
 
+.wide-field {
+  grid-column: 1 / -1;
+}
+
 .compact-actions {
   gap: 6px;
 }
@@ -974,6 +978,26 @@ button.small {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(9, 16, 31, 0.45);
+}
+
+.level-background-preview {
+  min-height: 74px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.58);
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+.level-background-preview img {
+  width: 100%;
+  height: 92px;
+  object-fit: cover;
+  display: block;
 }
 
 .reference-viewport-panel {

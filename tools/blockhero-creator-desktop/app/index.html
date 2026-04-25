@@ -298,6 +298,58 @@
                 </label>
 
                 <div class="panel-subtitle compact-subtitle">
+                  <strong>레벨 월드 배경</strong>
+                  <small class="muted">이미지를 서버 자산으로 올리고, 앱은 게임 로딩 때 최신 배포본을 내려받아 캐시합니다.</small>
+                </div>
+
+                <div class="preview-tuning-panel level-background-panel">
+                  <div class="form-grid two compact-fields">
+                    <label>
+                      <span>월드</span>
+                      <select id="visualLevelBackgroundWorld"></select>
+                    </label>
+                    <label>
+                      <span>배경 자산</span>
+                      <select id="visualLevelBackgroundAsset"></select>
+                    </label>
+                    <label>
+                      <span>덮개 색상</span>
+                      <input id="visualLevelBackgroundTintColor" type="text" placeholder="#000000" />
+                    </label>
+                    <label>
+                      <span>덮개 투명도</span>
+                      <input id="visualLevelBackgroundTintOpacity" type="number" step="0.05" min="0" max="1" />
+                    </label>
+                    <label>
+                      <span>이미지 제거</span>
+                      <select id="visualLevelBackgroundRemoveImage">
+                        <option value="false">아니오</option>
+                        <option value="true">예</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>업로드 키</span>
+                      <input id="visualBackgroundAssetKeyInput" type="text" placeholder="level_world_1_bg" />
+                    </label>
+                    <label class="wide-field">
+                      <span>이미지 업로드</span>
+                      <input id="visualBackgroundAssetFileInput" type="file" accept="image/*" />
+                    </label>
+                  </div>
+                  <div id="visualLevelBackgroundPreview" class="level-background-preview">
+                    선택된 월드 배경이 없습니다.
+                  </div>
+                  <div class="button-row wrap compact-actions">
+                    <button id="uploadVisualBackgroundAssetButton" class="secondary small">업로드 후 현재 월드에 연결</button>
+                    <button id="visualLevelBackgroundApplyButton" class="primary small">월드 배경 적용</button>
+                    <button id="visualLevelBackgroundClearButton" class="ghost small">현재 월드 배경 해제</button>
+                  </div>
+                  <small class="inline-note">
+                    업로드 이미지는 폰 성능을 위해 최대 1280px 기준으로 줄여 저장합니다. 배포 버튼을 눌러야 실제 앱 로딩에 반영됩니다.
+                  </small>
+                </div>
+
+                <div class="panel-subtitle compact-subtitle">
                   <strong>블록 조작감</strong>
                   <small class="muted">앱에 배포되는 드래그 위치 보정과 자석 가이드 강도입니다.</small>
                 </div>

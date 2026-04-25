@@ -25127,6 +25127,17 @@ ${suffix}`;
     visualShowGrid: $("#visualShowGrid"),
     visualSnapGrid: $("#visualSnapGrid"),
     visualGridSize: $("#visualGridSize"),
+    visualLevelBackgroundWorld: $("#visualLevelBackgroundWorld"),
+    visualLevelBackgroundAsset: $("#visualLevelBackgroundAsset"),
+    visualLevelBackgroundTintColor: $("#visualLevelBackgroundTintColor"),
+    visualLevelBackgroundTintOpacity: $("#visualLevelBackgroundTintOpacity"),
+    visualLevelBackgroundRemoveImage: $("#visualLevelBackgroundRemoveImage"),
+    visualBackgroundAssetKeyInput: $("#visualBackgroundAssetKeyInput"),
+    visualBackgroundAssetFileInput: $("#visualBackgroundAssetFileInput"),
+    visualLevelBackgroundPreview: $("#visualLevelBackgroundPreview"),
+    uploadVisualBackgroundAssetButton: $("#uploadVisualBackgroundAssetButton"),
+    visualLevelBackgroundApplyButton: $("#visualLevelBackgroundApplyButton"),
+    visualLevelBackgroundClearButton: $("#visualLevelBackgroundClearButton"),
     visualDragLiftOffset: $("#visualDragLiftOffset"),
     visualDragCenterOffsetX: $("#visualDragCenterOffsetX"),
     visualDragCenterOffsetY: $("#visualDragCenterOffsetY"),
@@ -25283,6 +25294,7 @@ ${suffix}`;
     visualShowGrid: false,
     visualSnapGrid: false,
     visualGridSize: 16,
+    visualLevelBackgroundWorldId: "1",
     visualSelectedSfxEventId: "blockPlace",
     visualSelectedBgmTrackId: "level",
     visualPreviewAudio: null,
@@ -26632,6 +26644,64 @@ ${suffix}`;
     }
     return state.assets.find((asset) => asset.asset_key === assetKey) ?? null;
   }
+  function getVisualLevelBackgroundRule(worldId = state.visualLevelBackgroundWorldId) {
+    if (!state.visualManifest) {
+      return sanitizeBackgroundOverride(null);
+    }
+    const key = String(worldId || "1");
+    return sanitizeBackgroundOverride(
+      state.visualManifest.screens?.level?.backgrounds?.byWorld?.[key]
+    );
+  }
+  function setVisualLevelBackgroundRule(worldId, rule) {
+    if (!state.visualManifest) {
+      return;
+    }
+    const key = String(worldId || "1");
+    state.visualManifest.screens.level.backgrounds.byWorld[key] = sanitizeBackgroundOverride(rule);
+  }
+  function clearVisualLevelBackgroundRule(worldId = state.visualLevelBackgroundWorldId) {
+    if (!state.visualManifest) {
+      return;
+    }
+    const key = String(worldId || "1");
+    delete state.visualManifest.screens.level.backgrounds.byWorld[key];
+  }
+  function isImageAsset(asset) {
+    const mime = String(asset?.mime_type || "").toLowerCase();
+    const dataUrl = String(asset?.data_url || "").toLowerCase();
+    return mime.startsWith("image/") || dataUrl.startsWith("data:image/");
+  }
+  function getImageAssetOptions(selectedKey) {
+    const imageAssets = state.assets.filter(isImageAsset).sort((a, b) => a.asset_key.localeCompare(b.asset_key));
+    return [
+      `<option value="" ${selectedKey ? "" : "selected"}>기본 배경 / 사용 안 함</option>`,
+      ...imageAssets.map((asset) => `<option value="${asset.asset_key}" ${asset.asset_key === selectedKey ? "selected" : ""}>${asset.asset_key}</option>`)
+    ].join("");
+  }
+  function getVisualLevelWorldIds() {
+    const ids = /* @__PURE__ */ new Set();
+    for (let worldId = 1; worldId <= 10; worldId += 1) {
+      ids.add(String(worldId));
+    }
+    if (state.manifest?.levels) {
+      Object.values(state.manifest.levels).forEach((level) => {
+        if (level?.worldId != null) {
+          ids.add(String(level.worldId));
+        }
+      });
+    }
+    Object.keys(state.visualManifest?.screens?.level?.backgrounds?.byWorld || {}).forEach((worldId) => {
+      ids.add(String(worldId));
+    });
+    return Array.from(ids).sort((a, b) => Number(a) - Number(b));
+  }
+  function getVisualBackgroundAssetDataUrl(assetKey) {
+    if (!assetKey) {
+      return "";
+    }
+    return state.assets.find((asset) => asset.asset_key === assetKey)?.data_url || "";
+  }
   function getVisualLayoutCoverage(screenId = state.visualSelectedScreenId) {
     const snapshot = getVisualSnapshot(screenId);
     const items = ELEMENT_DEFS[screenId] ?? [];
@@ -26670,6 +26740,16 @@ ${suffix}`;
         src: snapshotAsset.data_url
       };
     }
+    if (screenId === "level") {
+      const rule = getVisualLevelBackgroundRule();
+      const assetSrc = rule.removeImage ? "" : getVisualBackgroundAssetDataUrl(rule.assetKey);
+      if (assetSrc) {
+        return {
+          kind: "levelBackground",
+          src: assetSrc
+        };
+      }
+    }
     return null;
   }
   function getVisualStatusMessage() {
@@ -26682,6 +26762,9 @@ ${suffix}`;
     }
     if (background?.kind === "snapshot") {
       return `\uC800\uC7A5\uB41C \uB7F0\uD0C0\uC784 \uC2A4\uB0C5\uC0F7\uC744 \uAE30\uC900\uC73C\uB85C \uD3B8\uC9D1 \uC911\uC785\uB2C8\uB2E4.${layoutSuffix}${runtimeSuffix}`;
+    }
+    if (background?.kind === "levelBackground") {
+      return `레벨 월드 배경 자산을 기준으로 미리보기 중입니다.${layoutSuffix}${runtimeSuffix}`;
     }
     if (state.visualDeviceSource === "phone") {
       return `\uC2E4\uC81C \uD3F0 \uD654\uBA74\uC744 \uC544\uC9C1 \uAC00\uC838\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4. \uC5F0\uACB0 \uC0C1\uD0DC\uB97C \uD655\uC778\uD558\uC138\uC694.${layoutSuffix}${runtimeSuffix}`;
@@ -27072,6 +27155,153 @@ ${suffix}`;
       input.disabled = state.visualDeviceSource !== "custom";
     });
   }
+  function syncVisualLevelBackgroundInputs() {
+    if (!elements.visualLevelBackgroundWorld || !state.visualManifest) {
+      return;
+    }
+    const worldIds = getVisualLevelWorldIds();
+    if (!worldIds.includes(String(state.visualLevelBackgroundWorldId))) {
+      state.visualLevelBackgroundWorldId = worldIds[0] || "1";
+    }
+    const worldId = String(state.visualLevelBackgroundWorldId || "1");
+    const rule = getVisualLevelBackgroundRule(worldId);
+    elements.visualLevelBackgroundWorld.innerHTML = worldIds.map((id) => `<option value="${id}" ${id === worldId ? "selected" : ""}>월드 ${id}</option>`).join("");
+    elements.visualLevelBackgroundWorld.value = worldId;
+    elements.visualLevelBackgroundAsset.innerHTML = getImageAssetOptions(rule.assetKey);
+    elements.visualLevelBackgroundTintColor.value = rule.tintColor;
+    elements.visualLevelBackgroundTintOpacity.value = String(rule.tintOpacity);
+    elements.visualLevelBackgroundRemoveImage.value = String(rule.removeImage);
+    elements.visualBackgroundAssetKeyInput.placeholder = `level_world_${worldId}_bg`;
+    const assetSrc = rule.removeImage ? "" : getVisualBackgroundAssetDataUrl(rule.assetKey);
+    if (rule.removeImage) {
+      elements.visualLevelBackgroundPreview.innerHTML = "이미지 제거가 켜져 있어 색상 덮개만 적용됩니다.";
+    } else if (assetSrc) {
+      elements.visualLevelBackgroundPreview.innerHTML = `<img src="${assetSrc}" alt="월드 ${worldId} 배경" />`;
+    } else if (rule.assetKey) {
+      elements.visualLevelBackgroundPreview.innerHTML = `선택된 자산 ${rule.assetKey}를 찾지 못했습니다. 자산 목록을 새로고침하세요.`;
+    } else {
+      elements.visualLevelBackgroundPreview.innerHTML = "선택된 월드 배경이 없습니다. 앱 기본 배경을 사용합니다.";
+    }
+  }
+  function updateVisualLevelBackgroundFromInputs() {
+    if (!state.visualManifest) {
+      return;
+    }
+    const worldId = elements.visualLevelBackgroundWorld.value || state.visualLevelBackgroundWorldId || "1";
+    state.visualLevelBackgroundWorldId = String(worldId);
+    const nextRule = sanitizeBackgroundOverride({
+      assetKey: elements.visualLevelBackgroundAsset.value || null,
+      tintColor: elements.visualLevelBackgroundTintColor.value || "#000000",
+      tintOpacity: elements.visualLevelBackgroundTintOpacity.value,
+      removeImage: elements.visualLevelBackgroundRemoveImage.value === "true"
+    });
+    if (!nextRule.assetKey && nextRule.tintOpacity <= 0 && nextRule.removeImage !== true) {
+      clearVisualLevelBackgroundRule(worldId);
+      return;
+    }
+    setVisualLevelBackgroundRule(worldId, nextRule);
+  }
+  function commitVisualLevelBackgroundChange() {
+    if (!state.visualManifest) {
+      return;
+    }
+    pushVisualHistory();
+    updateVisualLevelBackgroundFromInputs();
+    markVisualDirty();
+    renderAll();
+  }
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("이미지를 읽는 중 오류가 발생했습니다."));
+      reader.readAsDataURL(file);
+    });
+  }
+  async function resizeImageFileForVisualBackground(file, maxSize = 1280) {
+    const originalDataUrl = await readFileAsDataUrl(file);
+    const mimeType = String(file.type || "").toLowerCase();
+    if (mimeType === "image/svg+xml" || mimeType === "image/gif") {
+      return {
+        dataUrl: originalDataUrl,
+        mimeType: file.type || "image/*"
+      };
+    }
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        const width = Math.max(1, image.naturalWidth || image.width || maxSize);
+        const height = Math.max(1, image.naturalHeight || image.height || maxSize);
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        const nextWidth = Math.max(1, Math.round(width * scale));
+        const nextHeight = Math.max(1, Math.round(height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+        const context = canvas.getContext("2d", { alpha: mimeType.includes("png") });
+        if (!context) {
+          resolve({ dataUrl: originalDataUrl, mimeType: file.type || "image/*" });
+          return;
+        }
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(image, 0, 0, nextWidth, nextHeight);
+        const outputMime = mimeType.includes("png") ? "image/png" : "image/jpeg";
+        resolve({
+          dataUrl: canvas.toDataURL(outputMime, outputMime === "image/jpeg" ? 0.84 : void 0),
+          mimeType: outputMime
+        });
+      };
+      image.onerror = () => resolve({ dataUrl: originalDataUrl, mimeType: file.type || "image/*" });
+      image.src = originalDataUrl;
+    });
+  }
+  async function uploadVisualBackgroundAsset() {
+    const file = elements.visualBackgroundAssetFileInput.files?.[0];
+    if (!file) {
+      showToast("업로드할 월드 배경 이미지를 먼저 선택하세요.");
+      return;
+    }
+    if (!String(file.type || "").startsWith("image/")) {
+      showToast("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+    const worldId = String(elements.visualLevelBackgroundWorld.value || state.visualLevelBackgroundWorldId || "1");
+    const assetKey = elements.visualBackgroundAssetKeyInput.value.trim() || `level_world_${worldId}_bg`;
+    const { dataUrl, mimeType } = await resizeImageFileForVisualBackground(file);
+    const { error } = await state.supabase.from("ui_assets").upsert(
+      {
+        asset_key: assetKey,
+        data_url: dataUrl,
+        mime_type: mimeType,
+        content_hash: hashString(dataUrl),
+        updated_by: state.session.user.id
+      },
+      { onConflict: "asset_key" }
+    );
+    if (error) {
+      throw error;
+    }
+    state.assets = await fetchAssets();
+    pushVisualHistory();
+    state.visualLevelBackgroundWorldId = worldId;
+    setVisualLevelBackgroundRule(worldId, {
+      assetKey,
+      tintColor: elements.visualLevelBackgroundTintColor.value || "#000000",
+      tintOpacity: elements.visualLevelBackgroundTintOpacity.value || 0,
+      removeImage: false
+    });
+    markVisualDirty();
+    elements.visualBackgroundAssetKeyInput.value = "";
+    elements.visualBackgroundAssetFileInput.value = "";
+    await saveVisualDraft();
+    renderAll();
+    setInlineStatus(
+      elements.uiEditorStatusLine,
+      `${assetKey}를 월드 ${worldId} 배경으로 연결하고 화면 초안에 저장했습니다. 배포를 눌러야 앱에 반영됩니다.`,
+      "success"
+    );
+  }
   function renderVisualInspector() {
     const rule = getVisualSelectedRule();
     elements.visualCurrentScreen.textContent = SCREEN_LABELS[state.visualSelectedScreenId];
@@ -27095,6 +27325,7 @@ ${suffix}`;
     elements.visualSafeAware.checked = rule.safeAreaAware;
     syncVisualViewportInputs();
     syncVisualDragTuningInputs();
+    syncVisualLevelBackgroundInputs();
     syncVisualAudioInputs();
   }
   function getVisualDragTuning() {
@@ -28366,6 +28597,33 @@ ${suffix}`;
         Number(elements.visualGridSize.value) || 16
       );
       renderAll();
+    });
+    elements.visualLevelBackgroundWorld.addEventListener("change", () => {
+      state.visualLevelBackgroundWorldId = elements.visualLevelBackgroundWorld.value || "1";
+      renderAll();
+    });
+    elements.visualLevelBackgroundApplyButton.addEventListener("click", () => {
+      commitVisualLevelBackgroundChange();
+    });
+    elements.visualLevelBackgroundClearButton.addEventListener("click", () => {
+      if (!state.visualManifest) {
+        return;
+      }
+      pushVisualHistory();
+      clearVisualLevelBackgroundRule();
+      markVisualDirty();
+      renderAll();
+    });
+    elements.uploadVisualBackgroundAssetButton.addEventListener("click", async () => {
+      if (!requireAdminAccess("월드 배경 업로드")) {
+        return;
+      }
+      try {
+        await uploadVisualBackgroundAsset();
+        showToast("월드 배경 이미지를 업로드했습니다.");
+      } catch (error) {
+        showToast(getErrorMessage(error, "월드 배경 이미지 업로드에 실패했습니다."));
+      }
     });
     [
       elements.visualDragLiftOffset,
