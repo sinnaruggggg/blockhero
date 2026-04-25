@@ -238,6 +238,21 @@ export async function getRaidInstance(instanceId: string) {
     .single();
 }
 
+async function closeOtherActivePartyRaids(
+  partyId: string,
+  keepInstanceId: string,
+) {
+  // RAID_FIX: a party must have exactly one active raid room. If older party
+  // rooms stay active, another phone can poll the wrong instanceId and join a
+  // different realtime channel from the host.
+  return supabase
+    .from('raid_instances')
+    .update({ status: 'closed' })
+    .eq('party_id', partyId)
+    .in('status', ['active', 'battle', 'waiting', 'ready'])
+    .neq('id', keepInstanceId);
+}
+
 export async function getActiveInstances(
   friendIds?: string[],
   options: RaidAccessOptions = {},
@@ -535,6 +550,14 @@ export async function startRaid(
     }
 
     if (partyInstance) {
+      const { error: closeError } = await closeOtherActivePartyRaids(
+        partyId,
+        partyInstance.id,
+      );
+      if (closeError) {
+        return { data: null, error: closeError };
+      }
+
       const { error: joinError } = await joinRaidInstance(
         partyInstance.id,
         playerId,
@@ -559,6 +582,16 @@ export async function startRaid(
     }
 
     if (reusableInstance) {
+      if (partyId) {
+        const { error: closeError } = await closeOtherActivePartyRaids(
+          partyId,
+          reusableInstance.id,
+        );
+        if (closeError) {
+          return { data: null, error: closeError };
+        }
+      }
+
       const { error: joinError } = await joinRaidInstance(
         reusableInstance.id,
         playerId,
@@ -585,6 +618,16 @@ export async function startRaid(
       data: null,
       error: instErr || { message: 'failed to create instance' },
     };
+  }
+
+  if (partyId) {
+    const { error: closeError } = await closeOtherActivePartyRaids(
+      partyId,
+      instance.id,
+    );
+    if (closeError) {
+      return { data: null, error: closeError };
+    }
   }
 
   if (!options.skipCooldown) {

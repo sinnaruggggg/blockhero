@@ -17,6 +17,28 @@ ALTER TABLE public.raid_participants REPLICA IDENTITY FULL;
 CREATE INDEX IF NOT EXISTS idx_raid_participants_ready
 ON public.raid_participants (raid_instance_id, is_ready);
 
+-- RAID_FIX: clean up stale duplicate party raid rooms created before the
+-- single-active-party-raid guard. Keep the newest active room per party.
+WITH ranked_party_raids AS (
+  SELECT
+    id,
+    ROW_NUMBER() OVER (
+      PARTITION BY party_id
+      ORDER BY created_at DESC, started_at DESC
+    ) AS room_rank
+  FROM public.raid_instances
+  WHERE party_id IS NOT NULL
+    AND status IN ('active', 'battle', 'waiting', 'ready')
+    AND expires_at > NOW()
+)
+UPDATE public.raid_instances
+SET status = 'closed'
+WHERE id IN (
+  SELECT id
+  FROM ranked_party_raids
+  WHERE room_rank > 1
+);
+
 -- RAID_FIX: clients subscribe to these tables with postgres_changes. If the
 -- tables are not in the Supabase realtime publication, one device may miss
 -- party/member updates and must wait for polling only.

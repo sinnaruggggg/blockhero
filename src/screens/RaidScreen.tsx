@@ -550,6 +550,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const startedAtRef = useRef(0);
   const vibrationRef = useRef(true);
   const boardRef = useRef<View>(null);
+  const boardStateRef = useRef<BoardType>(createBoard());
   const playerIdRef = useRef('');
   const nicknameRef = useRef('');
   const channelRef = useRef<any>(null);
@@ -638,6 +639,10 @@ export default function RaidScreen({ route, navigation }: any) {
     participantsRef.current = participants;
     participantCountRef.current = participants.length;
   }, [participants]);
+
+  useEffect(() => {
+    boardStateRef.current = board;
+  }, [board]);
 
   useEffect(() => {
     maxPlayerHpRef.current = maxPlayerHp;
@@ -778,6 +783,7 @@ export default function RaidScreen({ route, navigation }: any) {
       isAlive,
       currentHp: playerHpRef.current,
       maxHp: Math.max(maxPlayerHpRef.current, playerHpRef.current),
+      board: boardStateRef.current,
       battleStats: {
         ...localStats,
         isAlive,
@@ -800,6 +806,30 @@ export default function RaidScreen({ route, navigation }: any) {
         rematchReadyRef.current = next;
         return next;
       });
+    }
+
+    if (payload.board) {
+      // RAID_FIX: heartbeat also carries board state so spectators recover
+      // when the one-shot board_state broadcast is missed.
+      remoteBoardsRef.current.set(playerId, {
+        board: payload.board,
+        nickname: payload.nickname ?? playerId.slice(0, 8),
+      });
+      if (spectatorRef.current) {
+        const aliveList = alivePlayersRef.current.filter(
+          id => id !== playerIdRef.current,
+        );
+        if (aliveList.length > 0) {
+          setSpectatingIdx(index => {
+            const watchingId = aliveList[index % aliveList.length];
+            if (watchingId === playerId) {
+              setSpectatorBoard(payload.board);
+              setSpectatorNickname(payload.nickname ?? playerId.slice(0, 8));
+            }
+            return index;
+          });
+        }
+      }
     }
 
     if (payload.battleStats && typeof payload.battleStats === 'object') {
