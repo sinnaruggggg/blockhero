@@ -78,6 +78,9 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   private var lastMineRequired = 1f
   private var activeAction = ACTION_NONE
   private var activeActionUntilNanos = 0L
+  private var verticalVelocity = 0f
+  private var isGrounded = true
+  private var jumpQueued = false
   private var dragPointerId = MotionEvent.INVALID_POINTER_ID
   private val activeMovePointers = mutableMapOf<Int, Int>()
   private val blockDamage = mutableMapOf<Int, Float>()
@@ -414,7 +417,10 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
 
     cameraX = WORLD_WIDTH * 0.5f + 0.5f
     cameraZ = WORLD_DEPTH * 0.5f + 10.5f
-    cameraY = surfaceTopAt(cameraX, cameraZ) + EYE_HEIGHT
+    cameraY = maxSurfaceTopWithinRadius(cameraX, cameraZ) + EYE_HEIGHT
+    verticalVelocity = 0f
+    isGrounded = true
+    jumpQueued = false
     yaw = PI.toFloat()
     pitch = -0.08f
     updateTarget()
@@ -505,9 +511,43 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       tryMove(dx, dz)
     }
 
-    val targetY = surfaceTopAt(cameraX, cameraZ) + EYE_HEIGHT
-    cameraY += (targetY - cameraY) * min(1f, dt * 9f)
+    updateVerticalMotion(dt)
     updateTarget()
+  }
+
+  private fun updateVerticalMotion(dt: Float) {
+    val groundY = maxSurfaceTopWithinRadius(cameraX, cameraZ) + EYE_HEIGHT
+    val closeToGround = cameraY <= groundY + GROUND_SNAP_DISTANCE && verticalVelocity <= 0f
+
+    if (closeToGround) {
+      cameraY = groundY
+      verticalVelocity = 0f
+      isGrounded = true
+    } else {
+      isGrounded = false
+    }
+
+    if (jumpQueued && isGrounded) {
+      verticalVelocity = JUMP_SPEED
+      isGrounded = false
+    }
+    jumpQueued = false
+
+    if (!isGrounded) {
+      verticalVelocity -= GRAVITY * dt
+      val nextY = cameraY + verticalVelocity * dt
+      if (verticalVelocity > 0f && !hasBodyClearanceForEyeY(cameraX, cameraZ, nextY)) {
+        verticalVelocity = 0f
+      } else {
+        cameraY = nextY
+      }
+
+      if (cameraY <= groundY) {
+        cameraY = groundY
+        verticalVelocity = 0f
+        isGrounded = true
+      }
+    }
   }
 
   private fun tryMove(dx: Float, dz: Float) {
@@ -523,9 +563,85 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   }
 
   private fun canStandAt(x: Float, z: Float): Boolean {
-    val surface = surfaceTopAt(x, z)
-    val current = surfaceTopAt(cameraX, cameraZ)
-    return surface > 0f && surface - current <= 1.05f
+    val surface = maxSurfaceTopWithinRadius(x, z)
+    val current = maxSurfaceTopWithinRadius(cameraX, cameraZ)
+    return surface > 0f &&
+      surface - current <= MAX_STEP_HEIGHT &&
+      hasBodyClearanceAt(x, z, surface)
+  }
+
+  private fun hasBodyClearanceAt(x: Float, z: Float, surface: Float): Boolean {
+    return hasBodyClearanceForFootY(x, z, floor(surface).toInt())
+  }
+
+  private fun hasBodyClearanceForEyeY(x: Float, z: Float, eyeY: Float): Boolean {
+    return hasBodyClearanceForFootY(x, z, floor(eyeY - EYE_HEIGHT).toInt())
+  }
+
+  private fun hasBodyClearanceForFootY(x: Float, z: Float, footY: Int): Boolean {
+    if (footY !in 0 until WORLD_HEIGHT) {
+      return false
+    }
+
+    val minX = floor(x - PLAYER_RADIUS).toInt()
+    val maxX = floor(x + PLAYER_RADIUS).toInt()
+    val minZ = floor(z - PLAYER_RADIUS).toInt()
+    val maxZ = floor(z + PLAYER_RADIUS).toInt()
+    val maxBodyY = min(WORLD_HEIGHT - 1, footY + PLAYER_BODY_BLOCKS)
+
+    for (bx in minX..maxX) {
+      for (bz in minZ..maxZ) {
+        if (bx !in 0 until WORLD_WIDTH || bz !in 0 until WORLD_DEPTH) {
+          return false
+        }
+        val overlapsX = x + PLAYER_RADIUS > bx && x - PLAYER_RADIUS < bx + 1f
+        val overlapsZ = z + PLAYER_RADIUS > bz && z - PLAYER_RADIUS < bz + 1f
+        if (!overlapsX || !overlapsZ) {
+          continue
+        }
+        for (by in footY..maxBodyY) {
+          if (getBlock(bx, by, bz) != AIR) {
+            return false
+          }
+        }
+      }
+    }
+
+    return true
+  }
+
+  private fun maxSurfaceTopWithinRadius(x: Float, z: Float): Float {
+    val minX = floor(x - PLAYER_RADIUS).toInt()
+    val maxX = floor(x + PLAYER_RADIUS).toInt()
+    val minZ = floor(z - PLAYER_RADIUS).toInt()
+    val maxZ = floor(z + PLAYER_RADIUS).toInt()
+    var surface = 0f
+
+    for (bx in minX..maxX) {
+      for (bz in minZ..maxZ) {
+        if (bx !in 0 until WORLD_WIDTH || bz !in 0 until WORLD_DEPTH) {
+          return 0f
+        }
+        val overlapsX = x + PLAYER_RADIUS > bx && x - PLAYER_RADIUS < bx + 1f
+        val overlapsZ = z + PLAYER_RADIUS > bz && z - PLAYER_RADIUS < bz + 1f
+        if (!overlapsX || !overlapsZ) {
+          continue
+        }
+        val blockTop = highestSolidY(bx, bz) + 1f
+        if (blockTop > surface) {
+          surface = blockTop
+        }
+      }
+    }
+
+    return surface
+  }
+
+  private fun queueJump() {
+    if (isGrounded) {
+      jumpQueued = true
+      invalidate()
+    }
   }
 
   private fun updateTarget() {
@@ -672,6 +788,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   }
 
   private fun drawWorld(canvas: Canvas) {
+    paint.isAntiAlias = false
     faces.clear()
 
     val cameraBlockX = floor(cameraX).toInt()
@@ -680,10 +797,19 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     val maxX = min(WORLD_WIDTH - 1, cameraBlockX + RENDER_RADIUS)
     val minZ = max(0, cameraBlockZ - RENDER_RADIUS)
     val maxZ = min(WORLD_DEPTH - 1, cameraBlockZ + RENDER_RADIUS)
+    val renderRadiusSquared = RENDER_RADIUS * RENDER_RADIUS
+    val bottomFaceRadiusSquared = BOTTOM_FACE_RADIUS * BOTTOM_FACE_RADIUS
     val hit = target
 
     for (x in minX..maxX) {
       for (z in minZ..maxZ) {
+        val blockDx = x - cameraBlockX
+        val blockDz = z - cameraBlockZ
+        val blockDistanceSquared = blockDx * blockDx + blockDz * blockDz
+        if (blockDistanceSquared > renderRadiusSquared) {
+          continue
+        }
+
         for (y in 0 until WORLD_HEIGHT) {
           val block = getBlock(x, y, z)
           if (block == AIR) continue
@@ -691,6 +817,9 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
           val selected = hit?.let { it.x == x && it.y == y && it.z == z } == true
           if (getBlock(x, y + 1, z) == AIR) {
             addFace(x, y, z, block, TOP_FACE, 1.05f, selected)
+          }
+          if (blockDistanceSquared <= bottomFaceRadiusSquared && getBlock(x, y - 1, z) == AIR) {
+            addFace(x, y, z, block, BOTTOM_FACE, 0.52f, selected)
           }
           if (getBlock(x, y, z - 1) == AIR) {
             addFace(x, y, z, block, NORTH_FACE, 0.72f, selected)
@@ -726,17 +855,21 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
         drawFaceTexture(canvas, face, path)
       }
 
-      paint.style = Paint.Style.STROKE
-      paint.strokeWidth = 0.8f * density
-      paint.color = shade(face.color, 0.7f)
-      canvas.drawPath(path, paint)
+      if (face.depth < EDGE_DISTANCE) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 0.8f * density
+        paint.color = shade(face.color, 0.7f)
+        canvas.drawPath(path, paint)
+      }
 
       if (face.selected) {
+        paint.style = Paint.Style.STROKE
         paint.strokeWidth = 2.4f * density
         paint.color = Color.rgb(255, 226, 92)
         canvas.drawPath(path, paint)
       }
     }
+    paint.isAntiAlias = true
   }
 
   private fun addFace(
@@ -816,9 +949,9 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       return
     }
 
-    canvas.save()
-    canvas.clipPath(clipPath)
-    when (face.block) {
+    if (face.face == BOTTOM_FACE) {
+      drawUndersideTexture(canvas, face, left, top, right, bottom)
+    } else when (face.block) {
       GRASS -> drawGrassTexture(canvas, face, left, top, right, bottom)
       DIRT -> drawDirtTexture(canvas, face, left, top, right, bottom)
       STONE -> drawStoneTexture(canvas, face, left, top, right, bottom)
@@ -828,7 +961,6 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       PLANK, WORKBENCH, DOOR, CHAIR -> drawPlankTexture(canvas, face, left, top, right, bottom)
       FURNACE -> drawFurnaceTexture(canvas, face, left, top, right, bottom)
     }
-    canvas.restore()
   }
 
   private fun drawGrassTexture(
@@ -840,19 +972,23 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     bottom: Float,
   ) {
     if (face.face == TOP_FACE) {
+      drawSoftFaceHighlight(canvas, left, top, right, bottom)
       paint.style = Paint.Style.STROKE
       paint.strokeWidth = 1f * density
-      paint.color = Color.argb(92, 217, 255, 136)
-      drawSeededStrokes(canvas, face, left, top, right, bottom, 7, 4f, -5f)
-      paint.color = Color.argb(78, 35, 111, 47)
-      drawSeededDots(canvas, face, left, top, right, bottom, 8, 1.2f * density)
+      paint.color = Color.argb(118, 255, 255, 192)
+      drawSeededStrokes(canvas, face, left, top, right, bottom, 5, 4.5f * density, -4.5f * density)
+      paint.color = Color.argb(82, 73, 156, 97)
+      drawSeededDots(canvas, face, left, top, right, bottom, 5, 1.15f * density)
+      drawSeededFlowers(canvas, face, left, top, right, bottom, 1, 1.45f * density)
     } else {
       paint.style = Paint.Style.FILL
-      paint.color = Color.argb(110, 65, 42, 25)
+      paint.color = Color.argb(88, 165, 122, 83)
       val stripeHeight = ((bottom - top) * 0.24f).coerceAtLeast(3f)
       canvas.drawRect(left, top + stripeHeight, right, bottom, paint)
-      paint.color = Color.argb(95, 43, 131, 49)
-      drawSeededDots(canvas, face, left, top, right, top + stripeHeight, 5, 1.1f * density)
+      paint.color = Color.argb(94, 112, 197, 118)
+      drawSeededDots(canvas, face, left, top, right, top + stripeHeight, 3, 1.1f * density)
+      paint.color = Color.argb(64, 255, 235, 188)
+      drawSeededDots(canvas, face, left, top + stripeHeight, right, bottom, 2, 1.0f * density)
     }
   }
 
@@ -865,10 +1001,12 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     bottom: Float,
   ) {
     paint.style = Paint.Style.FILL
-    paint.color = Color.argb(82, 86, 48, 26)
-    drawSeededDots(canvas, face, left, top, right, bottom, 13, 1.4f * density)
-    paint.color = Color.argb(74, 176, 116, 70)
-    drawSeededDots(canvas, face, left, top, right, bottom, 6, 1.0f * density)
+    paint.color = Color.argb(76, 143, 90, 58)
+    drawSeededDots(canvas, face, left, top, right, bottom, 7, 1.45f * density)
+    paint.color = Color.argb(78, 255, 207, 154)
+    drawSeededDots(canvas, face, left, top, right, bottom, 3, 1.0f * density)
+    paint.color = Color.argb(58, 116, 70, 48)
+    drawSeededStrokes(canvas, face, left, top, right, bottom, 2, 5.5f * density, 2.4f * density)
   }
 
   private fun drawStoneTexture(
@@ -881,10 +1019,13 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   ) {
     paint.style = Paint.Style.STROKE
     paint.strokeWidth = 1f * density
-    paint.color = Color.argb(86, 64, 69, 78)
-    drawSeededStrokes(canvas, face, left, top, right, bottom, 5, 8f, 7f)
-    paint.color = Color.argb(50, 208, 216, 226)
-    drawSeededStrokes(canvas, face, left, top, right, bottom, 3, 5f, -4f)
+    paint.color = Color.argb(82, 92, 105, 132)
+    drawSeededStrokes(canvas, face, left, top, right, bottom, 3, 8f * density, 5f * density)
+    paint.color = Color.argb(80, 255, 255, 255)
+    drawSeededStrokes(canvas, face, left, top, right, bottom, 2, 5.5f * density, -4f * density)
+    paint.style = Paint.Style.FILL
+    paint.color = Color.argb(52, 196, 228, 246)
+    drawSeededDots(canvas, face, left, top, right, bottom, 2, 1.0f * density)
   }
 
   private fun drawWoodTexture(
@@ -897,7 +1038,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   ) {
     paint.style = Paint.Style.STROKE
     paint.strokeWidth = 1.1f * density
-    paint.color = Color.argb(98, 76, 43, 18)
+    paint.color = Color.argb(98, 145, 84, 51)
 
     if (face.face == TOP_FACE) {
       val cx = (left + right) * 0.5f
@@ -906,6 +1047,9 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       canvas.drawCircle(cx, cy, maxRadius * 0.35f, paint)
       canvas.drawCircle(cx, cy, maxRadius * 0.62f, paint)
       canvas.drawCircle(cx, cy, maxRadius * 0.88f, paint)
+      paint.style = Paint.Style.FILL
+      paint.color = Color.argb(64, 255, 231, 184)
+      drawSeededDots(canvas, face, left, top, right, bottom, 4, 1.1f * density)
     } else {
       val step = ((right - left) / 4f).coerceAtLeast(6f)
       var x = left + step * 0.6f
@@ -913,6 +1057,8 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
         canvas.drawLine(x, top, x + step * 0.18f, bottom, paint)
         x += step
       }
+      paint.color = Color.argb(70, 255, 222, 170)
+      drawSeededStrokes(canvas, face, left, top, right, bottom, 3, 5f * density, -2f * density)
     }
   }
 
@@ -925,10 +1071,12 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     bottom: Float,
   ) {
     paint.style = Paint.Style.FILL
-    paint.color = Color.argb(86, 29, 94, 45)
-    drawSeededDots(canvas, face, left, top, right, bottom, 11, 1.8f * density)
-    paint.color = Color.argb(76, 115, 205, 95)
-    drawSeededDots(canvas, face, left, top, right, bottom, 8, 1.3f * density)
+    paint.color = Color.argb(80, 58, 143, 86)
+    drawSeededDots(canvas, face, left, top, right, bottom, 6, 1.75f * density)
+    paint.color = Color.argb(88, 185, 239, 137)
+    drawSeededDots(canvas, face, left, top, right, bottom, 4, 1.25f * density)
+    paint.color = Color.argb(72, 255, 244, 168)
+    drawSeededDots(canvas, face, left, top, right, bottom, 2, 0.9f * density)
   }
 
   private fun drawIronOreTexture(
@@ -941,10 +1089,10 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   ) {
     drawStoneTexture(canvas, face, left, top, right, bottom)
     paint.style = Paint.Style.FILL
-    paint.color = Color.argb(160, 210, 143, 92)
-    drawSeededDots(canvas, face, left, top, right, bottom, 6, 1.9f * density)
-    paint.color = Color.argb(110, 236, 203, 168)
-    drawSeededDots(canvas, face, left, top, right, bottom, 3, 1.1f * density)
+    paint.color = Color.argb(172, 255, 178, 133)
+    drawSeededDots(canvas, face, left, top, right, bottom, 4, 1.9f * density)
+    paint.color = Color.argb(138, 255, 237, 206)
+    drawSeededDots(canvas, face, left, top, right, bottom, 2, 1.1f * density)
   }
 
   private fun drawPlankTexture(
@@ -957,7 +1105,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   ) {
     paint.style = Paint.Style.STROKE
     paint.strokeWidth = 1f * density
-    paint.color = Color.argb(92, 91, 52, 23)
+    paint.color = Color.argb(92, 151, 91, 56)
 
     val rowStep = ((bottom - top) / 3f).coerceAtLeast(6f)
     var y = top + rowStep
@@ -973,20 +1121,29 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       x += colStep
     }
 
+    drawSoftFaceHighlight(canvas, left, top, right, bottom)
+    paint.style = Paint.Style.FILL
+    paint.color = Color.argb(62, 255, 242, 206)
+    drawSeededDots(canvas, face, left, top, right, bottom, 4, 0.95f * density)
+
     if (face.block == WORKBENCH) {
-      paint.color = Color.argb(130, 222, 176, 99)
+      paint.style = Paint.Style.STROKE
+      paint.color = Color.argb(150, 255, 211, 133)
       paint.strokeWidth = 1.5f * density
       canvas.drawLine(left + colStep * 0.45f, top + rowStep * 0.45f, right - colStep * 0.45f, top + rowStep * 0.45f, paint)
       canvas.drawLine(left + colStep * 0.45f, top + rowStep * 0.85f, right - colStep * 0.45f, top + rowStep * 0.85f, paint)
+      paint.style = Paint.Style.FILL
+      paint.color = Color.argb(170, 255, 236, 167)
+      drawSeededFlowers(canvas, face, left, top, right, bottom, 1, 1.25f * density)
     }
 
     if (face.block == DOOR && face.face != TOP_FACE) {
       paint.style = Paint.Style.STROKE
       paint.strokeWidth = 1.5f * density
-      paint.color = Color.argb(120, 64, 34, 13)
+      paint.color = Color.argb(126, 136, 74, 42)
       canvas.drawRect(left + colStep * 0.45f, top + rowStep * 0.45f, right - colStep * 0.45f, bottom - rowStep * 0.35f, paint)
       paint.style = Paint.Style.FILL
-      paint.color = Color.argb(190, 238, 191, 73)
+      paint.color = Color.argb(205, 255, 221, 116)
       canvas.drawCircle(right - colStep * 0.65f, (top + bottom) * 0.5f, 1.9f * density, paint)
     }
   }
@@ -1003,12 +1160,61 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     if (face.face == TOP_FACE) return
 
     paint.style = Paint.Style.FILL
-    paint.color = Color.argb(175, 22, 27, 34)
+    paint.color = Color.argb(160, 69, 80, 98)
     val w = right - left
     val h = bottom - top
-    canvas.drawRect(left + w * 0.28f, top + h * 0.34f, right - w * 0.28f, bottom - h * 0.25f, paint)
-    paint.color = Color.argb(170, 244, 124, 55)
-    canvas.drawRect(left + w * 0.38f, top + h * 0.48f, right - w * 0.38f, bottom - h * 0.34f, paint)
+    canvas.drawRoundRect(
+      left + w * 0.25f,
+      top + h * 0.32f,
+      right - w * 0.25f,
+      bottom - h * 0.24f,
+      4f * density,
+      4f * density,
+      paint,
+    )
+    paint.color = Color.argb(182, 255, 166, 121)
+    canvas.drawRoundRect(
+      left + w * 0.37f,
+      top + h * 0.48f,
+      right - w * 0.37f,
+      bottom - h * 0.34f,
+      3f * density,
+      3f * density,
+      paint,
+    )
+    paint.color = Color.argb(130, 255, 230, 144)
+    canvas.drawCircle((left + right) * 0.5f, top + h * 0.42f, 1.7f * density, paint)
+  }
+
+  private fun drawUndersideTexture(
+    canvas: Canvas,
+    face: ProjectedFace,
+    left: Float,
+    top: Float,
+    right: Float,
+    bottom: Float,
+  ) {
+    paint.style = Paint.Style.FILL
+    paint.color = Color.argb(72, 72, 50, 54)
+    drawSeededDots(canvas, face, left, top, right, bottom, 4, 1.2f * density)
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 1f * density
+    paint.color = Color.argb(78, 255, 238, 218)
+    drawSeededStrokes(canvas, face, left, top, right, bottom, 2, 5f * density, 3f * density)
+  }
+
+  private fun drawSoftFaceHighlight(
+    canvas: Canvas,
+    left: Float,
+    top: Float,
+    right: Float,
+    bottom: Float,
+  ) {
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 1.2f * density
+    paint.color = Color.argb(64, 255, 255, 255)
+    canvas.drawLine(left, top, right, top, paint)
+    canvas.drawLine(left, top, left, bottom, paint)
   }
 
   private fun drawSeededDots(
@@ -1053,6 +1259,36 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       val x = left + rx * w
       val y = top + ry * h
       canvas.drawLine(x - length * 0.5f, y, x + length * 0.5f, y + slope, paint)
+    }
+  }
+
+  private fun drawSeededFlowers(
+    canvas: Canvas,
+    face: ProjectedFace,
+    left: Float,
+    top: Float,
+    right: Float,
+    bottom: Float,
+    count: Int,
+    radius: Float,
+  ) {
+    val w = right - left
+    val h = bottom - top
+    if (w <= 0f || h <= 0f) return
+
+    for (i in 0 until count) {
+      val cx = left + seededUnit(face, i * 5 + 1) * w
+      val cy = top + seededUnit(face, i * 5 + 2) * h
+      paint.style = Paint.Style.FILL
+      paint.color =
+        if (seededUnit(face, i * 5 + 3) > 0.5f) Color.argb(178, 255, 186, 208)
+        else Color.argb(178, 255, 240, 158)
+      canvas.drawCircle(cx - radius, cy, radius, paint)
+      canvas.drawCircle(cx + radius, cy, radius, paint)
+      canvas.drawCircle(cx, cy - radius, radius, paint)
+      canvas.drawCircle(cx, cy + radius, radius, paint)
+      paint.color = Color.argb(210, 255, 247, 190)
+      canvas.drawCircle(cx, cy, radius * 0.72f, paint)
     }
   }
 
@@ -1175,7 +1411,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   private fun drawNativeActionPad(canvas: Canvas) {
     drawNativeActionButton(canvas, ACTION_MINE)
     drawNativeActionButton(canvas, ACTION_PLACE)
-    drawNativeActionButton(canvas, ACTION_RESET)
+    drawNativeActionButton(canvas, ACTION_JUMP)
   }
 
   private fun drawNativeActionButton(canvas: Canvas, action: Int) {
@@ -1187,7 +1423,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       when (action) {
         ACTION_MINE -> if (active) Color.rgb(205, 111, 64) else Color.argb(232, 177, 88, 55)
         ACTION_PLACE -> if (active) Color.rgb(62, 157, 101) else Color.argb(232, 55, 130, 88)
-        else -> if (active) Color.rgb(70, 85, 110) else Color.argb(232, 48, 58, 76)
+        else -> if (active) Color.rgb(71, 129, 205) else Color.argb(232, 56, 93, 154)
       }
     canvas.drawRoundRect(controlRect, 12f * density, 12f * density, paint)
 
@@ -1197,7 +1433,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       when (action) {
         ACTION_MINE -> Color.rgb(255, 194, 164)
         ACTION_PLACE -> Color.rgb(184, 255, 208)
-        else -> Color.rgb(182, 196, 216)
+        else -> Color.rgb(205, 226, 255)
       }
     canvas.drawRoundRect(controlRect, 12f * density, 12f * density, paint)
 
@@ -1213,7 +1449,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   }
 
   private fun hitNativeActionPad(x: Float, y: Float): Int {
-    val actions = intArrayOf(ACTION_MINE, ACTION_PLACE, ACTION_RESET)
+    val actions = intArrayOf(ACTION_MINE, ACTION_PLACE, ACTION_JUMP)
     for (action in actions) {
       setNativeActionButtonRect(action, controlRect)
       if (controlRect.contains(x, y)) {
@@ -1259,7 +1495,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     when (action) {
       ACTION_MINE -> mineTarget()
       ACTION_PLACE -> placeTarget()
-      ACTION_RESET -> resetWorldAndPlayer()
+      ACTION_JUMP -> queueJump()
     }
     invalidate()
   }
@@ -1268,7 +1504,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     return when (action) {
       ACTION_MINE -> ACTION_MINE_LABEL
       ACTION_PLACE -> ACTION_PLACE_LABEL
-      else -> ACTION_RESET_LABEL
+      else -> ACTION_JUMP_LABEL
     }
   }
 
@@ -1366,10 +1602,10 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   }
 
   private fun intersectsPlayer(x: Int, y: Int, z: Int): Boolean {
-    val px = floor(cameraX).toInt()
-    val pz = floor(cameraZ).toInt()
     val footY = floor(cameraY - EYE_HEIGHT).toInt()
-    return x == px && z == pz && y in footY..footY + 2
+    val overlapsX = cameraX + PLAYER_RADIUS > x && cameraX - PLAYER_RADIUS < x + 1f
+    val overlapsZ = cameraZ + PLAYER_RADIUS > z && cameraZ - PLAYER_RADIUS < z + 1f
+    return overlapsX && overlapsZ && y in footY..footY + PLAYER_BODY_BLOCKS
   }
 
   private fun highestSolidY(x: Int, z: Int): Int {
@@ -1413,17 +1649,17 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
 
   private fun blockColor(block: Int): Int {
     return when (block) {
-      GRASS -> Color.rgb(86, 172, 78)
-      DIRT -> Color.rgb(127, 83, 49)
-      STONE -> Color.rgb(116, 121, 130)
-      WOOD -> Color.rgb(130, 82, 42)
-      LEAVES -> Color.rgb(50, 135, 77)
-      IRON_ORE -> Color.rgb(161, 143, 124)
-      PLANK -> Color.rgb(181, 128, 70)
-      WORKBENCH -> Color.rgb(151, 95, 46)
-      FURNACE -> Color.rgb(81, 88, 96)
-      DOOR -> Color.rgb(146, 92, 45)
-      CHAIR -> Color.rgb(166, 106, 56)
+      GRASS -> Color.rgb(142, 218, 132)
+      DIRT -> Color.rgb(190, 139, 102)
+      STONE -> Color.rgb(166, 178, 198)
+      WOOD -> Color.rgb(203, 142, 91)
+      LEAVES -> Color.rgb(126, 207, 135)
+      IRON_ORE -> Color.rgb(196, 177, 161)
+      PLANK -> Color.rgb(227, 175, 113)
+      WORKBENCH -> Color.rgb(220, 155, 95)
+      FURNACE -> Color.rgb(150, 159, 176)
+      DOOR -> Color.rgb(214, 147, 88)
+      CHAIR -> Color.rgb(224, 158, 96)
       else -> Color.TRANSPARENT
     }
   }
@@ -1447,12 +1683,16 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     private const val WORLD_WIDTH = 72
     private const val WORLD_DEPTH = 72
     private const val WORLD_HEIGHT = 18
-    private const val RENDER_RADIUS = 17
-    private const val RENDER_DISTANCE = 25f
-    private const val TEXTURE_DISTANCE = 18f
-    private const val NEAR_PLANE = 0.08f
+    private const val RENDER_RADIUS = 8
+    private const val BOTTOM_FACE_RADIUS = 4
+    private const val RENDER_DISTANCE = 13f
+    private const val TEXTURE_DISTANCE = 4f
+    private const val EDGE_DISTANCE = 9f
+    private const val NEAR_PLANE = 0.035f
     private const val ACTION_REACH = 5.8f
     private const val WALK_SPEED = 4.1f
+    private const val JUMP_SPEED = 6.8f
+    private const val GRAVITY = 18f
     private const val TURN_SPEED = 1.95f
     private const val LOOK_SPEED = 1.15f
     private const val DRAG_YAW_SPEED = 0.0055f
@@ -1460,6 +1700,10 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     private const val MIN_PITCH = -1.55f
     private const val MAX_PITCH = 1.55f
     private const val EYE_HEIGHT = 1.68f
+    private const val PLAYER_RADIUS = 0.34f
+    private const val PLAYER_BODY_BLOCKS = 2
+    private const val MAX_STEP_HEIGHT = 1.05f
+    private const val GROUND_SNAP_DISTANCE = 0.08f
 
     private const val MOVE_NONE = 0
     private const val MOVE_UP = 1
@@ -1475,7 +1719,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     private const val ACTION_NONE = 0
     private const val ACTION_MINE = 1
     private const val ACTION_PLACE = 2
-    private const val ACTION_RESET = 3
+    private const val ACTION_JUMP = 3
     private const val ACTION_BUTTON_WIDTH_DP = 74f
     private const val ACTION_BUTTON_HEIGHT_DP = 48f
     private const val ACTION_BUTTON_GAP_DP = 8f
@@ -1484,7 +1728,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     private const val ACTION_FLASH_NANOS = 140_000_000L
     private const val ACTION_MINE_LABEL = "\uCE90\uAE30"
     private const val ACTION_PLACE_LABEL = "\uB193\uAE30"
-    private const val ACTION_RESET_LABEL = "\uB9AC\uC14B"
+    private const val ACTION_JUMP_LABEL = "\uC810\uD504"
     private const val MINE_DENIED_TOOL_LABEL = "맞는 특별 도구가 있어야 캘 수 있습니다."
     private const val MINE_DENIED_DURABILITY_LABEL = "도구 내구도가 없습니다."
 
@@ -1511,6 +1755,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     private const val SOUTH_FACE = 2
     private const val WEST_FACE = 3
     private const val EAST_FACE = 4
+    private const val BOTTOM_FACE = 5
 
     private val FACE_VERTICES =
       arrayOf(
@@ -1519,6 +1764,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
         floatArrayOf(0f, 0f, 1f, 1f, 0f, 1f, 1f, 1f, 1f, 0f, 1f, 1f),
         floatArrayOf(0f, 0f, 0f, 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f, 0f),
         floatArrayOf(1f, 0f, 1f, 1f, 0f, 0f, 1f, 1f, 0f, 1f, 1f, 1f),
+        floatArrayOf(0f, 0f, 1f, 1f, 0f, 1f, 1f, 0f, 0f, 0f, 0f, 0f),
       )
   }
 }
