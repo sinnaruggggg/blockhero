@@ -39,9 +39,7 @@ import BaseVisualElementView, {
   buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
-import RaidParticipants, {
-  RaidParticipant,
-} from '../components/RaidParticipants';
+import { RaidParticipant } from '../components/RaidParticipants';
 import { useDragDrop } from '../game/useDragDrop';
 import { BOSS_RAID_WINDOW_MS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import { RAID_BOSSES, getNormalRaidMaxHp } from '../constants/raidBosses';
@@ -567,6 +565,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const feverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feverTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gameOverRef = useRef(false);
+  const bossDefeatedRef = useRef(false);
   const spectatorRef = useRef(false);
   const attackPowerRef = useRef(10);
   const baseAttackPowerRef = useRef(10);
@@ -1511,6 +1510,7 @@ export default function RaidScreen({ route, navigation }: any) {
 
   const applyRaidCleared = useCallback((snapshot?: RaidClearSnapshot | null) => {
     setBossDefeated(true);
+    bossDefeatedRef.current = true;
     setGameOver(true);
     gameOverRef.current = true;
     setSpectatorMode(false);
@@ -1534,6 +1534,7 @@ export default function RaidScreen({ route, navigation }: any) {
       setBossHp(bossMaxHp);
       bossHpRef.current = bossMaxHp;
       setBossDefeated(false);
+      bossDefeatedRef.current = false;
       setGameOver(false);
       gameOverRef.current = false;
       setTimeExpired(false);
@@ -1612,6 +1613,35 @@ export default function RaidScreen({ route, navigation }: any) {
       playerHpAnim,
       updateNextPieces,
     ],
+  );
+
+  const applyRaidRematchFromInstance = useCallback(
+    (instance: any) => {
+      if (!instance || !['active', 'battle'].includes(instance.status)) {
+        return false;
+      }
+      if (!bossDefeatedRef.current && !gameOverRef.current) {
+        return false;
+      }
+
+      const nextStartedAt = Date.parse(instance.started_at ?? '');
+      if (
+        Number.isFinite(nextStartedAt) &&
+        startedAtRef.current > 0 &&
+        nextStartedAt <= startedAtRef.current
+      ) {
+        return false;
+      }
+
+      // RAID_FIX: if a party member misses raid_rematch_start broadcast, the
+      // raid_instances row update is the fallback signal to enter the next run.
+      resetLocalRaidBattleForNextRun({
+        startedAt: instance.started_at,
+        expiresAt: instance.expires_at,
+      });
+      return true;
+    },
+    [resetLocalRaidBattleForNextRun],
   );
 
   useEffect(() => {
@@ -2108,6 +2138,9 @@ export default function RaidScreen({ route, navigation }: any) {
               if (!mounted || !nextInstance) {
                 return;
               }
+              if (applyRaidRematchFromInstance(nextInstance)) {
+                return;
+              }
               // RAID_FIX: cleared/closed instance updates are table state, not
               // only realtime broadcasts, so dead spectators also see results.
               if (
@@ -2261,6 +2294,7 @@ export default function RaidScreen({ route, navigation }: any) {
     applyBattleStats,
     applyParticipantRuntimeSnapshot,
     applyRaidCleared,
+    applyRaidRematchFromInstance,
     bossStage,
     buildRaidClearSnapshot,
     buildRaidPiecePack,
@@ -2295,14 +2329,18 @@ export default function RaidScreen({ route, navigation }: any) {
       ]).then(([instanceResult, participantsResult]) => {
         const instance = (instanceResult as any).data;
         if (instance) {
-          if (typeof instance.boss_current_hp === 'number') {
+          const didApplyRematch = applyRaidRematchFromInstance(instance);
+          if (!didApplyRematch && typeof instance.boss_current_hp === 'number') {
             setBossHp(instance.boss_current_hp);
             bossHpRef.current = instance.boss_current_hp;
           }
-          if (instance.status === 'defeated' || instance.status === 'cleared') {
+          if (
+            !didApplyRematch &&
+            (instance.status === 'defeated' || instance.status === 'cleared')
+          ) {
             applyRaidCleared(clearSnapshot ?? buildRaidClearSnapshot());
           }
-          if (instance.status === 'closed') {
+          if (!didApplyRematch && instance.status === 'closed') {
             allowLeaveRef.current = true;
             clearRaidScreenCache(instanceId);
             navigation.replace('RaidLobby');
@@ -2329,6 +2367,7 @@ export default function RaidScreen({ route, navigation }: any) {
     };
   }, [
     applyRaidCleared,
+    applyRaidRematchFromInstance,
     buildRaidClearSnapshot,
     clearSnapshot,
     expiresAt,
@@ -4894,10 +4933,6 @@ export default function RaidScreen({ route, navigation }: any) {
             </View>
 
             {renderTopStatusRow(true)}
-            <RaidParticipants
-              participants={participants}
-              myPlayerId={playerIdRef.current}
-            />
           </>
         ) : (
           <>
@@ -4934,10 +4969,6 @@ export default function RaidScreen({ route, navigation }: any) {
             />
 
             {renderTopStatusRow(false)}
-            <RaidParticipants
-              participants={participants}
-              myPlayerId={playerIdRef.current}
-            />
           </>
         )}
       </VisualElementView>
