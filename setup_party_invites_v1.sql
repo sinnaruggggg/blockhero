@@ -4,6 +4,32 @@ ADD COLUMN IF NOT EXISTS party_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_raid_instances_party_stage_status
 ON public.raid_instances (party_id, boss_stage, status, expires_at DESC);
 
+-- RAID_FIX: before adding the one-active-room guard, close duplicate active
+-- party raid rooms left by older builds. A party must poll one room only.
+WITH ranked_party_raids AS (
+  SELECT
+    id,
+    ROW_NUMBER() OVER (
+      PARTITION BY party_id
+      ORDER BY created_at DESC, started_at DESC
+    ) AS room_rank
+  FROM public.raid_instances
+  WHERE party_id IS NOT NULL
+    AND status IN ('active', 'battle', 'waiting', 'ready')
+)
+UPDATE public.raid_instances
+SET status = 'closed'
+WHERE id IN (
+  SELECT id
+  FROM ranked_party_raids
+  WHERE room_rank > 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_raid_instances_one_active_party_raid
+ON public.raid_instances (party_id)
+WHERE party_id IS NOT NULL
+  AND status IN ('active', 'battle', 'waiting', 'ready');
+
 CREATE TABLE IF NOT EXISTS public.parties (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   leader_id TEXT NOT NULL,
@@ -32,6 +58,34 @@ CREATE INDEX IF NOT EXISTS idx_parties_raid_target_status
 ON public.parties (raid_type, boss_stage, status, updated_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_party_members_player
+ON public.party_members (player_id);
+
+-- RAID_FIX: one phone/user must not remain in several raid parties. Clean old
+-- duplicate rows first, then add a DB guard so races cannot create more.
+WITH ranked_members AS (
+  SELECT
+    pm.ctid AS row_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY pm.player_id
+      ORDER BY p.updated_at DESC NULLS LAST, pm.joined_at DESC
+    ) AS member_rank
+  FROM public.party_members pm
+  LEFT JOIN public.parties p ON p.id = pm.party_id
+)
+DELETE FROM public.party_members pm
+USING ranked_members ranked
+WHERE pm.ctid = ranked.row_id
+  AND ranked.member_rank > 1;
+
+DELETE FROM public.parties p
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.party_members pm
+  WHERE pm.party_id = p.id
+    AND pm.player_id = p.leader_id
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_one_party_per_player
 ON public.party_members (player_id);
 
 ALTER TABLE public.parties ENABLE ROW LEVEL SECURITY;

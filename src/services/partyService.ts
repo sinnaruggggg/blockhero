@@ -70,6 +70,7 @@ async function getMembership(playerId: string) {
     .from('party_members')
     .select('party_id')
     .eq('player_id', playerId)
+    .order('joined_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 }
@@ -106,6 +107,43 @@ async function cleanupInvalidParty(partyId: string) {
   if (result.error) {
     console.warn('partyService cleanupInvalidParty failed:', result.error);
   }
+}
+
+async function cleanupCreatedPartyOnFailure(partyId: string) {
+  // RAID_FIX: party creation is split across parties + party_members. If the
+  // member insert fails, remove the new party immediately so it cannot remain
+  // as a hostless recruitment row.
+  const result = await disbandParty(partyId);
+  if (result.error) {
+    console.warn('partyService cleanupCreatedPartyOnFailure failed:', result.error);
+  }
+}
+
+function isDuplicateMembershipError(error: unknown) {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+
+  return code === '23505' || message.includes('duplicate key');
+}
+
+function isMissingOptionalTableError(error: unknown, tableName: string) {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+
+  return (
+    message.includes(tableName) &&
+    (message.includes('schema cache') ||
+      message.includes('relation') ||
+      message.includes('does not exist'))
+  );
 }
 
 async function updateInviteStatus(
@@ -154,6 +192,7 @@ export async function createParty(leaderId: string, nickname: string) {
     nickname,
   });
   if (memberError) {
+    await cleanupCreatedPartyOnFailure(party.id);
     return { data: null, error: memberError };
   }
 
@@ -316,7 +355,18 @@ export async function joinParty(
     return { data: null, error: { message: 'party_full' } };
   }
 
-  return supabase
+  const { data: latestMembership, error: latestMembershipError } =
+    await getMembership(playerId);
+  if (latestMembershipError) {
+    return { data: null, error: latestMembershipError };
+  }
+  if (latestMembership?.party_id && latestMembership.party_id !== partyId) {
+    // RAID_FIX: reduce race windows before insert; the DB unique index in the
+    // runtime SQL is the final guard for "one player, one raid party".
+    return { data: null, error: { message: 'already_in_party' } };
+  }
+
+  const result = await supabase
     .from('party_members')
     .insert({
       party_id: partyId,
@@ -325,6 +375,12 @@ export async function joinParty(
     })
     .select()
     .single();
+
+  if (result.error && isDuplicateMembershipError(result.error)) {
+    return { data: null, error: { message: 'already_in_party' } };
+  }
+
+  return result;
 }
 
 export async function leaveParty(partyId: string, playerId: string) {
@@ -338,13 +394,16 @@ export async function leaveParty(partyId: string, playerId: string) {
 export async function disbandParty(partyId: string) {
   // RAID_FIX: a disbanded raid party must disappear from recruitment and stop
   // leaving an active party raid room behind.
-  await supabase
+  const closeResult = await supabase
     .from('raid_instances')
     .update({ status: 'closed' })
     .eq('party_id', partyId)
     .in('status', ['active', 'battle', 'waiting', 'ready']);
+  if (closeResult.error) {
+    return { data: null, error: closeResult.error };
+  }
 
-  await supabase
+  const inviteResult = await supabase
     .from('party_invites')
     .update({
       status: 'cancelled',
@@ -352,6 +411,12 @@ export async function disbandParty(partyId: string) {
     })
     .eq('party_id', partyId)
     .eq('status', 'pending');
+  if (
+    inviteResult.error &&
+    !isMissingOptionalTableError(inviteResult.error, 'party_invites')
+  ) {
+    return { data: null, error: inviteResult.error };
+  }
 
   return supabase.from('parties').delete().eq('id', partyId);
 }
@@ -385,9 +450,20 @@ export async function getMyParty(playerId: string) {
     .from('parties')
     .select('*')
     .eq('id', membership.party_id)
-    .single();
+    .maybeSingle();
 
-  return { data: party ?? null, error: partyError ?? null };
+  if (partyError) {
+    return { data: null, error: partyError };
+  }
+
+  if (!party) {
+    // RAID_FIX: if a party row was deleted without cascade on an older DB,
+    // drop the orphan member row so this user is not stuck in a phantom party.
+    await leaveParty(membership.party_id, playerId);
+    return { data: null, error: null };
+  }
+
+  return { data: party, error: null };
 }
 
 export async function getPartyMembers(partyId: string) {
@@ -499,7 +575,7 @@ export async function createPartyInvite(
 
   const { data: party, error: partyError } = await supabase
     .from('parties')
-    .select('id, leader_id')
+    .select('id, leader_id, status')
     .eq('id', partyId)
     .maybeSingle();
   if (partyError) {
@@ -510,6 +586,11 @@ export async function createPartyInvite(
   }
   if (party.leader_id !== inviterId) {
     return { data: null, error: { message: 'leader_only' } };
+  }
+  if (party.status && party.status !== 'recruiting') {
+    // RAID_FIX: after the host starts a raid, late invites must not add a new
+    // member who missed the synchronized party entry flow.
+    return { data: null, error: { message: 'party_not_found' } };
   }
 
   const { count, error: countError } = await getPartyMemberCount(partyId);

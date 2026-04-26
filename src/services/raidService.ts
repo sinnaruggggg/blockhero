@@ -18,6 +18,7 @@ interface StartRaidOptions {
 interface RaidAccessOptions {
   bypassBossWindow?: boolean;
   raidType?: 'normal' | 'boss';
+  expectedPartyId?: string | null;
 }
 
 interface RaidInstanceRecord {
@@ -77,6 +78,16 @@ function isMissingRaidRuntimeColumnError(error: unknown) {
   );
 }
 
+function isMissingPartyStateColumnError(error: unknown) {
+  const message = getErrorMessage(error);
+  return (
+    (message.includes('status') || message.includes('updated_at')) &&
+    (message.includes('schema cache') ||
+      message.includes('column') ||
+      message.includes('does not exist'))
+  );
+}
+
 function getErrorMessage(error: unknown) {
   return error && typeof error === 'object' && 'message' in error
     ? String((error as { message?: unknown }).message ?? '')
@@ -110,6 +121,98 @@ function matchesRaidType(
 
   const isNormal = isNormalRaidInstance(instance);
   return raidType === 'normal' ? isNormal : !isNormal;
+}
+
+async function validatePartyRaidAccess(
+  instance: RaidInstanceRecord,
+  playerId: string,
+  options: RaidAccessOptions = {},
+) {
+  const instancePartyId = instance.party_id ?? null;
+  if (
+    Object.prototype.hasOwnProperty.call(options, 'expectedPartyId') &&
+    (options.expectedPartyId ?? null) !== instancePartyId
+  ) {
+    // RAID_FIX: never trust a client/broadcast raid id unless it belongs to
+    // the party flow that is trying to enter it.
+    return { error: { message: 'raid_party_mismatch' } };
+  }
+
+  if (!instancePartyId) {
+    return { error: null };
+  }
+
+  const { data: membership, error } = await supabase
+    .from('party_members')
+    .select('party_id')
+    .eq('party_id', instancePartyId)
+    .eq('player_id', playerId)
+    .maybeSingle();
+
+  if (error) {
+    return { error };
+  }
+
+  if (!membership) {
+    // RAID_FIX: party raid rooms are private to current party members. This
+    // blocks stale room ids and prevents old duplicate rooms from hijacking a
+    // member into the wrong realtime channel.
+    return { error: { message: 'not_in_party' } };
+  }
+
+  return { error: null };
+}
+
+async function validatePartyRaidStart(partyId: string, playerId: string) {
+  const { data: party, error: partyError } = await supabase
+    .from('parties')
+    .select('id, leader_id, status')
+    .eq('id', partyId)
+    .maybeSingle();
+
+  if (partyError) {
+    return { data: null, error: partyError };
+  }
+  if (!party) {
+    return { data: null, error: { message: 'party_not_found' } };
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from('party_members')
+    .select('party_id')
+    .eq('party_id', partyId)
+    .eq('player_id', playerId)
+    .maybeSingle();
+
+  if (membershipError) {
+    return { data: null, error: membershipError };
+  }
+  if (!membership) {
+    return { data: null, error: { message: 'not_in_party' } };
+  }
+  if (party.leader_id !== playerId) {
+    // RAID_FIX: the UI already hides this button, but the service must also
+    // reject non-host starts so a stale client cannot start a party raid alone.
+    return { data: null, error: { message: 'leader_only' } };
+  }
+
+  return { data: party, error: null };
+}
+
+async function updatePartyRaidStatus(partyId: string, status: string) {
+  const result = await supabase
+    .from('parties')
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', partyId);
+
+  if (result.error && isMissingPartyStateColumnError(result.error)) {
+    return { error: null };
+  }
+
+  return { error: result.error ?? null };
 }
 
 function isCurrentBossWindowInstance(
@@ -291,6 +394,40 @@ async function closeOtherActivePartyRaids(
   return closeResult;
 }
 
+async function closeAllActivePartyRaids(partyId: string) {
+  // RAID_FIX: close stale active rooms before creating a fresh party raid.
+  // This keeps the party on one raid_instance id even when an older build left
+  // duplicate active rows behind.
+  const closeResult = await supabase
+    .from('raid_instances')
+    .update({ status: 'closed' })
+    .eq('party_id', partyId)
+    .in('status', ['active', 'battle', 'waiting', 'ready']);
+
+  if (!closeResult.error) {
+    await deleteInactivePartyRaidRooms(partyId, '');
+  }
+
+  return closeResult;
+}
+
+async function cleanupFailedRaidStart(instanceId: string) {
+  // RAID_FIX: raid creation and host join are separate DB calls in the current
+  // client flow. If a later step fails, remove the half-created room so it
+  // cannot appear as a ghost party raid.
+  const deleteResult = await deleteRaidInstancesByIds([instanceId]);
+  if (!deleteResult.error) {
+    return { error: null };
+  }
+
+  const closeResult = await supabase
+    .from('raid_instances')
+    .update({ status: 'closed' })
+    .eq('id', instanceId);
+
+  return { error: closeResult.error ?? deleteResult.error ?? null };
+}
+
 async function deleteRaidInstancesByIds(instanceIds: string[]) {
   if (instanceIds.length === 0) {
     return { error: null };
@@ -438,6 +575,15 @@ export async function joinRaidInstance(
     return { data: null, error: { message: 'raid_expired' } };
   }
 
+  const partyAccess = await validatePartyRaidAccess(
+    instance,
+    playerId,
+    options,
+  );
+  if (partyAccess.error) {
+    return { data: null, error: partyAccess.error };
+  }
+
   const { data: existingParticipant, error: existingParticipantError } =
     await supabase
       .from('raid_participants')
@@ -455,7 +601,8 @@ export async function joinRaidInstance(
 
   if (
     !isClearedStatus &&
-    (!RAID_BATTLE_COMPAT_STATUSES.has(instance.status) ||
+    (!matchesRaidType(instance, options.raidType) ||
+      !RAID_BATTLE_COMPAT_STATUSES.has(instance.status) ||
       new Date(instance.expires_at).getTime() <= Date.now() ||
       !isUsableActiveRaidInstance(
         instance,
@@ -473,16 +620,56 @@ export async function joinRaidInstance(
   }
 
   if (existingParticipant) {
+    const restoringLeftParticipant = existingParticipant.role === 'left';
+    const updatePayload: Record<string, unknown> = {
+      nickname,
+      joined_at: restoringLeftParticipant
+        ? new Date().toISOString()
+        : existingParticipant.joined_at ?? new Date().toISOString(),
+    };
+
+    if (restoringLeftParticipant) {
+      // RAID_FIX: older cleanup fell back to role='left' when delete was
+      // blocked. A valid manual rejoin should restore that same row instead
+      // of keeping the player invisible to the party.
+      updatePayload.role =
+        playerId === instance.starter_id ? 'host' : 'member';
+      updatePayload.is_host = playerId === instance.starter_id;
+      updatePayload.is_ready = false;
+      updatePayload.is_alive = true;
+      updatePayload.current_hp = null;
+      updatePayload.max_hp = null;
+      updatePayload.battle_stats = {};
+      updatePayload.board_state = null;
+      updatePayload.updated_at = new Date().toISOString();
+    }
+
     const { data, error } = await supabase
       .from('raid_participants')
-      .update({
-        nickname,
-        joined_at: existingParticipant.joined_at ?? new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('raid_instance_id', instanceId)
       .eq('player_id', playerId)
       .select()
       .single();
+
+    if (error && isMissingRaidRuntimeColumnError(error)) {
+      const fallback = await supabase
+        .from('raid_participants')
+        .update({
+          nickname,
+          joined_at:
+            existingParticipant.joined_at ?? new Date().toISOString(),
+        })
+        .eq('raid_instance_id', instanceId)
+        .eq('player_id', playerId)
+        .select()
+        .single();
+
+      return {
+        data: fallback.data ?? existingParticipant,
+        error: fallback.error ?? null,
+      };
+    }
 
     return { data: data ?? existingParticipant, error };
   }
@@ -732,6 +919,11 @@ export async function startRaid(
     (expiresInMs >= NORMAL_RAID_DURATION_THRESHOLD_MS ? 'normal' : 'boss');
 
   if (partyId) {
+    const startAccess = await validatePartyRaidStart(partyId, playerId);
+    if (startAccess.error) {
+      return { data: null, error: startAccess.error };
+    }
+
     const { data: partyInstance, error: partyError } = await getPartyActiveRaid(
       partyId,
       bossStage,
@@ -754,12 +946,17 @@ export async function startRaid(
         partyInstance.id,
         playerId,
         nickname,
-        { bypassBossWindow: options.bypassBossWindow },
+        {
+          bypassBossWindow: options.bypassBossWindow,
+          expectedPartyId: partyId,
+          raidType,
+        },
       );
       if (joinError) {
         return { data: null, error: joinError };
       }
 
+      await updatePartyRaidStatus(partyId, 'battle');
       return { data: partyInstance, error: null };
     }
   }
@@ -789,12 +986,19 @@ export async function startRaid(
         reusableInstance.id,
         playerId,
         nickname,
-        { bypassBossWindow: options.bypassBossWindow },
+        {
+          bypassBossWindow: options.bypassBossWindow,
+          expectedPartyId: partyId,
+          raidType,
+        },
       );
       if (joinError) {
         return { data: null, error: joinError };
       }
 
+      if (partyId) {
+        await updatePartyRaidStatus(partyId, 'battle');
+      }
       return { data: reusableInstance, error: null };
     }
   }
@@ -806,6 +1010,13 @@ export async function startRaid(
     );
     if (closeError) {
       return { data: null, error: closeError };
+    }
+  }
+
+  if (partyId) {
+    const { error: closeAllError } = await closeAllActivePartyRaids(partyId);
+    if (closeAllError) {
+      return { data: null, error: closeAllError };
     }
   }
 
@@ -829,22 +1040,32 @@ export async function startRaid(
       instance.id,
     );
     if (closeError) {
+      await cleanupFailedRaidStart(instance.id);
       return { data: null, error: closeError };
     }
-  }
-
-  if (!options.skipCooldown) {
-    await setPlayerCooldown(playerId, tier);
   }
 
   const { error: joinError } = await joinRaidInstance(
     instance.id,
     playerId,
     nickname,
-    { bypassBossWindow: options.bypassBossWindow },
+    {
+      bypassBossWindow: options.bypassBossWindow,
+      expectedPartyId: partyId,
+      raidType,
+    },
   );
   if (joinError) {
+    await cleanupFailedRaidStart(instance.id);
     return { data: null, error: joinError };
+  }
+
+  if (partyId) {
+    await updatePartyRaidStatus(partyId, 'battle');
+  }
+
+  if (!options.skipCooldown) {
+    await setPlayerCooldown(playerId, tier);
   }
 
   return { data: instance, error: null };

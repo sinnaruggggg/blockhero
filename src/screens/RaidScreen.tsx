@@ -1790,7 +1790,10 @@ export default function RaidScreen({ route, navigation }: any) {
             instanceId,
             playerIdRef.current,
             nicknameRef.current,
-            { bypassBossWindow: isAdmin },
+            {
+              bypassBossWindow: isAdmin,
+              raidType: isNormalRaid ? 'normal' : 'boss',
+            },
           ),
           'raid_join',
         ).catch(error => ({ data: null, error }));

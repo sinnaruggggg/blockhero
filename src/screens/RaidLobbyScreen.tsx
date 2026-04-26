@@ -106,6 +106,7 @@ interface ActiveRaid {
   expires_at: string;
   starter_id: string;
   status?: string;
+  party_id?: string | null;
 }
 
 interface PartyMemberLocal {
@@ -635,6 +636,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       const currentPlayerId = playerIdRef.current;
       const currentNickname = nicknameRef.current;
       const raidStatus = raid?.status ?? 'active';
+      const raidPartyId = raid?.party_id ?? null;
 
       if (
         !raid?.id ||
@@ -644,6 +646,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
         isLeaderRef.current ||
         (raidStatus !== 'active' && raidStatus !== 'battle')
       ) {
+        return;
+      }
+
+      if (raidPartyId && raidPartyId !== currentPartyId) {
+        // RAID_FIX: ignore stale/mismatched party raid rows before navigation.
         return;
       }
 
@@ -660,7 +667,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
         raid.id,
         currentPlayerId,
         currentNickname,
-        { bypassBossWindow: isAdmin },
+        {
+          bypassBossWindow: isAdmin,
+          expectedPartyId: currentPartyId,
+          raidType: inferPartyRaidIsNormal(raid) ? 'normal' : 'boss',
+        },
       );
 
       if (error) {
@@ -700,14 +711,27 @@ export default function RaidLobbyScreen({ navigation }: any) {
       started_at?: string;
       expires_at?: string;
       starter_id?: string;
+      partyId?: string | null;
+      party_id?: string | null;
       isNormalRaid?: boolean;
       status?: string;
     }) => {
       const nextInstanceId = raidPayload.instanceId ?? raidPayload.id;
       const nextBossStage = raidPayload.bossStage ?? raidPayload.boss_stage;
       const status = raidPayload.status ?? 'active';
+      const payloadPartyId = raidPayload.partyId ?? raidPayload.party_id;
 
       if (!nextInstanceId || typeof nextBossStage !== 'number') {
+        return;
+      }
+
+      if (
+        payloadPartyId &&
+        partyIdRef.current &&
+        payloadPartyId !== partyIdRef.current
+      ) {
+        // RAID_FIX: party channels are client-created, so verify the payload's
+        // party id before treating it as a start signal.
         return;
       }
 
@@ -735,6 +759,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         expires_at: expiresAt,
         starter_id: raidPayload.starter_id ?? '',
         status,
+        party_id: payloadPartyId ?? partyIdRef.current,
       };
 
       setPartyActiveRaid(currentRaid =>
@@ -1930,6 +1955,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
             starter_id: instance.starter_id,
             status: instance.status ?? 'active',
             partyId,
+            party_id: partyId,
             isNormalRaid: true,
           },
         });
@@ -2010,6 +2036,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
             starter_id: instance.starter_id,
             status: instance.status ?? 'active',
             partyId,
+            party_id: partyId,
             isNormalRaid: false,
           },
         });
@@ -2054,7 +2081,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
         raid.id,
         playerIdRef.current,
         nicknameRef.current,
-        { bypassBossWindow: isAdmin },
+        {
+          bypassBossWindow: isAdmin,
+          expectedPartyId: null,
+          raidType: 'boss',
+        },
       );
 
       if (error) {
@@ -2087,7 +2118,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
       partyActiveRaid.id,
       playerIdRef.current,
       nicknameRef.current,
-      { bypassBossWindow: isAdmin },
+      {
+        bypassBossWindow: isAdmin,
+        expectedPartyId: partyId,
+        raidType: inferPartyRaidIsNormal(partyActiveRaid) ? 'normal' : 'boss',
+      },
     );
 
     if (error) {

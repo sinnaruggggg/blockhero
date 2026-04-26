@@ -54,6 +54,41 @@ WHERE id IN (
   WHERE room_rank > 1
 );
 
+-- RAID_FIX: enforce the single active party raid invariant after cleanup.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_raid_instances_one_active_party_raid
+ON public.raid_instances (party_id)
+WHERE party_id IS NOT NULL
+  AND status IN ('active', 'battle', 'waiting', 'ready');
+
+-- RAID_FIX: remove duplicate/orphan party memberships created before the
+-- client-side guards existed, then prevent the same player from being in
+-- multiple raid parties at once.
+WITH ranked_members AS (
+  SELECT
+    pm.ctid AS row_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY pm.player_id
+      ORDER BY p.updated_at DESC NULLS LAST, pm.joined_at DESC
+    ) AS member_rank
+  FROM public.party_members pm
+  LEFT JOIN public.parties p ON p.id::TEXT = pm.party_id::TEXT
+)
+DELETE FROM public.party_members pm
+USING ranked_members ranked
+WHERE pm.ctid = ranked.row_id
+  AND ranked.member_rank > 1;
+
+DELETE FROM public.parties p
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.party_members pm
+  WHERE pm.party_id::TEXT = p.id::TEXT
+    AND pm.player_id = p.leader_id
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_party_members_one_party_per_player
+ON public.party_members (player_id);
+
 -- RAID_FIX: old normal raid attempts were stored as long-lived active
 -- raid_instances. Because raid_instances has no raid_type column yet, those
 -- stale public normal rooms can appear as "active boss raids" for admins.
