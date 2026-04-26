@@ -39,7 +39,9 @@ import BaseVisualElementView, {
   buildVisualAutomationLabel,
   buildVisualElementStyle,
 } from '../components/VisualElementView';
-import { RaidParticipant } from '../components/RaidParticipants';
+import RaidParticipants, {
+  RaidParticipant,
+} from '../components/RaidParticipants';
 import { useDragDrop } from '../game/useDragDrop';
 import { BOSS_RAID_WINDOW_MS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import { RAID_BOSSES, getNormalRaidMaxHp } from '../constants/raidBosses';
@@ -105,9 +107,11 @@ import {
   joinRaidInstance,
   getRaidChannel,
   expireRaidInstance,
+  leaveRaidParticipant,
   restartRaidInstance,
   updateRaidParticipantRuntimeState,
 } from '../services/raidService';
+import { leaveOrDisbandParty } from '../services/partyService';
 import {
   clearRaidScreenCache,
   readRaidScreenCache,
@@ -588,6 +592,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const summonAttackRef = useRef(0);
   const summonActiveRef = useRef(false);
   const summonRemainingMsRef = useRef(0);
+  const activeSummonIdRef = useRef<string | null>(null);
   const summonExpEarnedRef = useRef(0);
   const summonLevelRef = useRef(1);
   const summonExpRef = useRef(0);
@@ -613,6 +618,7 @@ export default function RaidScreen({ route, navigation }: any) {
   >(new Map());
   const rematchReadyRef = useRef<Record<string, boolean>>({});
   const raidStarterIdRef = useRef('');
+  const raidPartyIdRef = useRef<string | null>(null);
   const alivePlayersRef = useRef<string[]>(
     cachedRaidSnapshot?.alivePlayerIds ?? [],
   );
@@ -624,6 +630,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const skillNoticeModeRef = useRef<SkillTriggerNoticeMode>('triggered_only');
   const screenShakeEnabledRef = useRef(true);
   const allowLeaveRef = useRef(false);
+  const leavingRaidRef = useRef(false);
   const {
     message: battleNoticeMessage,
     messageKey: battleNoticeKey,
@@ -795,9 +802,53 @@ export default function RaidScreen({ route, navigation }: any) {
     };
   }, []);
 
+  const removeParticipantFromRaid = useCallback((targetPlayerId: string) => {
+    if (!targetPlayerId) {
+      return;
+    }
+
+    // RAID_FIX: explicit leaves must disappear on every client immediately,
+    // while normal deaths remain visible as dead/spectator participants.
+    remoteBoardsRef.current.delete(targetPlayerId);
+    setRemoteSummons(previous =>
+      previous.filter(entry => entry.casterId !== targetPlayerId),
+    );
+    setParticipants(previous => {
+      const ranked = previous
+        .filter(entry => entry.playerId !== targetPlayerId)
+        .sort((a, b) => b.totalDamage - a.totalDamage)
+        .map((entry, index) => ({ ...entry, rank: index + 1 }));
+      participantsRef.current = ranked;
+      participantCountRef.current = ranked.length;
+      return ranked;
+    });
+    setAlivePlayers(previous => {
+      const next = previous.filter(id => id !== targetPlayerId);
+      alivePlayersRef.current = next;
+      return next;
+    });
+    const currentStats =
+      battleStatsRef.current[targetPlayerId] ??
+      createEmptyRaidBattleStats(false);
+    const nextStatsMap = {
+      ...battleStatsRef.current,
+      [targetPlayerId]: {
+        ...currentStats,
+        isAlive: false,
+      },
+    };
+    battleStatsRef.current = nextStatsMap;
+    setBattleStats(nextStatsMap);
+  }, []);
+
   const applyParticipantRuntimeSnapshot = useCallback((payload: any) => {
     const playerId = payload?.playerId;
     if (!playerId || playerId === playerIdRef.current) {
+      return;
+    }
+
+    if (payload.left === true || payload.role === 'left') {
+      removeParticipantFromRaid(playerId);
       return;
     }
 
@@ -946,7 +997,7 @@ export default function RaidScreen({ route, navigation }: any) {
       participantCountRef.current = ranked.length;
       return ranked;
     });
-  }, []);
+  }, [removeParticipantFromRaid]);
 
   const applyBattleStats = useCallback(
     (
@@ -993,9 +1044,14 @@ export default function RaidScreen({ route, navigation }: any) {
 
   const syncParticipantsFromRows = useCallback(
     (rows: any[] | null | undefined, instanceExpiresAt: number) => {
+      // RAID_FIX: a participant marked as left is a delete fallback for older
+      // DB policies. Treat it exactly like a deleted raid participant row.
+      const visibleRows = (rows ?? []).filter(
+        participant => participant?.role !== 'left',
+      );
       const nextReadyMap = { ...rematchReadyRef.current };
       const nextStatsMap: RaidBattleStatsMap = { ...battleStatsRef.current };
-      (rows ?? []).forEach((participant: any) => {
+      visibleRows.forEach((participant: any) => {
         if (typeof participant.is_ready === 'boolean') {
           nextReadyMap[participant.player_id] = participant.is_ready;
         }
@@ -1056,40 +1112,44 @@ export default function RaidScreen({ route, navigation }: any) {
       battleStatsRef.current = nextStatsMap;
       setBattleStats(nextStatsMap);
 
-      const partList = (rows ?? []).map((participant: any, index: number) => ({
-        playerId: participant.player_id,
-        nickname: participant.nickname,
-        totalDamage: participant.total_damage ?? 0,
-        rank: index + 1,
-        avatarIcon: participant.avatar_icon ?? participant.nickname?.slice(0, 1),
-        role:
-          participant.role ??
-          (participant.player_id === raidStarterIdRef.current
-            ? 'host'
-            : 'member'),
-        isHost:
-          typeof participant.is_host === 'boolean'
-            ? participant.is_host
-            : participant.player_id === raidStarterIdRef.current,
-        isReady: Boolean(nextReadyMap[participant.player_id]),
-        isAlive:
-          typeof participant.is_alive === 'boolean'
-            ? participant.is_alive
-            : nextStatsMap[participant.player_id]?.isAlive ?? true,
-        currentHp:
-          typeof participant.current_hp === 'number'
-            ? participant.current_hp
-            : participant.player_id === playerIdRef.current
-            ? playerHpRef.current
-            : undefined,
-        maxHp:
-          typeof participant.max_hp === 'number'
-            ? participant.max_hp
-            : participant.player_id === playerIdRef.current
-            ? baseMaxPlayerHpRef.current
-            : undefined,
-        joinedAt: participant.joined_at,
-      }));
+      const partList = visibleRows
+        .map((participant: any) => ({
+          playerId: participant.player_id,
+          nickname: participant.nickname,
+          totalDamage: participant.total_damage ?? 0,
+          rank: 0,
+          avatarIcon:
+            participant.avatar_icon ?? participant.nickname?.slice(0, 1),
+          role:
+            participant.role ??
+            (participant.player_id === raidStarterIdRef.current
+              ? 'host'
+              : 'member'),
+          isHost:
+            typeof participant.is_host === 'boolean'
+              ? participant.is_host
+              : participant.player_id === raidStarterIdRef.current,
+          isReady: Boolean(nextReadyMap[participant.player_id]),
+          isAlive:
+            typeof participant.is_alive === 'boolean'
+              ? participant.is_alive
+              : nextStatsMap[participant.player_id]?.isAlive ?? true,
+          currentHp:
+            typeof participant.current_hp === 'number'
+              ? participant.current_hp
+              : participant.player_id === playerIdRef.current
+              ? playerHpRef.current
+              : undefined,
+          maxHp:
+            typeof participant.max_hp === 'number'
+              ? participant.max_hp
+              : participant.player_id === playerIdRef.current
+              ? baseMaxPlayerHpRef.current
+              : undefined,
+          joinedAt: participant.joined_at,
+        }))
+        .sort((a, b) => b.totalDamage - a.totalDamage)
+        .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
       setParticipants(partList);
       participantsRef.current = partList;
@@ -1332,7 +1392,9 @@ export default function RaidScreen({ route, navigation }: any) {
       const summon: RemoteRaidSummon = {
         eventId: payload.eventId,
         casterId: payload.casterId,
-        summonId: payload.summonId ?? payload.eventId,
+        summonId:
+          payload.summonId ??
+          `${payload.casterId}:${payload.eventId}:${payload.createdAt ?? Date.now()}`,
         summonType: payload.summonType ?? 'raid_summon',
         spawnAnchor:
           typeof payload.spawnAnchor === 'number'
@@ -1376,12 +1438,19 @@ export default function RaidScreen({ route, navigation }: any) {
         return;
       }
 
+      // RAID_FIX: summon events are keyed by summonId first. Using only
+      // casterId can merge separate summons and make one player's return
+      // animation affect another active summon visual.
+      const targetSummonId = payload.summonId;
       setRemoteSummons(previous =>
-        previous.map(entry =>
-          entry.casterId === payload.casterId
+        previous.map(entry => {
+          const matches = targetSummonId
+            ? entry.summonId === targetSummonId
+            : entry.casterId === payload.casterId;
+          return matches
             ? { ...entry, attackPulse: entry.attackPulse + 1 }
-            : entry,
-        ),
+            : entry;
+        }),
       );
     },
     [markRaidEventProcessed],
@@ -1398,16 +1467,24 @@ export default function RaidScreen({ route, navigation }: any) {
         return;
       }
 
+      // RAID_FIX: return only the exact summon instance that ended.
+      const targetSummonId = payload.summonId;
       setRemoteSummons(previous =>
-        previous.map(entry =>
-          entry.casterId === payload.casterId
-            ? { ...entry, returning: true }
-            : entry,
-        ),
+        previous.map(entry => {
+          const matches = targetSummonId
+            ? entry.summonId === targetSummonId
+            : entry.casterId === payload.casterId;
+          return matches ? { ...entry, returning: true } : entry;
+        }),
       );
       setTimeout(() => {
         setRemoteSummons(previous =>
-          previous.filter(entry => entry.casterId !== payload.casterId),
+          previous.filter(entry => {
+            const matches = targetSummonId
+              ? entry.summonId === targetSummonId
+              : entry.casterId === payload.casterId;
+            return !matches;
+          }),
         );
       }, 280);
     },
@@ -1481,6 +1558,7 @@ export default function RaidScreen({ route, navigation }: any) {
       setFeverActive(false);
       setFeverRemainingMs(0);
       summonActiveRef.current = false;
+      activeSummonIdRef.current = null;
       setSummonActive(false);
       setSummonReturning(false);
       setSummonOverlayVisible(false);
@@ -1567,6 +1645,7 @@ export default function RaidScreen({ route, navigation }: any) {
     summonGaugeRequiredRef.current = 0;
     summonAttackRef.current = 0;
     summonActiveRef.current = false;
+    activeSummonIdRef.current = null;
     summonRemainingMsRef.current = 0;
     summonExpEarnedRef.current = 0;
     summonLevelRef.current = 1;
@@ -1753,6 +1832,7 @@ export default function RaidScreen({ route, navigation }: any) {
           const nextStarterId = instance.starter_id ?? '';
           setRaidStarterId(nextStarterId);
           raidStarterIdRef.current = nextStarterId;
+          raidPartyIdRef.current = instance.party_id ?? null;
           startedAtRef.current = new Date(instance.started_at).getTime();
           persistLocalRaidRuntimeState({
             avatarIcon: nicknameRef.current.slice(0, 1),
@@ -1849,6 +1929,8 @@ export default function RaidScreen({ route, navigation }: any) {
               playerId: payload.playerId,
               nickname: payload.nickname,
               isAlive: false,
+              currentHp: 0,
+              maxHp: payload.maxHp,
               battleStats: {
                 ...(battleStatsRef.current[payload.playerId] ??
                   createEmptyRaidBattleStats(false)),
@@ -1863,7 +1945,12 @@ export default function RaidScreen({ route, navigation }: any) {
             setAlivePlayers(prev => {
               const next = prev.filter(id => id !== payload.playerId);
               alivePlayersRef.current = next;
-              if (next.length === 0) {
+              const hasKnownAliveMember = participantsRef.current.some(
+                entry =>
+                  entry.playerId !== payload.playerId &&
+                  entry.isAlive !== false,
+              );
+              if (next.length === 0 && !hasKnownAliveMember) {
                 setFailureReason('hp_zero');
                 setGameOver(true);
                 gameOverRef.current = true;
@@ -1876,6 +1963,20 @@ export default function RaidScreen({ route, navigation }: any) {
             setFailureReason('hp_zero');
             setGameOver(true);
             gameOverRef.current = true;
+          })
+          .on('broadcast', { event: 'player_left' }, ({ payload }: any) => {
+            if (!mounted || !payload?.playerId) return;
+            // RAID_FIX: explicit leaves are party exits, not deaths. Remove the
+            // leaving member from the raid UI and do not keep a dead skull row.
+            removeParticipantFromRaid(payload.playerId);
+            if (
+              payload.playerId === raidStarterIdRef.current &&
+              payload.playerId !== playerIdRef.current
+            ) {
+              allowLeaveRef.current = true;
+              clearRaidScreenCache(instanceId);
+              navigation.replace('RaidLobby');
+            }
           })
           .on('broadcast', { event: 'summon_spawn' }, ({ payload }: any) => {
             if (!mounted) return;
@@ -1994,6 +2095,41 @@ export default function RaidScreen({ route, navigation }: any) {
               },
             ]);
           })
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'raid_instances',
+              filter: `id=eq.${instanceId}`,
+            },
+            (payload: any) => {
+              const nextInstance = payload.new ?? {};
+              if (!mounted || !nextInstance) {
+                return;
+              }
+              // RAID_FIX: cleared/closed instance updates are table state, not
+              // only realtime broadcasts, so dead spectators also see results.
+              if (
+                nextInstance.status === 'defeated' ||
+                nextInstance.status === 'cleared' ||
+                nextInstance.boss_current_hp <= 0
+              ) {
+                if (typeof nextInstance.boss_current_hp === 'number') {
+                  setBossHp(nextInstance.boss_current_hp);
+                  bossHpRef.current = nextInstance.boss_current_hp;
+                }
+                applyRaidCleared(buildRaidClearSnapshot());
+                return;
+              }
+
+              if (nextInstance.status === 'closed') {
+                allowLeaveRef.current = true;
+                clearRaidScreenCache(instanceId);
+                navigation.replace('RaidLobby');
+              }
+            },
+          )
           .on(
             'postgres_changes',
             {
@@ -2138,6 +2274,7 @@ export default function RaidScreen({ route, navigation }: any) {
     pulseRemoteSummonAttack,
     queueSummonDamageHit,
     registerRemoteSummon,
+    removeParticipantFromRaid,
     resetLocalRaidBattleForNextRun,
     returnRemoteSummon,
     syncParticipantsFromRows,
@@ -2164,6 +2301,11 @@ export default function RaidScreen({ route, navigation }: any) {
           }
           if (instance.status === 'defeated' || instance.status === 'cleared') {
             applyRaidCleared(clearSnapshot ?? buildRaidClearSnapshot());
+          }
+          if (instance.status === 'closed') {
+            allowLeaveRef.current = true;
+            clearRaidScreenCache(instanceId);
+            navigation.replace('RaidLobby');
           }
         }
 
@@ -2192,6 +2334,7 @@ export default function RaidScreen({ route, navigation }: any) {
     expiresAt,
     instanceId,
     instanceReady,
+    navigation,
     syncParticipantsFromRows,
   ]);
 
@@ -2403,6 +2546,7 @@ export default function RaidScreen({ route, navigation }: any) {
           setSummonActive(false);
           setSummonReturning(true);
           const eventId = createRaidEventId('summon_return');
+          const summonId = activeSummonIdRef.current;
           channelRef.current?.send({
             type: 'broadcast',
             event: 'summon_return',
@@ -2410,8 +2554,10 @@ export default function RaidScreen({ route, navigation }: any) {
               eventId,
               raidRoomId: instanceId,
               casterId: playerIdRef.current,
+              summonId,
             },
           });
+          activeSummonIdRef.current = null;
         }
         return next;
       });
@@ -2442,6 +2588,7 @@ export default function RaidScreen({ route, navigation }: any) {
 
       const summonDamage = Math.max(1, Math.round(summonAttackRef.current));
       const eventId = createRaidEventId('summon_damage');
+      const summonId = activeSummonIdRef.current;
       setSummonAttackPulse(prev => prev + 1);
       triggerBossPose('hurt', 180);
       queueSummonDamageHit(summonDamage);
@@ -2454,6 +2601,7 @@ export default function RaidScreen({ route, navigation }: any) {
           eventId: createRaidEventId('summon_attack'),
           raidRoomId: instanceId,
           casterId: playerIdRef.current,
+          summonId,
         },
       });
 
@@ -2491,6 +2639,7 @@ export default function RaidScreen({ route, navigation }: any) {
             event: 'summon_damage',
             payload: {
               eventId,
+              summonId,
               playerId: playerIdRef.current,
               nickname: nicknameRef.current,
               damage: summonDamage,
@@ -2534,6 +2683,7 @@ export default function RaidScreen({ route, navigation }: any) {
     }
 
     summonActiveRef.current = false;
+    activeSummonIdRef.current = null;
     setSummonActive(false);
     setSummonReturning(false);
     setSummonOverlayVisible(false);
@@ -2634,6 +2784,20 @@ export default function RaidScreen({ route, navigation }: any) {
       { deathCount: 1, isAlive: false },
       eventId,
     );
+    setParticipants(previous => {
+      const next = previous.map(entry =>
+        entry.playerId === playerIdRef.current
+          ? {
+              ...entry,
+              isAlive: false,
+              currentHp: 0,
+              maxHp: maxPlayerHpRef.current,
+            }
+          : entry,
+      );
+      participantsRef.current = next;
+      return next;
+    });
 
     // RAID_FIX: death stays in the raid room and only changes personal state.
     channelRef.current?.send({
@@ -2643,15 +2807,25 @@ export default function RaidScreen({ route, navigation }: any) {
         eventId,
         playerId: playerIdRef.current,
         nickname: nicknameRef.current,
+        currentHp: 0,
+        maxHp: maxPlayerHpRef.current,
       },
     });
 
     // Remove self from alive
     setAlivePlayers(prev => {
       const next = prev.filter(id => id !== playerIdRef.current);
-      alivePlayersRef.current = next;
+      const knownAliveOthers = participantsRef.current
+        .filter(
+          entry =>
+            entry.playerId !== playerIdRef.current &&
+            entry.isAlive !== false,
+        )
+        .map(entry => entry.playerId);
+      const nextAliveTargets = next.length > 0 ? next : knownAliveOthers;
+      alivePlayersRef.current = nextAliveTargets;
       // If nobody else alive, game over
-      if (next.length === 0) {
+      if (nextAliveTargets.length === 0) {
         channelRef.current?.send({
           type: 'broadcast',
           event: 'raid_failed',
@@ -2664,15 +2838,15 @@ export default function RaidScreen({ route, navigation }: any) {
       } else {
         // Start spectating first alive player
         setSpectatingIdx(0);
-        const data = remoteBoardsRef.current.get(next[0]);
+        const data = remoteBoardsRef.current.get(nextAliveTargets[0]);
         if (data) {
           setSpectatorBoard(data.board);
           setSpectatorNickname(data.nickname);
         } else {
-          setSpectatorNickname(next[0].slice(0, 8) + '...');
+          setSpectatorNickname(nextAliveTargets[0].slice(0, 8) + '...');
         }
       }
-      return next;
+      return nextAliveTargets;
     });
   }, [applyBattleStats, createRaidEventId]);
 
@@ -3277,6 +3451,7 @@ export default function RaidScreen({ route, navigation }: any) {
 
     if (!summonActiveRef.current) {
       const eventId = createRaidEventId('summon_spawn');
+      const summonId = `${playerIdRef.current}:summon:${Date.now()}`;
       const spawnAnchor = getSummonSpawnIndexForPlayer(playerIdRef.current);
       summonGaugeRef.current = 0;
       setSummonGauge(0);
@@ -3284,6 +3459,7 @@ export default function RaidScreen({ route, navigation }: any) {
       setSummonReturning(false);
       setSummonOverlayVisible(true);
       summonActiveRef.current = true;
+      activeSummonIdRef.current = summonId;
       setSummonActive(true);
       applyBattleStats(
         playerIdRef.current,
@@ -3299,7 +3475,7 @@ export default function RaidScreen({ route, navigation }: any) {
           eventId,
           raidRoomId: instanceId,
           casterId: playerIdRef.current,
-          summonId: `${playerIdRef.current}:summon`,
+          summonId,
           summonType: 'raid_summon',
           spawnAnchor,
           createdAt: Date.now(),
@@ -3310,6 +3486,8 @@ export default function RaidScreen({ route, navigation }: any) {
     }
 
     summonActiveRef.current = false;
+    const summonId = activeSummonIdRef.current;
+    activeSummonIdRef.current = null;
     setSummonActive(false);
     setSummonReturning(true);
     channelRef.current?.send({
@@ -3319,6 +3497,7 @@ export default function RaidScreen({ route, navigation }: any) {
         eventId: createRaidEventId('summon_return'),
         raidRoomId: instanceId,
         casterId: playerIdRef.current,
+        summonId,
       },
     });
   }, [
@@ -3377,10 +3556,55 @@ export default function RaidScreen({ route, navigation }: any) {
     );
   }, [chatInput]);
 
+  const leaveRaidSession = useCallback(async () => {
+    const playerId = playerIdRef.current;
+    if (!playerId || leavingRaidRef.current) {
+      return;
+    }
+
+    leavingRaidRef.current = true;
+    const partyId = raidPartyIdRef.current;
+    const nickname = nicknameRef.current;
+    // RAID_FIX: pressing leave is an explicit raid exit, not a background
+    // pause. Broadcast first for instant UI, then persist delete/fallback.
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'player_left',
+      payload: {
+        playerId,
+        nickname,
+        left: true,
+        role: 'left',
+        partyId,
+        eventId: createRaidEventId('player_left'),
+      },
+    });
+
+    removeParticipantFromRaid(playerId);
+
+    try {
+      await leaveRaidParticipant(instanceId, playerId);
+    } catch (error) {
+      console.warn('RaidScreen leaveRaidParticipant failed:', error);
+    }
+
+    if (partyId) {
+      try {
+        await leaveOrDisbandParty(partyId, playerId);
+      } catch (error) {
+        console.warn('RaidScreen leaveOrDisbandParty failed:', error);
+      }
+    }
+
+    raidPartyIdRef.current = null;
+  }, [createRaidEventId, instanceId, removeParticipantFromRaid]);
+
   const leaveRaidToLobby = useCallback(() => {
     allowLeaveRef.current = true;
-    navigation.replace('RaidLobby');
-  }, [navigation]);
+    void leaveRaidSession().finally(() => {
+      navigation.replace('RaidLobby');
+    });
+  }, [leaveRaidSession, navigation]);
 
   const requestRaidExit = useCallback(
     (onConfirm?: () => void) => {
@@ -3403,8 +3627,10 @@ export default function RaidScreen({ route, navigation }: any) {
           style: 'destructive',
           onPress: () => {
             if (onConfirm) {
-              allowLeaveRef.current = true;
-              onConfirm();
+              void leaveRaidSession().finally(() => {
+                allowLeaveRef.current = true;
+                onConfirm();
+              });
               return;
             }
             leaveRaidToLobby();
@@ -3416,6 +3642,7 @@ export default function RaidScreen({ route, navigation }: any) {
       bossDefeated,
       gameOver,
       leaveRaidToLobby,
+      leaveRaidSession,
       rewardCollected,
       rewardData,
       spectatorMode,
@@ -3487,9 +3714,9 @@ export default function RaidScreen({ route, navigation }: any) {
     const { data: finalParts } = await getRaidParticipants(instanceId);
     let myRank = 1;
     if (finalParts) {
-      const sorted = finalParts.sort(
-        (a: any, b: any) => b.total_damage - a.total_damage,
-      );
+      const sorted = finalParts
+        .filter((p: any) => p.role !== 'left')
+        .sort((a: any, b: any) => b.total_damage - a.total_damage);
       const idx = sorted.findIndex(
         (p: any) => p.player_id === playerIdRef.current,
       );
@@ -4167,6 +4394,16 @@ export default function RaidScreen({ route, navigation }: any) {
         : participant.nickname
       : '대기중';
 
+    const isAlive = participant?.isAlive !== false;
+    const hpMax = Math.max(1, participant?.maxHp ?? 0);
+    const hpCurrent = Math.max(
+      0,
+      participant?.currentHp ?? (participant ? hpMax : 0),
+    );
+    const hpPercent = participant
+      ? Math.max(0, Math.min(100, (hpCurrent / hpMax) * 100))
+      : 0;
+
     return (
       <View
         key={`${side}-${slotIndex}-${participant?.playerId ?? 'empty'}`}
@@ -4190,6 +4427,30 @@ export default function RaidScreen({ route, navigation }: any) {
         <Text numberOfLines={1} style={styles.normalRaidAvatarName}>
           {displayName}
         </Text>
+        {participant ? (
+          <View style={styles.normalRaidMemberHpBlock}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.normalRaidMemberState,
+                !isAlive && styles.normalRaidMemberStateDead,
+              ]}
+            >
+              {isAlive
+                ? `${hpCurrent.toLocaleString()} / ${hpMax.toLocaleString()}`
+                : '☠'}
+            </Text>
+            <View style={styles.normalRaidMemberHpTrack}>
+              <View
+                style={[
+                  styles.normalRaidMemberHpFill,
+                  !isAlive && styles.normalRaidMemberHpFillDead,
+                  { width: `${hpPercent}%` },
+                ]}
+              />
+            </View>
+          </View>
+        ) : null}
         {false && (
           <View pointerEvents="none" style={styles.normalRaidTimerCover}>
             <Text style={styles.normalRaidTimerCoverText}>일반 레이드</Text>
@@ -4633,6 +4894,10 @@ export default function RaidScreen({ route, navigation }: any) {
             </View>
 
             {renderTopStatusRow(true)}
+            <RaidParticipants
+              participants={participants}
+              myPlayerId={playerIdRef.current}
+            />
           </>
         ) : (
           <>
@@ -4669,6 +4934,10 @@ export default function RaidScreen({ route, navigation }: any) {
             />
 
             {renderTopStatusRow(false)}
+            <RaidParticipants
+              participants={participants}
+              myPlayerId={playerIdRef.current}
+            />
           </>
         )}
       </VisualElementView>
@@ -5104,6 +5373,35 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     maxWidth: '100%',
+  },
+  normalRaidMemberHpBlock: {
+    width: '100%',
+    gap: 2,
+  },
+  normalRaidMemberState: {
+    color: '#bbf7d0',
+    fontSize: 7,
+    fontWeight: '900',
+    maxWidth: '100%',
+  },
+  normalRaidMemberStateDead: {
+    color: '#fca5a5',
+    fontSize: 11,
+  },
+  normalRaidMemberHpTrack: {
+    width: '100%',
+    height: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(15,23,42,0.9)',
+  },
+  normalRaidMemberHpFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+  },
+  normalRaidMemberHpFillDead: {
+    backgroundColor: '#64748b',
   },
   normalRaidBossCard: {
     flex: 1,

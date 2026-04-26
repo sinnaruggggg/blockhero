@@ -14,6 +14,9 @@ ADD COLUMN IF NOT EXISTS board_state JSONB,
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 ALTER TABLE public.raid_participants REPLICA IDENTITY FULL;
+ALTER TABLE public.raid_instances REPLICA IDENTITY FULL;
+ALTER TABLE public.party_members REPLICA IDENTITY FULL;
+ALTER TABLE public.parties REPLICA IDENTITY FULL;
 
 CREATE INDEX IF NOT EXISTS idx_raid_participants_ready
 ON public.raid_participants (raid_instance_id, is_ready);
@@ -97,6 +100,45 @@ BEGIN
   ) THEN
     CREATE POLICY "Anyone can delete raid_participants"
       ON public.raid_participants
+      FOR DELETE
+      USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'parties'
+      AND policyname = 'Anyone can delete parties'
+  ) THEN
+    CREATE POLICY "Anyone can delete parties"
+      ON public.parties
+      FOR DELETE
+      USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'party_members'
+      AND policyname = 'Anyone can delete party_members'
+  ) THEN
+    CREATE POLICY "Anyone can delete party_members"
+      ON public.party_members
+      FOR DELETE
+      USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'party_invites'
+      AND policyname = 'Anyone can delete party_invites'
+  ) THEN
+    CREATE POLICY "Anyone can delete party_invites"
+      ON public.party_invites
       FOR DELETE
       USING (true);
   END IF;

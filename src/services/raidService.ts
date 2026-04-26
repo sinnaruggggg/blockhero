@@ -587,6 +587,38 @@ export async function updateRaidParticipantRuntimeState(
   return { data, error };
 }
 
+export async function leaveRaidParticipant(instanceId: string, playerId: string) {
+  // RAID_FIX: explicit raid exits must remove the member from the shared
+  // participant source. If delete is blocked by an older policy, mark it left
+  // so clients can hide it until the SQL migration is applied.
+  const deleteResult = await supabase
+    .from('raid_participants')
+    .delete()
+    .eq('raid_instance_id', instanceId)
+    .eq('player_id', playerId)
+    .select('player_id');
+
+  if (!deleteResult.error && (deleteResult.data?.length ?? 0) > 0) {
+    return { data: deleteResult.data, error: null };
+  }
+
+  const fallbackResult = await updateRaidParticipantRuntimeState(
+    instanceId,
+    playerId,
+    {
+      role: 'left',
+      isReady: false,
+      isAlive: false,
+      currentHp: 0,
+    },
+  );
+
+  return {
+    data: fallbackResult.data,
+    error: fallbackResult.error ?? deleteResult.error ?? null,
+  };
+}
+
 export async function dealRaidDamage(
   instanceId: string,
   playerId: string,
