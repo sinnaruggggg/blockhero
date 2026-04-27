@@ -7,6 +7,7 @@ interface FloatingDamageLabelProps {
   baseTop?: number;
   stackGap?: number;
   variant?: 'player' | 'summon';
+  horizontalOffset?: number;
 }
 
 export default function FloatingDamageLabel({
@@ -15,6 +16,7 @@ export default function FloatingDamageLabel({
   baseTop = 0,
   stackGap = 16,
   variant = 'player',
+  horizontalOffset,
 }: FloatingDamageLabelProps) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
@@ -58,7 +60,14 @@ export default function FloatingDamageLabel({
           top: baseTop - stackIndex * stackGap,
           opacity,
           zIndex: 12 - stackIndex,
-          transform: [{translateY}, {scale}],
+          transform: [
+            {
+              translateX:
+                horizontalOffset ?? (variant === 'summon' ? 38 : 0),
+            },
+            {translateY},
+            {scale},
+          ],
         },
       ]}>
       <Text style={styles.damageFlashText}>-{damage}</Text>

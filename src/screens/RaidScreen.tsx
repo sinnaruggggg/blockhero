@@ -105,6 +105,7 @@ import {
   joinRaidInstance,
   getRaidChannel,
   expireRaidInstance,
+  failRaidInstance,
   leaveRaidParticipant,
   restartRaidInstance,
   updateRaidParticipantRuntimeState,
@@ -618,6 +619,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const rematchReadyRef = useRef<Record<string, boolean>>({});
   const raidStarterIdRef = useRef('');
   const raidPartyIdRef = useRef<string | null>(null);
+  const publishRaidFailedRef = useRef<() => void>(() => {});
   const alivePlayersRef = useRef<string[]>(
     cachedRaidSnapshot?.alivePlayerIds ?? [],
   );
@@ -1158,6 +1160,14 @@ export default function RaidScreen({ route, navigation }: any) {
         .map(entry => entry.playerId);
       alivePlayersRef.current = nextAlive;
       setAlivePlayers(nextAlive);
+      if (
+        partList.length > 0 &&
+        nextAlive.length === 0 &&
+        !bossDefeatedRef.current &&
+        !gameOverRef.current
+      ) {
+        publishRaidFailedRef.current();
+      }
       const ensuredStats: RaidBattleStatsMap = { ...battleStatsRef.current };
       partList.forEach(entry => {
         if (!ensuredStats[entry.playerId]) {
@@ -1368,7 +1378,15 @@ export default function RaidScreen({ route, navigation }: any) {
   );
 
   const getSummonSpawnIndexForPlayer = useCallback((casterId: string) => {
-    const participantIndex = participantsRef.current.findIndex(
+    const stableParticipants = [...participantsRef.current].sort((left, right) => {
+      const leftJoinedAt = left.joinedAt ?? '';
+      const rightJoinedAt = right.joinedAt ?? '';
+      if (leftJoinedAt !== rightJoinedAt) {
+        return leftJoinedAt.localeCompare(rightJoinedAt);
+      }
+      return left.playerId.localeCompare(right.playerId);
+    });
+    const participantIndex = stableParticipants.findIndex(
       entry => entry.playerId === casterId,
     );
     if (participantIndex >= 0) {
@@ -1518,6 +1536,46 @@ export default function RaidScreen({ route, navigation }: any) {
     setClearSnapshot(snapshot ?? buildRaidClearSnapshot());
   }, [buildRaidClearSnapshot]);
 
+  const applyRaidFailed = useCallback(() => {
+    if (bossDefeatedRef.current) {
+      return;
+    }
+
+    setFailureReason('hp_zero');
+    setTimeExpired(false);
+    setGameOver(true);
+    gameOverRef.current = true;
+    setSpectatorMode(false);
+    spectatorRef.current = false;
+    summonActiveRef.current = false;
+    activeSummonIdRef.current = null;
+    setSummonActive(false);
+    setSummonReturning(false);
+    setSummonOverlayVisible(false);
+    alivePlayersRef.current = [];
+    setAlivePlayers([]);
+    setParticipants(previous => {
+      const next = previous.map(entry => ({
+        ...entry,
+        isAlive: false,
+        currentHp: 0,
+      }));
+      participantsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const publishRaidFailed = useCallback(() => {
+    applyRaidFailed();
+    void failRaidInstance(instanceId);
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: 'raid_failed',
+      payload: { reason: 'all_dead' },
+    });
+  }, [applyRaidFailed, instanceId]);
+  publishRaidFailedRef.current = publishRaidFailed;
+
   const resetLocalRaidBattleForNextRun = useCallback(
     (payload?: { startedAt?: string; expiresAt?: string }) => {
       const nextBoard = createBoard();
@@ -1569,7 +1627,19 @@ export default function RaidScreen({ route, navigation }: any) {
       playerHpAnim.setValue(1);
       spectatorRef.current = false;
       setSpectatorMode(false);
-      const aliveIds = participantsRef.current.map(entry => entry.playerId);
+      const revivedParticipants = participantsRef.current.map(entry => ({
+        ...entry,
+        isAlive: true,
+        currentHp:
+          entry.playerId === playerIdRef.current
+            ? maxPlayerHp
+            : entry.currentHp,
+        maxHp:
+          entry.playerId === playerIdRef.current ? maxPlayerHp : entry.maxHp,
+      }));
+      participantsRef.current = revivedParticipants;
+      setParticipants(revivedParticipants);
+      const aliveIds = revivedParticipants.map(entry => entry.playerId);
       setAlivePlayers(aliveIds);
       alivePlayersRef.current = aliveIds;
       const freshStats: RaidBattleStatsMap = {};
@@ -1984,18 +2054,14 @@ export default function RaidScreen({ route, navigation }: any) {
                   entry.isAlive !== false,
               );
               if (next.length === 0 && !hasKnownAliveMember) {
-                setFailureReason('hp_zero');
-                setGameOver(true);
-                gameOverRef.current = true;
+                publishRaidFailedRef.current();
               }
               return next;
             });
           })
           .on('broadcast', { event: 'raid_failed' }, () => {
             if (!mounted) return;
-            setFailureReason('hp_zero');
-            setGameOver(true);
-            gameOverRef.current = true;
+            applyRaidFailed();
           })
           .on('broadcast', { event: 'player_left' }, ({ payload }: any) => {
             if (!mounted || !payload?.playerId) return;
@@ -2163,6 +2229,11 @@ export default function RaidScreen({ route, navigation }: any) {
                 allowLeaveRef.current = true;
                 clearRaidScreenCache(instanceId);
                 navigation.replace('RaidLobby');
+                return;
+              }
+
+              if (nextInstance.status === 'failed') {
+                applyRaidFailed();
               }
             },
           )
@@ -2295,6 +2366,7 @@ export default function RaidScreen({ route, navigation }: any) {
     };
   }, [
     applyBattleStats,
+    applyRaidFailed,
     applyParticipantRuntimeSnapshot,
     applyRaidCleared,
     applyRaidRematchFromInstance,
@@ -2348,6 +2420,9 @@ export default function RaidScreen({ route, navigation }: any) {
             clearRaidScreenCache(instanceId);
             navigation.replace('RaidLobby');
           }
+          if (!didApplyRematch && instance.status === 'failed') {
+            applyRaidFailed();
+          }
         }
 
         const rows = (participantsResult as any).data;
@@ -2370,6 +2445,7 @@ export default function RaidScreen({ route, navigation }: any) {
     };
   }, [
     applyRaidCleared,
+    applyRaidFailed,
     applyRaidRematchFromInstance,
     buildRaidClearSnapshot,
     clearSnapshot,
@@ -2868,15 +2944,7 @@ export default function RaidScreen({ route, navigation }: any) {
       alivePlayersRef.current = nextAliveTargets;
       // If nobody else alive, game over
       if (nextAliveTargets.length === 0) {
-        channelRef.current?.send({
-          type: 'broadcast',
-          event: 'raid_failed',
-          payload: { reason: 'all_dead' },
-        });
-        setGameOver(true);
-        gameOverRef.current = true;
-        setSpectatorMode(false);
-        spectatorRef.current = false;
+        publishRaidFailedRef.current();
       } else {
         // Start spectating first alive player
         setSpectatingIdx(0);
@@ -3892,12 +3960,13 @@ export default function RaidScreen({ route, navigation }: any) {
 
     const nextReady = !rematchReadyRef.current[playerId];
     const nextMap = { ...rematchReadyRef.current, [playerId]: nextReady };
+    const readyRuntimeAlive = !gameOverRef.current && !spectatorRef.current;
     rematchReadyRef.current = nextMap;
     setRematchReady(nextMap);
     persistLocalRaidRuntimeState({
       isReady: nextReady,
-      isAlive: !spectatorRef.current,
-      currentHp: playerHpRef.current,
+      isAlive: readyRuntimeAlive,
+      currentHp: readyRuntimeAlive ? playerHpRef.current : 0,
       maxHp: maxPlayerHpRef.current,
       boardState: boardStateRef.current,
       battleStats:
@@ -3916,6 +3985,8 @@ export default function RaidScreen({ route, navigation }: any) {
         runtime: {
           ...(buildLocalRaidRuntimeSnapshot() ?? {}),
           isReady: nextReady,
+          isAlive: readyRuntimeAlive,
+          currentHp: readyRuntimeAlive ? playerHpRef.current : 0,
         },
       },
     });
@@ -3976,7 +4047,7 @@ export default function RaidScreen({ route, navigation }: any) {
   const getResultText = () => {
     if (bossDefeated) return t('raid.defeated');
     if (timeExpired || failureReason === 'time_up') return t('raid.timeUp');
-    if (failureReason === 'hp_zero') return t('raid.hpDepleted');
+    if (failureReason === 'hp_zero') return '파티가 전멸했습니다.';
     return t('raid.boardFull');
   };
 
@@ -5286,6 +5357,35 @@ export default function RaidScreen({ route, navigation }: any) {
                 <Text style={styles.finalRankDmg}>{p.totalDamage}</Text>
               </View>
             ))}
+          </View>
+
+          <View style={styles.raidRematchRow}>
+            {isCurrentRaidHost ? (
+              <TouchableOpacity
+                style={[
+                  styles.raidClearAction,
+                  !allRematchReady && styles.raidClearActionDisabled,
+                ]}
+                disabled={!allRematchReady}
+                onPress={() => void handleStartNextRaid()}
+              >
+                <Text style={styles.raidClearActionText}>
+                  {allRematchReady ? '재도전 시작' : '파티원 준비 대기 중'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.raidClearAction,
+                  myRematchReady && styles.raidReadyActionActive,
+                ]}
+                onPress={handleToggleRematchReady}
+              >
+                <Text style={styles.raidClearActionText}>
+                  {myRematchReady ? '준비 완료' : '재도전 준비'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <TouchableOpacity style={styles.exitBtn} onPress={leaveRaidToLobby}>

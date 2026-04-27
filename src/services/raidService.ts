@@ -163,10 +163,15 @@ async function validatePartyRaidAccess(
   return { error: null };
 }
 
-async function validatePartyRaidStart(partyId: string, playerId: string) {
+async function validatePartyRaidStart(
+  partyId: string,
+  playerId: string,
+  raidType: 'normal' | 'boss',
+  bossStage: number,
+) {
   const { data: party, error: partyError } = await supabase
     .from('parties')
-    .select('id, leader_id, status')
+    .select('id, leader_id, raid_type, boss_stage, status')
     .eq('id', partyId)
     .maybeSingle();
 
@@ -194,6 +199,12 @@ async function validatePartyRaidStart(partyId: string, playerId: string) {
     // RAID_FIX: the UI already hides this button, but the service must also
     // reject non-host starts so a stale client cannot start a party raid alone.
     return { data: null, error: { message: 'leader_only' } };
+  }
+  if (
+    (party.raid_type && party.raid_type !== raidType) ||
+    (typeof party.boss_stage === 'number' && party.boss_stage !== bossStage)
+  ) {
+    return { data: null, error: { message: 'party_target_mismatch' } };
   }
 
   return { data: party, error: null };
@@ -258,6 +269,14 @@ export async function expireRaidInstance(instanceId: string) {
     .update({ status: 'expired' })
     .eq('id', instanceId)
     .eq('status', 'active');
+}
+
+export async function failRaidInstance(instanceId: string) {
+  return supabase
+    .from('raid_instances')
+    .update({ status: 'failed' })
+    .eq('id', instanceId)
+    .in('status', ['active', 'battle']);
 }
 
 export async function createRaidInstance(
@@ -919,7 +938,12 @@ export async function startRaid(
     (expiresInMs >= NORMAL_RAID_DURATION_THRESHOLD_MS ? 'normal' : 'boss');
 
   if (partyId) {
-    const startAccess = await validatePartyRaidStart(partyId, playerId);
+    const startAccess = await validatePartyRaidStart(
+      partyId,
+      playerId,
+      raidType,
+      bossStage,
+    );
     if (startAccess.error) {
       return { data: null, error: startAccess.error };
     }

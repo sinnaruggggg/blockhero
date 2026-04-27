@@ -32,7 +32,6 @@ interface LobbyChatPanelProps {
   onSend: () => void;
   onSwitchChannel: (channelId: number) => void;
   onRandomizeChannel: () => void;
-  onPressUser?: (userId: string, nickname: string) => void;
   onJoinParty?: (partyId: string, message: LobbyChatMessage) => void;
   bottom?: number;
 }
@@ -53,7 +52,6 @@ export default function LobbyChatPanel({
   onSend,
   onSwitchChannel,
   onRandomizeChannel,
-  onPressUser,
   onJoinParty,
   bottom = 22,
 }: LobbyChatPanelProps) {
@@ -182,23 +180,6 @@ export default function LobbyChatPanel({
                   >
                     {message.nickname}
                   </Text>
-                  {message.userId && onPressUser ? (
-                    <TouchableOpacity
-                      disabled={message.self}
-                      onPress={() =>
-                        onPressUser?.(message.userId!, message.nickname)
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.messageUserId,
-                          message.self && styles.messageUserIdDisabled,
-                        ]}
-                      >
-                        ID: {message.userId}
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
                   <Text style={styles.messageText}>{message.text}</Text>
                   {message.partyRecruitment && onJoinParty ? (
                     <TouchableOpacity

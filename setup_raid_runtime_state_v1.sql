@@ -26,6 +26,7 @@ ON public.raid_participants (raid_instance_id, is_ready);
 ALTER TABLE public.parties
 ADD COLUMN IF NOT EXISTS raid_type TEXT,
 ADD COLUMN IF NOT EXISTS boss_stage INTEGER,
+ADD COLUMN IF NOT EXISTS password_code TEXT,
 ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'recruiting',
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 

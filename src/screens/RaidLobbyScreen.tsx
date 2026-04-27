@@ -63,6 +63,7 @@ import {
   getPartyMembers,
   updatePartyRaidTarget,
   type RaidPartyListing,
+  type PartyRaidTarget,
 } from '../services/partyService';
 import FriendInviteModal, {
   type InviteCandidate,
@@ -322,6 +323,14 @@ function getPartyInviteErrorMessage(message?: string) {
       return '파티가 가득 찼습니다.';
     case 'party_not_found':
       return '파티를 찾을 수 없습니다.';
+    case 'party_target_mismatch':
+      return '이 파티는 다른 레이드 몬스터로 만든 파티입니다.';
+    case 'party_password_setup_required':
+      return '비밀번호 기능 SQL을 먼저 적용해야 합니다.';
+    case 'party_password_required':
+      return '파티 비밀번호를 입력해 주세요.';
+    case 'party_password_invalid':
+      return '파티 비밀번호가 맞지 않습니다.';
     case 'invite_expired':
       return '초대가 만료되었습니다.';
     case 'invite_not_found':
@@ -346,6 +355,28 @@ function inferPartyRaidIsNormal(instance: {
   return expiresAt - startedAt >= 24 * 60 * 60 * 1000;
 }
 
+function getPartyRaidTargetFromRecord(party: any): PartyRaidTarget | null {
+  const raidType = party?.raid_type;
+  const bossStage = party?.boss_stage;
+  if (
+    (raidType === 'normal' || raidType === 'boss') &&
+    typeof bossStage === 'number'
+  ) {
+    return { raidType, bossStage };
+  }
+  return null;
+}
+
+function isSameRaidTarget(
+  left: PartyRaidTarget | null,
+  right: PartyRaidTarget,
+) {
+  return (
+    !left ||
+    (left.raidType === right.raidType && left.bossStage === right.bossStage)
+  );
+}
+
 export default function RaidLobbyScreen({ navigation }: any) {
   const { manifest: creatorManifest } = useCreatorConfig();
   const cachedCore = useMemo(() => readRaidLobbyCoreCache(), []);
@@ -353,7 +384,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const cachedParty = useMemo(() => readRaidLobbyPartyCache(), []);
   const [raidMode, setRaidMode] = useState<'normal' | 'boss'>('normal');
   const [coreLoading, setCoreLoading] = useState(!cachedCore);
-  const [socialLoading, setSocialLoading] = useState(false);
+  const [, setSocialLoading] = useState(false);
   const [partyLoading, setPartyLoading] = useState(false);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const [, setTick] = useState(0);
@@ -370,6 +401,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const [partyId, setPartyId] = useState<string | null>(
     cachedCore?.partyId ?? null,
   );
+  const [partyRaidTarget, setPartyRaidTarget] =
+    useState<PartyRaidTarget | null>(null);
   const [partyMembers, setPartyMembers] = useState<PartyMemberLocal[]>(
     cachedParty?.partyMembers ?? [],
   );
@@ -397,6 +430,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const [raidPartyLoading, setRaidPartyLoading] = useState(false);
   const [partyActionLoading, setPartyActionLoading] = useState(false);
   const [partyJoinCode, setPartyJoinCode] = useState('');
+  const [partyPassword, setPartyPassword] = useState('');
   const [chatPlayerId, setChatPlayerId] = useState(cachedCore?.playerId ?? '');
   const [chatNickname, setChatNickname] = useState(cachedCore?.nickname ?? '');
   const [chatSessionKey, setChatSessionKey] = useState(cachedCore ? 1 : 0);
@@ -603,6 +637,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     cleanupPartyChannel();
     clearRaidLobbyPartyCache();
     setPartyId(null);
+    setPartyRaidTarget(null);
     setPartyMembers([]);
     setPartyActiveRaid(null);
     setIsLeader(false);
@@ -988,6 +1023,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         partyIdRef.current = null;
         cleanupPartyChannel();
         clearRaidLobbyPartyCache();
+        setPartyRaidTarget(null);
         setPartyMembers([]);
         setPartyActiveRaid(null);
         setPartyLoading(false);
@@ -1123,9 +1159,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
     if (partyResult.data) {
       const nextPartyId = partyResult.data.id;
+      const nextPartyRaidTarget = getPartyRaidTargetFromRecord(partyResult.data);
       partyIdRef.current = nextPartyId;
       isLeaderRef.current = partyResult.data.leader_id === playerId;
       setPartyId(nextPartyId);
+      setPartyRaidTarget(nextPartyRaidTarget);
       setIsLeader(partyResult.data.leader_id === playerId);
       writeRaidLobbyCoreCache({
         playerId,
@@ -1144,6 +1182,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       cleanupPartyChannel();
       clearRaidLobbyPartyCache();
       setPartyId(null);
+      setPartyRaidTarget(null);
       setPartyMembers([]);
       setPartyActiveRaid(null);
       setIsLeader(false);
@@ -1268,6 +1307,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
           ? RAID_BOSSES.map(boss => boss.stage)
           : getUnlockedBossRaidStages(levelProgress);
         const nextPartyId = partyResult.data?.id ?? null;
+        const nextPartyRaidTarget = getPartyRaidTargetFromRecord(
+          partyResult.data,
+        );
         const nextIsLeader = Boolean(
           partyResult.data && partyResult.data.leader_id === playerId,
         );
@@ -1279,6 +1321,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         setIsAdmin(adminStatus);
         setUnlockedBossStages(nextUnlockedBossStages);
         setPartyId(nextPartyId);
+        setPartyRaidTarget(nextPartyRaidTarget);
         setIsLeader(nextIsLeader);
         writeRaidLobbyCoreCache({
           playerId,
@@ -1294,6 +1337,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         if (!nextPartyId) {
           cleanupPartyChannel();
           clearRaidLobbyPartyCache();
+          setPartyRaidTarget(null);
           setPartyMembers([]);
           setPartyActiveRaid(null);
         }
@@ -1319,17 +1363,13 @@ export default function RaidLobbyScreen({ navigation }: any) {
       }
     },
     [
-      activeRaids,
       applyPlayerProfile,
       chatNickname,
       chatPlayerId,
       cleanupPartyChannel,
       hasVisibleCoreData,
-      isAdmin,
       loadPartyData,
       loadSocialData,
-      normalRaidProgress,
-      unlockedBossStages,
     ],
   );
 
@@ -1386,7 +1426,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     return () => {
       cleanupInviteChannel();
     };
-  }, [chatPlayerId, cleanupInviteChannel]);
+  }, [chatPlayerId, cleanupInviteChannel, loadSocialData]);
 
   useEffect(() => {
     cleanupSocialChannel();
@@ -1422,7 +1462,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     return () => {
       cleanupSocialChannel();
     };
-  }, [chatPlayerId, cleanupSocialChannel]);
+  }, [chatPlayerId, cleanupSocialChannel, loadSocialData]);
 
   useEffect(() => {
     const interval = setInterval(() => setTick(previous => previous + 1), 1000);
@@ -1462,6 +1502,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     (target: RaidPartyModalTarget) => {
       setPartyModalTarget(target);
       setPartyJoinCode('');
+      setPartyPassword('');
       setRaidPartyListings([]);
       void loadRaidPartyListings(target);
     },
@@ -1471,6 +1512,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const closePartyManager = useCallback(() => {
     setPartyModalTarget(null);
     setPartyJoinCode('');
+    setPartyPassword('');
     setRaidPartyListings([]);
   }, []);
 
@@ -1520,6 +1562,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
       return;
     }
 
+    const requestedTarget = {
+      raidType: partyModalTarget.raidType,
+      bossStage: partyModalTarget.bossStage,
+    };
+
     if (partyId && !isLeader) {
       Alert.alert(
         '파티',
@@ -1531,13 +1578,17 @@ export default function RaidLobbyScreen({ navigation }: any) {
     setPartyActionLoading(true);
     try {
       if (partyId && isLeader) {
+        if (!isSameRaidTarget(partyRaidTarget, requestedTarget)) {
+          Alert.alert(
+            '파티',
+            '이 파티는 다른 레이드 몬스터로 만든 파티입니다. 다른 몬스터에 도전하려면 현재 파티를 해산하고 다시 만들어 주세요.',
+          );
+          return;
+        }
         const { error } = await updatePartyRaidTarget(
           partyId,
           playerIdRef.current,
-          {
-            raidType: partyModalTarget.raidType,
-            bossStage: partyModalTarget.bossStage,
-          },
+          requestedTarget,
         );
         if (error) {
           Alert.alert('파티', getPartyInviteErrorMessage(error.message));
@@ -1555,17 +1606,21 @@ export default function RaidLobbyScreen({ navigation }: any) {
       const { data, error } = await createRaidParty(
         playerIdRef.current,
         nicknameRef.current,
-        {
-          raidType: partyModalTarget.raidType,
-          bossStage: partyModalTarget.bossStage,
-        },
+        requestedTarget,
+        partyPassword,
       );
       if (error || !data) {
-        Alert.alert('오류', error?.message || '파티를 만들 수 없습니다.');
+        Alert.alert(
+          '오류',
+          error
+            ? getPartyInviteErrorMessage(error.message)
+            : '파티를 만들 수 없습니다.',
+        );
         return;
       }
 
       setPartyId(data.id);
+      setPartyRaidTarget(requestedTarget);
       setIsLeader(true);
       setPartyMembers([
         { playerId: playerIdRef.current, nickname: nicknameRef.current },
@@ -1599,9 +1654,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
     loadPartyData,
     loadRaidPartyListings,
     normalRaidProgress,
+    partyPassword,
     partyId,
     partyMembers.length,
     partyModalTarget,
+    partyRaidTarget,
     postPartyRecruitment,
     setupPartyChannel,
     unlockedBossStages,
@@ -1616,6 +1673,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     cleanup();
     clearRaidLobbyPartyCache();
     setPartyId(null);
+    setPartyRaidTarget(null);
     setPartyMembers([]);
     setIsLeader(false);
     writeRaidLobbyCoreCache({
@@ -1648,6 +1706,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     cleanup();
     clearRaidLobbyPartyCache();
     setPartyId(null);
+    setPartyRaidTarget(null);
     setPartyMembers([]);
     setIsLeader(false);
     writeRaidLobbyCoreCache({
@@ -1672,7 +1731,11 @@ export default function RaidLobbyScreen({ navigation }: any) {
   ]);
 
   const handleJoinPartyById = useCallback(
-    async (targetPartyId: string, closeAfterJoin = false) => {
+    async (
+      targetPartyId: string,
+      closeAfterJoin = false,
+      passwordOverride?: string,
+    ) => {
       const trimmed = targetPartyId.trim();
       if (!trimmed) {
         return;
@@ -1688,6 +1751,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           resolvedPartyId,
           playerIdRef.current,
           nicknameRef.current,
+          passwordOverride ?? partyPassword,
         );
         if (error) {
           Alert.alert('파티 참가', getPartyInviteErrorMessage(error.message));
@@ -1710,6 +1774,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       closePartyManager,
       loadRaidPartyListings,
       loadSocialData,
+      partyPassword,
       partyModalTarget,
       refreshPartyState,
       visibleRaidPartyListings,
@@ -1720,15 +1785,60 @@ export default function RaidLobbyScreen({ navigation }: any) {
     void handleJoinPartyById(partyJoinCode);
   }, [handleJoinPartyById, partyJoinCode]);
 
-  const handleRandomPartyJoin = useCallback(() => {
-    if (visibleRaidPartyListings.length === 0) {
+  const handleRandomPartyJoin = useCallback(async () => {
+    let joinableListings = visibleRaidPartyListings;
+
+    if (joinableListings.length === 0 && partyModalTarget) {
+      setRaidPartyLoading(true);
+      try {
+        const { data, error } = await listOpenPartiesForRaid(
+          {
+            raidType: partyModalTarget.raidType,
+            bossStage: partyModalTarget.bossStage,
+          },
+          playerIdRef.current,
+        );
+        if (error) {
+          Alert.alert('빠른 참가', getPartyInviteErrorMessage(error.message));
+          return;
+        }
+        const nextListings = (data ?? []).filter(
+          listing => listing.id !== partyId,
+        );
+        setRaidPartyListings(nextListings);
+        joinableListings = nextListings;
+      } finally {
+        setRaidPartyLoading(false);
+      }
+    }
+
+    if (joinableListings.length === 0) {
       Alert.alert('랜덤 참가', '현재 참가 가능한 파티가 없습니다.');
       return;
     }
 
-    const index = Math.floor(Math.random() * visibleRaidPartyListings.length);
-    void handleJoinPartyById(visibleRaidPartyListings[index].id);
-  }, [handleJoinPartyById, visibleRaidPartyListings]);
+    const passwordInput = partyPassword.trim();
+    const passwordCompatibleListings = passwordInput
+      ? joinableListings
+      : joinableListings.filter(listing => !listing.hasPassword);
+
+    if (passwordCompatibleListings.length === 0) {
+      Alert.alert(
+        '빠른 참가',
+        '비밀번호가 필요한 파티만 있습니다. 비밀번호를 입력한 뒤 다시 시도해 주세요.',
+      );
+      return;
+    }
+
+    const index = Math.floor(Math.random() * passwordCompatibleListings.length);
+    await handleJoinPartyById(passwordCompatibleListings[index].id);
+  }, [
+    handleJoinPartyById,
+    partyId,
+    partyModalTarget,
+    partyPassword,
+    visibleRaidPartyListings,
+  ]);
 
   const handlePostRecruitment = useCallback(async () => {
     if (!partyModalTarget || !partyId) {
@@ -1740,15 +1850,24 @@ export default function RaidLobbyScreen({ navigation }: any) {
       return;
     }
 
+    const requestedTarget = {
+      raidType: partyModalTarget.raidType,
+      bossStage: partyModalTarget.bossStage,
+    };
+    if (!isSameRaidTarget(partyRaidTarget, requestedTarget)) {
+      Alert.alert(
+        '파티 모집',
+        '이 파티는 다른 레이드 몬스터로 만든 파티입니다. 현재 파티를 해산한 뒤 다시 만들어 주세요.',
+      );
+      return;
+    }
+
     setPartyActionLoading(true);
     try {
       const { error } = await updatePartyRaidTarget(
         partyId,
         playerIdRef.current,
-        {
-          raidType: partyModalTarget.raidType,
-          bossStage: partyModalTarget.bossStage,
-        },
+        requestedTarget,
       );
       if (error) {
         Alert.alert('파티 모집', getPartyInviteErrorMessage(error.message));
@@ -1770,6 +1889,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     partyId,
     partyMembers.length,
     partyModalTarget,
+    partyRaidTarget,
     postPartyRecruitment,
   ]);
 
@@ -1873,43 +1993,24 @@ export default function RaidLobbyScreen({ navigation }: any) {
     [loadSocialData],
   );
 
-  const handleInviteFromChat = useCallback(
-    (inviteeId: string, inviteeNickname: string) => {
-      if (inviteeId === playerIdRef.current) {
-        return;
-      }
-
-      if (!partyId) {
-        Alert.alert('파티 초대', '먼저 파티를 만들어 주세요.');
-        return;
-      }
-
-      if (!isLeader) {
-        Alert.alert('파티 초대', '파티장만 초대할 수 있습니다.');
-        return;
-      }
-
-      Alert.alert(
-        '파티 초대',
-        `${inviteeNickname}님에게 파티 초대를 보내겠습니까?`,
-        [
-          { text: '취소', style: 'cancel' },
-          {
-            text: '초대',
-            onPress: () => {
-              void handleInvitePlayer(inviteeId, inviteeNickname);
-            },
-          },
-        ],
-      );
-    },
-    [handleInvitePlayer, isLeader, partyId],
-  );
-
   const handleNormalRaidChallenge = useCallback(
     async (bossStage: number) => {
       if (partyId && !isLeader) {
         Alert.alert('파티 레이드', '파티장만 레이드를 시작할 수 있습니다.');
+        return;
+      }
+      if (
+        partyId &&
+        isLeader &&
+        !isSameRaidTarget(partyRaidTarget, {
+          raidType: 'normal',
+          bossStage,
+        })
+      ) {
+        Alert.alert(
+          '파티 레이드',
+          '이 파티는 다른 레이드 몬스터로 만든 파티입니다. 다른 몬스터에 도전하려면 현재 파티를 해산하고 다시 만들어 주세요.',
+        );
         return;
       }
 
@@ -1934,7 +2035,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
       if (error || !instance) {
         Alert.alert(
           '오류',
-          error?.message || '일반 레이드를 시작할 수 없습니다.',
+          error
+            ? getPartyInviteErrorMessage(error.message)
+            : '일반 레이드를 시작할 수 없습니다.',
         );
         return;
       }
@@ -1969,7 +2072,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         isNormalRaid: true,
       });
     },
-    [cleanup, isLeader, navigation, partyId, resolveRaidDisplay],
+    [cleanup, isLeader, navigation, partyId, partyRaidTarget, resolveRaidDisplay],
   );
 
   const handleChallengeBoss = useCallback(
@@ -1984,6 +2087,20 @@ export default function RaidLobbyScreen({ navigation }: any) {
 
       if (partyId && !isLeader) {
         Alert.alert('파티 레이드', '파티장만 레이드를 시작할 수 있습니다.');
+        return;
+      }
+      if (
+        partyId &&
+        isLeader &&
+        !isSameRaidTarget(partyRaidTarget, {
+          raidType: 'boss',
+          bossStage,
+        })
+      ) {
+        Alert.alert(
+          '파티 레이드',
+          '이 파티는 다른 레이드 몬스터로 만든 파티입니다. 다른 몬스터에 도전하려면 현재 파티를 해산하고 다시 만들어 주세요.',
+        );
         return;
       }
 
@@ -2015,7 +2132,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
       if (error || !instance) {
         Alert.alert(
           '오류',
-          error?.message || '보스 레이드를 시작할 수 없습니다.',
+          error
+            ? getPartyInviteErrorMessage(error.message)
+            : '보스 레이드를 시작할 수 없습니다.',
         );
         return;
       }
@@ -2057,6 +2176,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       isLeader,
       navigation,
       partyId,
+      partyRaidTarget,
       resolveRaidDisplay,
       unlockedBossStages,
     ],
@@ -2172,6 +2292,80 @@ export default function RaidLobbyScreen({ navigation }: any) {
       friend.isOnline &&
       !partyMembers.some(member => member.playerId === friend.id),
   );
+  const normalRecruitmentMessages = lobbyChat.messages.filter(
+    message => message.partyRecruitment?.raidType === 'normal',
+  );
+
+  const renderNormalRecruitmentPanel = () => (
+    <View style={styles.normalRecruitmentPanel}>
+      <View style={styles.normalRecruitmentHeader}>
+        <View>
+          <Text style={styles.normalRecruitmentTitle}>파티 모집</Text>
+          <Text style={styles.normalRecruitmentMeta}>
+            {lobbyChat.currentChannelId
+              ? `채널 ${lobbyChat.currentChannelId}`
+              : lobbyChat.connected
+              ? '채널 연결 중'
+              : '연결 중'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.normalRecruitmentChannelBtn}
+          onPress={() => {
+            lobbyChat.joinRandomChannel().catch(error => {
+              console.warn('RaidLobbyScreen joinRandomChannel error:', error);
+            });
+          }}
+        >
+          <Text style={styles.normalRecruitmentChannelText}>채널 변경</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        style={styles.normalRecruitmentScroll}
+        contentContainerStyle={styles.normalRecruitmentContent}
+      >
+        {normalRecruitmentMessages.length === 0 ? (
+          <Text style={styles.normalRecruitmentEmpty}>
+            현재 올라온 파티 모집이 없습니다.
+          </Text>
+        ) : (
+          normalRecruitmentMessages.slice(-30).map(message => {
+            const recruitment = message.partyRecruitment!;
+            return (
+              <View key={message.id} style={styles.normalRecruitmentRow}>
+                <View style={styles.normalRecruitmentInfo}>
+                  <Text style={styles.normalRecruitmentName} numberOfLines={1}>
+                    {recruitment.raidName ?? '일반 레이드'} 파티
+                  </Text>
+                  <Text style={styles.normalRecruitmentText} numberOfLines={2}>
+                    {message.text}
+                  </Text>
+                  <Text style={styles.normalRecruitmentSub} numberOfLines={1}>
+                    {recruitment.leaderNickname ?? message.nickname} ·{' '}
+                    {recruitment.bossStage}단계
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.normalRecruitmentJoinBtn,
+                    message.self && styles.normalRecruitmentJoinBtnDisabled,
+                  ]}
+                  disabled={message.self}
+                  onPress={() => {
+                    void handleJoinPartyById(recruitment.partyId, true);
+                  }}
+                >
+                  <Text style={styles.normalRecruitmentJoinText}>
+                    {message.self ? '내 파티' : '참가'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
 
   if (coreLoading) {
     return (
@@ -2239,7 +2433,10 @@ export default function RaidLobbyScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
         <ScrollView
-          style={styles.scrollView}
+          style={[
+            styles.scrollView,
+            raidMode === 'normal' && styles.normalRaidListPane,
+          ]}
           contentContainerStyle={styles.scrollContent}
         >
           {loadSummary && (
@@ -2263,12 +2460,10 @@ export default function RaidLobbyScreen({ navigation }: any) {
               </TouchableOpacity>
             </View>
           )}
-          {(socialLoading || partyLoading) && (
+          {partyLoading && (
             <View style={styles.sectionLoadingCard}>
               <Text style={styles.sectionLoadingText}>
-                {partyLoading
-                  ? '파티 정보를 불러오는 중입니다.'
-                  : '친구와 초대 정보를 불러오는 중입니다.'}
+                파티 정보를 불러오는 중입니다.
               </Text>
             </View>
           )}
@@ -2649,6 +2844,8 @@ export default function RaidLobbyScreen({ navigation }: any) {
           ) : null}
         </ScrollView>
 
+        {raidMode === 'normal' ? renderNormalRecruitmentPanel() : null}
+
         <GameBottomNav
           navigation={navigation}
           activeItem={null}
@@ -2683,7 +2880,9 @@ export default function RaidLobbyScreen({ navigation }: any) {
           loading={raidPartyLoading}
           actionLoading={partyActionLoading}
           joinCode={partyJoinCode}
+          partyPassword={partyPassword}
           onChangeJoinCode={setPartyJoinCode}
+          onChangePartyPassword={setPartyPassword}
           onCreateParty={handleCreateParty}
           onPostRecruitment={handlePostRecruitment}
           onJoinByCode={handleJoinPartyFromCode}
@@ -2691,11 +2890,6 @@ export default function RaidLobbyScreen({ navigation }: any) {
             void handleJoinPartyById(partyIdToJoin);
           }}
           onRandomJoin={handleRandomPartyJoin}
-          onRefreshParties={() => {
-            if (partyModalTarget) {
-              void loadRaidPartyListings(partyModalTarget);
-            }
-          }}
           onInviteFriends={() => {
             if (
               !partyId ||
@@ -2711,7 +2905,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           onClose={closePartyManager}
         />
 
-        {!coreLoading && chatPlayerId ? (
+        {raidMode === 'boss' && !coreLoading && chatPlayerId ? (
           <LobbyChatPanel
             title="레이드 모집 채팅"
             accentColor={raidMode === 'boss' ? '#ef4444' : '#22c55e'}
@@ -2736,7 +2930,6 @@ export default function RaidLobbyScreen({ navigation }: any) {
                 console.warn('RaidLobbyScreen joinRandomChannel error:', error);
               });
             }}
-            onPressUser={handleInviteFromChat}
             onJoinParty={partyIdToJoin => {
               void handleJoinPartyById(partyIdToJoin, true);
             }}
@@ -2809,7 +3002,113 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  normalRaidListPane: {
+    flex: 3,
+  },
   scrollContent: { paddingBottom: 20, paddingHorizontal: 14 },
+  normalRecruitmentPanel: {
+    flex: 2,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.42)',
+    backgroundColor: 'rgba(15,23,42,0.82)',
+    overflow: 'hidden',
+  },
+  normalRecruitmentHeader: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.16)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  normalRecruitmentTitle: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  normalRecruitmentMeta: {
+    color: '#86efac',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  normalRecruitmentChannelBtn: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(134,239,172,0.42)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  normalRecruitmentChannelText: {
+    color: '#bbf7d0',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  normalRecruitmentScroll: {
+    flex: 1,
+  },
+  normalRecruitmentContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  normalRecruitmentEmpty: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingVertical: 18,
+  },
+  normalRecruitmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(2,6,23,0.48)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  normalRecruitmentInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  normalRecruitmentName: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  normalRecruitmentText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  normalRecruitmentSub: {
+    color: '#86efac',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  normalRecruitmentJoinBtn: {
+    minWidth: 52,
+    borderRadius: 9,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  normalRecruitmentJoinBtnDisabled: {
+    backgroundColor: '#475569',
+  },
+  normalRecruitmentJoinText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
   loadErrorCard: {
     backgroundColor: 'rgba(127,29,29,0.35)',
     borderRadius: 12,

@@ -15,6 +15,7 @@ export interface RaidPartyListing {
   raidType: RaidPartyType;
   bossStage: number;
   memberCount: number;
+  hasPassword?: boolean;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -63,6 +64,39 @@ function buildPartyTargetPayload(target?: PartyRaidTarget | null) {
     status: 'recruiting',
     updated_at: new Date().toISOString(),
   };
+}
+
+function normalizePartyPassword(passwordCode?: string | null) {
+  const trimmed = passwordCode?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed.slice(0, 24) : null;
+}
+
+function isMissingPartyPasswordColumnError(error: unknown) {
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : '';
+
+  return (
+    message.includes('password_code') &&
+    (message.includes('schema cache') ||
+      message.includes('column') ||
+      message.includes('does not exist'))
+  );
+}
+
+function buildPartyCreatePayload(
+  target: PartyRaidTarget,
+  passwordCode?: string | null,
+) {
+  const payload: Record<string, unknown> = {
+    ...buildPartyTargetPayload(target),
+  };
+  const normalizedPassword = normalizePartyPassword(passwordCode);
+  if (normalizedPassword) {
+    payload.password_code = normalizedPassword;
+  }
+  return payload;
 }
 
 async function getMembership(playerId: string) {
@@ -203,6 +237,7 @@ export async function createRaidParty(
   leaderId: string,
   nickname: string,
   target: PartyRaidTarget,
+  passwordCode?: string | null,
 ) {
   const { data: existingMembership, error: membershipError } =
     await getMembership(leaderId);
@@ -217,10 +252,14 @@ export async function createRaidParty(
     .from('parties')
     .insert({
       leader_id: leaderId,
-      ...buildPartyTargetPayload(target),
+      ...buildPartyCreatePayload(target, passwordCode),
     })
     .select()
     .single();
+
+  if (partyErr && isMissingPartyPasswordColumnError(partyErr)) {
+    return { data: null, error: { message: 'party_password_setup_required' } };
+  }
 
   if (partyErr && isMissingPartyTargetColumnError(partyErr)) {
     const fallback = await supabase
@@ -274,6 +313,13 @@ export async function updatePartyRaidTarget(
   if (party.leader_id !== leaderId) {
     return { data: null, error: { message: 'leader_only' } };
   }
+  if (
+    (party.raid_type && party.raid_type !== target.raidType) ||
+    (typeof party.boss_stage === 'number' &&
+      party.boss_stage !== target.bossStage)
+  ) {
+    return { data: null, error: { message: 'party_target_mismatch' } };
+  }
 
   const { data, error } = await supabase
     .from('parties')
@@ -300,6 +346,8 @@ export async function joinParty(
   partyId: string,
   playerId: string,
   nickname: string,
+  passwordCode?: string | null,
+  options: { bypassPassword?: boolean } = {},
 ) {
   const { data: existingMembership, error: membershipError } =
     await getMembership(playerId);
@@ -331,6 +379,17 @@ export async function joinParty(
 
   if (party.status && party.status !== 'recruiting') {
     return { data: null, error: { message: 'party_not_found' } };
+  }
+
+  const partyPassword = normalizePartyPassword(party.password_code);
+  if (partyPassword && !options.bypassPassword) {
+    const inputPassword = normalizePartyPassword(passwordCode);
+    if (!inputPassword) {
+      return { data: null, error: { message: 'party_password_required' } };
+    }
+    if (inputPassword !== partyPassword) {
+      return { data: null, error: { message: 'party_password_invalid' } };
+    }
   }
 
   const { data: leaderMember, error: leaderMemberError } = await supabase
@@ -478,15 +537,26 @@ export async function listOpenPartiesForRaid(
   target: PartyRaidTarget,
   excludePlayerId?: string,
 ) {
-  const { data: parties, error } = await supabase
-    .from('parties')
-    .select(
-      'id, leader_id, raid_type, boss_stage, status, created_at, updated_at',
-    )
-    .eq('raid_type', target.raidType)
-    .eq('boss_stage', target.bossStage)
-    .order('updated_at', { ascending: false })
-    .limit(20);
+  const queryOpenParties = (includePassword: boolean) =>
+    supabase
+      .from('parties')
+      .select(
+        (includePassword
+          ? 'id, leader_id, raid_type, boss_stage, status, password_code, created_at, updated_at'
+          : 'id, leader_id, raid_type, boss_stage, status, created_at, updated_at') as string,
+      )
+      .eq('raid_type', target.raidType)
+      .eq('boss_stage', target.bossStage)
+      .order('updated_at', { ascending: false })
+      .limit(20);
+
+  let { data: parties, error } = await queryOpenParties(true);
+
+  if (error && isMissingPartyPasswordColumnError(error)) {
+    const fallback = await queryOpenParties(false);
+    parties = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     if (isMissingPartyTargetColumnError(error)) {
@@ -511,7 +581,7 @@ export async function listOpenPartiesForRaid(
     presenceMap.set(row.player_id, row);
   });
 
-  for (const party of parties ?? []) {
+  for (const party of ((parties ?? []) as any[])) {
     if (party.status && party.status !== 'recruiting') {
       continue;
     }
@@ -554,6 +624,7 @@ export async function listOpenPartiesForRaid(
       raidType: party.raid_type,
       bossStage: party.boss_stage,
       memberCount: memberRows.length,
+      hasPassword: Boolean(normalizePartyPassword(party.password_code)),
       createdAt: party.created_at,
       updatedAt: party.updated_at,
     });
@@ -715,6 +786,8 @@ export async function acceptPartyInvite(
       invite.party_id,
       playerId,
       nickname,
+      null,
+      { bypassPassword: true },
     );
     if (joinError) {
       return { data: null, error: joinError };
