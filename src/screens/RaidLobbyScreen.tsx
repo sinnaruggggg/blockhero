@@ -56,6 +56,7 @@ import {
   declinePartyInvite,
   joinParty,
   listOpenPartiesForRaid,
+  listOpenPartiesForRaidType,
   disbandParty,
   leaveOrDisbandParty,
   getIncomingPartyInvites,
@@ -427,6 +428,13 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const [raidPartyListings, setRaidPartyListings] = useState<
     RaidPartyListing[]
   >([]);
+  const [normalRecruitmentListings, setNormalRecruitmentListings] = useState<
+    RaidPartyListing[]
+  >([]);
+  const [bossRecruitmentListings, setBossRecruitmentListings] = useState<
+    RaidPartyListing[]
+  >([]);
+  const [recruitmentLoading, setRecruitmentLoading] = useState(false);
   const [raidPartyLoading, setRaidPartyLoading] = useState(false);
   const [partyActionLoading, setPartyActionLoading] = useState(false);
   const [partyJoinCode, setPartyJoinCode] = useState('');
@@ -517,6 +525,10 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const playerIdRef = useRef('');
   const nicknameRef = useRef('');
   const partyChannelRef = useRef<any>(null);
+  const recruitmentChannelRef = useRef<any>(null);
+  const recruitmentRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const keepPartyForRaidNavigationRef = useRef(false);
   const partyIdRef = useRef<string | null>(cachedCore?.partyId ?? null);
   const isLeaderRef = useRef(cachedCore?.isLeader ?? false);
@@ -528,10 +540,12 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const socialRequestRef = useRef(0);
   const partyRequestRef = useRef(0);
   const partyStateRequestRef = useRef(0);
+  const recruitmentRequestRef = useRef(0);
   const loadDataRef = useRef<
     (options?: { showBlockingSpinner?: boolean }) => Promise<void>
   >(async () => {});
   const refreshPartyStateRef = useRef<() => Promise<void>>(async () => {});
+  const loadRecruitmentListingsRef = useRef<() => Promise<void>>(async () => {});
   const lobbyChat = useLobbyChat({
     mode: 'raid',
     userId: chatPlayerId,
@@ -614,6 +628,17 @@ export default function RaidLobbyScreen({ navigation }: any) {
     if (socialChannelRef.current) {
       supabase.removeChannel(socialChannelRef.current);
       socialChannelRef.current = null;
+    }
+  }, []);
+
+  const cleanupRecruitmentChannel = useCallback(() => {
+    if (recruitmentRefreshTimerRef.current) {
+      clearTimeout(recruitmentRefreshTimerRef.current);
+      recruitmentRefreshTimerRef.current = null;
+    }
+    if (recruitmentChannelRef.current) {
+      supabase.removeChannel(recruitmentChannelRef.current);
+      recruitmentChannelRef.current = null;
     }
   }, []);
 
@@ -1469,6 +1494,45 @@ export default function RaidLobbyScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, []);
 
+  const loadRecruitmentListings = useCallback(async () => {
+    const requestId = recruitmentRequestRef.current + 1;
+    recruitmentRequestRef.current = requestId;
+    const isCurrentRequest = () =>
+      mountedRef.current && recruitmentRequestRef.current === requestId;
+
+    setRecruitmentLoading(true);
+    try {
+      const [normalResult, bossResult] = await Promise.all([
+        listOpenPartiesForRaidType('normal', undefined, 50),
+        listOpenPartiesForRaidType('boss', undefined, 50),
+      ]);
+
+      if (!isCurrentRequest()) {
+        return;
+      }
+
+      if (normalResult.error) {
+        console.warn(
+          'RaidLobbyScreen normal recruitment list error:',
+          normalResult.error,
+        );
+      }
+      if (bossResult.error) {
+        console.warn(
+          'RaidLobbyScreen boss recruitment list error:',
+          bossResult.error,
+        );
+      }
+
+      setNormalRecruitmentListings(normalResult.data ?? []);
+      setBossRecruitmentListings(bossResult.data ?? []);
+    } finally {
+      if (isCurrentRequest()) {
+        setRecruitmentLoading(false);
+      }
+    }
+  }, []);
+
   const loadRaidPartyListings = useCallback(
     async (target: RaidPartyModalTarget) => {
       setRaidPartyLoading(true);
@@ -1498,10 +1562,68 @@ export default function RaidLobbyScreen({ navigation }: any) {
     [],
   );
 
+  useEffect(() => {
+    loadRecruitmentListingsRef.current = loadRecruitmentListings;
+  }, [loadRecruitmentListings]);
+
+  const scheduleRecruitmentRefresh = useCallback(() => {
+    if (recruitmentRefreshTimerRef.current) {
+      clearTimeout(recruitmentRefreshTimerRef.current);
+    }
+    recruitmentRefreshTimerRef.current = setTimeout(() => {
+      recruitmentRefreshTimerRef.current = null;
+      void loadRecruitmentListingsRef.current();
+    }, 250);
+  }, []);
+
+  useEffect(() => {
+    cleanupRecruitmentChannel();
+
+    if (coreLoading) {
+      return;
+    }
+
+    void loadRecruitmentListings();
+
+    const channel = supabase
+      .channel('raid-party-recruitment-db')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'parties' },
+        scheduleRecruitmentRefresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'party_members' },
+        scheduleRecruitmentRefresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_presence' },
+        scheduleRecruitmentRefresh,
+      )
+      .subscribe(status => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('RaidLobbyScreen recruitment channel error');
+        }
+      });
+
+    recruitmentChannelRef.current = channel;
+
+    return () => {
+      cleanupRecruitmentChannel();
+    };
+  }, [
+    cleanupRecruitmentChannel,
+    coreLoading,
+    loadRecruitmentListings,
+    scheduleRecruitmentRefresh,
+  ]);
+
   const openPartyManager = useCallback(
-    (target: RaidPartyModalTarget) => {
+    (target: RaidPartyModalTarget, initialPartyId = '') => {
       setPartyModalTarget(target);
-      setPartyJoinCode('');
+      setPartyJoinCode(initialPartyId);
       setPartyPassword('');
       setRaidPartyListings([]);
       void loadRaidPartyListings(target);
@@ -1528,6 +1650,10 @@ export default function RaidLobbyScreen({ navigation }: any) {
       nextPartyId: string,
       memberCount = partyMembers.length || 1,
     ) => {
+      if (target.raidType === 'normal') {
+        return true;
+      }
+
       const rawMessage = buildRaidPartyRecruitmentMessage(
         `${target.name} 파티 모집 중입니다. (${memberCount}/${MAX_PARTY_SIZE})`,
         {
@@ -1600,6 +1726,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
           partyMembers.length || 1,
         );
         await loadRaidPartyListings(partyModalTarget);
+        await loadRecruitmentListings();
         return;
       }
 
@@ -1644,6 +1771,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
       void loadPartyData(data.id);
       await postPartyRecruitment(partyModalTarget, data.id, 1);
       await loadRaidPartyListings(partyModalTarget);
+      await loadRecruitmentListings();
     } finally {
       setPartyActionLoading(false);
     }
@@ -1653,6 +1781,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     isLeader,
     loadPartyData,
     loadRaidPartyListings,
+    loadRecruitmentListings,
     normalRaidProgress,
     partyPassword,
     partyId,
@@ -1687,10 +1816,12 @@ export default function RaidLobbyScreen({ navigation }: any) {
       isLeader: false,
     });
     resetInviteModal();
+    await loadRecruitmentListings();
   }, [
     activeRaids,
     cleanup,
     isAdmin,
+    loadRecruitmentListings,
     normalRaidProgress,
     partyId,
     resetInviteModal,
@@ -1720,10 +1851,12 @@ export default function RaidLobbyScreen({ navigation }: any) {
       isLeader: false,
     });
     resetInviteModal();
+    await loadRecruitmentListings();
   }, [
     activeRaids,
     cleanup,
     isAdmin,
+    loadRecruitmentListings,
     normalRaidProgress,
     partyId,
     resetInviteModal,
@@ -1763,6 +1896,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
         if (partyModalTarget) {
           await loadRaidPartyListings(partyModalTarget);
         }
+        await loadRecruitmentListings();
         if (closeAfterJoin) {
           closePartyManager();
         }
@@ -1773,6 +1907,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
     [
       closePartyManager,
       loadRaidPartyListings,
+      loadRecruitmentListings,
       loadSocialData,
       partyPassword,
       partyModalTarget,
@@ -1880,12 +2015,14 @@ export default function RaidLobbyScreen({ navigation }: any) {
         partyMembers.length || 1,
       );
       await loadRaidPartyListings(partyModalTarget);
+      await loadRecruitmentListings();
     } finally {
       setPartyActionLoading(false);
     }
   }, [
     isLeader,
     loadRaidPartyListings,
+    loadRecruitmentListings,
     partyId,
     partyMembers.length,
     partyModalTarget,
@@ -2292,8 +2429,28 @@ export default function RaidLobbyScreen({ navigation }: any) {
       friend.isOnline &&
       !partyMembers.some(member => member.playerId === friend.id),
   );
-  const normalRecruitmentMessages = lobbyChat.messages.filter(
-    message => message.partyRecruitment?.raidType === 'normal',
+  const validRecruitmentPartyIds = useMemo(
+    () =>
+      new Set(
+        [...normalRecruitmentListings, ...bossRecruitmentListings].map(
+          listing => listing.id,
+        ),
+      ),
+    [bossRecruitmentListings, normalRecruitmentListings],
+  );
+  const bossChatMessages = useMemo(
+    () =>
+      lobbyChat.messages.map(message => {
+        const recruitment = message.partyRecruitment;
+        if (!recruitment || validRecruitmentPartyIds.has(recruitment.partyId)) {
+          return message;
+        }
+        return {
+          ...message,
+          partyRecruitment: undefined,
+        };
+      }),
+    [lobbyChat.messages, validRecruitmentPartyIds],
   );
 
   const renderNormalRecruitmentPanel = () => (
@@ -2302,61 +2459,70 @@ export default function RaidLobbyScreen({ navigation }: any) {
         <View>
           <Text style={styles.normalRecruitmentTitle}>파티 모집</Text>
           <Text style={styles.normalRecruitmentMeta}>
-            {lobbyChat.currentChannelId
-              ? `채널 ${lobbyChat.currentChannelId}`
-              : lobbyChat.connected
-              ? '채널 연결 중'
-              : '연결 중'}
+            {recruitmentLoading
+              ? '목록 갱신 중'
+              : `${normalRecruitmentListings.length}개 모집 중`}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.normalRecruitmentChannelBtn}
-          onPress={() => {
-            lobbyChat.joinRandomChannel().catch(error => {
-              console.warn('RaidLobbyScreen joinRandomChannel error:', error);
-            });
-          }}
-        >
-          <Text style={styles.normalRecruitmentChannelText}>채널 변경</Text>
-        </TouchableOpacity>
       </View>
       <ScrollView
         style={styles.normalRecruitmentScroll}
         contentContainerStyle={styles.normalRecruitmentContent}
       >
-        {normalRecruitmentMessages.length === 0 ? (
+        {normalRecruitmentListings.length === 0 ? (
           <Text style={styles.normalRecruitmentEmpty}>
-            현재 올라온 파티 모집이 없습니다.
+            {recruitmentLoading
+              ? '파티 모집 목록을 확인하는 중입니다.'
+              : '현재 올라온 파티 모집이 없습니다.'}
           </Text>
         ) : (
-          normalRecruitmentMessages.slice(-30).map(message => {
-            const recruitment = message.partyRecruitment!;
+          normalRecruitmentListings.map(listing => {
+            const raidDisplay = resolveRaidDisplay(
+              listing.raidType,
+              listing.bossStage,
+            );
+            const isOwnParty = listing.id === partyId;
+            const target = {
+              raidType: listing.raidType,
+              bossStage: listing.bossStage,
+              name: raidDisplay.name,
+              color: raidDisplay.color,
+              emoji: raidDisplay.emoji,
+            };
             return (
-              <View key={message.id} style={styles.normalRecruitmentRow}>
+              <View key={listing.id} style={styles.normalRecruitmentRow}>
                 <View style={styles.normalRecruitmentInfo}>
                   <Text style={styles.normalRecruitmentName} numberOfLines={1}>
-                    {recruitment.raidName ?? '일반 레이드'} 파티
+                    {raidDisplay.name} 파티
                   </Text>
                   <Text style={styles.normalRecruitmentText} numberOfLines={2}>
-                    {message.text}
+                    {listing.memberCount}/{MAX_PARTY_SIZE} 모집 중
+                    {listing.hasPassword ? ' · 비공개' : ''}
                   </Text>
                   <Text style={styles.normalRecruitmentSub} numberOfLines={1}>
-                    {recruitment.leaderNickname ?? message.nickname} ·{' '}
-                    {recruitment.bossStage}단계
+                    {listing.leaderNickname} · {listing.bossStage}단계
                   </Text>
                 </View>
                 <TouchableOpacity
                   style={[
                     styles.normalRecruitmentJoinBtn,
-                    message.self && styles.normalRecruitmentJoinBtnDisabled,
+                    isOwnParty && styles.normalRecruitmentJoinBtnDisabled,
                   ]}
-                  disabled={message.self}
+                  disabled={isOwnParty || partyActionLoading}
                   onPress={() => {
-                    void handleJoinPartyById(recruitment.partyId, true);
+                    if (listing.hasPassword) {
+                      openPartyManager(target, listing.id);
+                      return;
+                    }
+                    void handleJoinPartyById(listing.id, true);
                   }}
                 >
                   <Text style={styles.normalRecruitmentJoinText}>
-                    {message.self ? '내 파티' : '참가'}
+                    {isOwnParty
+                      ? '내 파티'
+                      : listing.hasPassword
+                      ? '비밀번호'
+                      : '참가'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2909,7 +3075,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
             capacity={lobbyChat.capacity}
             channelOptions={lobbyChat.channelOptions}
             draft={lobbyChat.draft}
-            messages={lobbyChat.messages}
+            messages={bossChatMessages}
             onToggle={lobbyChat.toggleOpen}
             onChangeDraft={lobbyChat.setDraft}
             onSend={lobbyChat.sendMessage}

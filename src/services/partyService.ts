@@ -35,6 +35,10 @@ export interface PartyInviteRecord {
 
 const RAID_PARTY_STALE_MS = 60 * 60 * 1000;
 const RAID_PARTY_LEADER_PRESENCE_MAX_AGE_MS = 3 * 60 * 1000;
+const PARTY_SELECT_WITH_PASSWORD =
+  'id, leader_id, raid_type, boss_stage, status, password_code, created_at, updated_at';
+const PARTY_SELECT_WITHOUT_PASSWORD =
+  'id, leader_id, raid_type, boss_stage, status, created_at, updated_at';
 
 function isMissingPartyTargetColumnError(error: unknown) {
   const message =
@@ -281,6 +285,7 @@ export async function createRaidParty(
     nickname,
   });
   if (memberError) {
+    await cleanupCreatedPartyOnFailure(party.id);
     return { data: null, error: memberError };
   }
 
@@ -621,6 +626,112 @@ export async function listOpenPartiesForRaid(
       id: party.id,
       leaderId: party.leader_id,
       leaderNickname: leader?.nickname ?? '파티장',
+      raidType: party.raid_type,
+      bossStage: party.boss_stage,
+      memberCount: memberRows.length,
+      hasPassword: Boolean(normalizePartyPassword(party.password_code)),
+      createdAt: party.created_at,
+      updatedAt: party.updated_at,
+    });
+  }
+
+  return { data: listings, error: null };
+}
+
+export async function listOpenPartiesForRaidType(
+  raidType: RaidPartyType,
+  excludePlayerId?: string,
+  limit = 50,
+) {
+  const queryOpenParties = (includePassword: boolean) =>
+    supabase
+      .from('parties')
+      .select(
+        (includePassword
+          ? PARTY_SELECT_WITH_PASSWORD
+          : PARTY_SELECT_WITHOUT_PASSWORD) as string,
+      )
+      .eq('raid_type', raidType)
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+  let { data: parties, error } = await queryOpenParties(true);
+
+  if (error && isMissingPartyPasswordColumnError(error)) {
+    const fallback = await queryOpenParties(false);
+    parties = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    if (isMissingPartyTargetColumnError(error)) {
+      return { data: [] as RaidPartyListing[], error: null };
+    }
+    return { data: [] as RaidPartyListing[], error };
+  }
+
+  const listings: RaidPartyListing[] = [];
+  const acceptedLeaderIds = new Set<string>();
+  const leaderIds = Array.from(
+    new Set((parties ?? []).map((party: any) => party.leader_id)),
+  ).filter(Boolean);
+  const presenceResult =
+    leaderIds.length > 0
+      ? await supabase
+          .from('user_presence')
+          .select('player_id, is_online, last_seen')
+          .in('player_id', leaderIds)
+      : { data: [], error: null };
+  const presenceMap = new Map<string, any>();
+  (presenceResult.data ?? []).forEach((row: any) => {
+    presenceMap.set(row.player_id, row);
+  });
+
+  for (const party of (parties ?? []) as any[]) {
+    if (party.status && party.status !== 'recruiting') {
+      continue;
+    }
+    if (isStalePartyRecord(party)) {
+      await cleanupInvalidParty(party.id);
+      continue;
+    }
+
+    const { data: members, error: memberError } = await getPartyMembers(
+      party.id,
+    );
+    if (memberError) {
+      return { data: [] as RaidPartyListing[], error: memberError };
+    }
+
+    const memberRows = members ?? [];
+    if (memberRows.length === 0) {
+      await cleanupInvalidParty(party.id);
+      continue;
+    }
+    if (memberRows.some(member => member.player_id === excludePlayerId)) {
+      continue;
+    }
+    if (memberRows.length >= MAX_PARTY_SIZE) {
+      continue;
+    }
+
+    const leader = memberRows.find(
+      member => member.player_id === party.leader_id,
+    );
+    if (!leader || !isFreshOnlinePresence(presenceMap.get(party.leader_id))) {
+      await cleanupInvalidParty(party.id);
+      continue;
+    }
+    if (acceptedLeaderIds.has(party.leader_id)) {
+      await cleanupInvalidParty(party.id);
+      continue;
+    }
+
+    acceptedLeaderIds.add(party.leader_id);
+    listings.push({
+      id: party.id,
+      leaderId: party.leader_id,
+      leaderNickname: leader?.nickname ?? 'Unknown',
       raidType: party.raid_type,
       bossStage: party.boss_stage,
       memberCount: memberRows.length,
