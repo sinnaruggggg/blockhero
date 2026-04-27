@@ -385,7 +385,7 @@ export default function RaidLobbyScreen({ navigation }: any) {
   const [raidMode, setRaidMode] = useState<'normal' | 'boss'>('normal');
   const [coreLoading, setCoreLoading] = useState(!cachedCore);
   const [, setSocialLoading] = useState(false);
-  const [partyLoading, setPartyLoading] = useState(false);
+  const [_partyLoading, setPartyLoading] = useState(false);
   const [loadSummary, setLoadSummary] = useState<LoadSummary | null>(null);
   const [, setTick] = useState(0);
   const [activeRaids, setActiveRaids] = useState<ActiveRaid[]>(
@@ -2458,13 +2458,6 @@ export default function RaidLobbyScreen({ navigation }: any) {
               >
                 <Text style={styles.retryBtnText}>다시 시도</Text>
               </TouchableOpacity>
-            </View>
-          )}
-          {partyLoading && (
-            <View style={styles.sectionLoadingCard}>
-              <Text style={styles.sectionLoadingText}>
-                파티 정보를 불러오는 중입니다.
-              </Text>
             </View>
           )}
           {raidMode === 'normal' ? (
