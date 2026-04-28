@@ -34,6 +34,20 @@ import {
   type SummonProgressData,
 } from '../game/skinSummonRuntime';
 import {
+  addPendingSummonReward,
+  applyMonsterSummonExp,
+  buyMonsterSummonWithFragments,
+  chooseMonsterSummonSkill as chooseMonsterSummonSkillRuntime,
+  claimMonsterSummonFragments as claimMonsterSummonFragmentsRuntime,
+  convertMonsterSummonToFragments as convertMonsterSummonToFragmentsRuntime,
+  createDefaultMonsterSummonData,
+  drawWorldSummon,
+  ensureMonsterSummonData,
+  selectMonsterSummon as selectMonsterSummonRuntime,
+  type MonsterSummonData,
+  type MonsterSummonSkillKey,
+} from '../game/monsterSummonRuntime';
+import {
   getSpecialPieceShapeIndices,
   SPECIAL_PIECE_UNLOCK_KEYS,
   type SpecialPieceUnlockKey,
@@ -1210,6 +1224,92 @@ export async function gainSummonExp(
   };
   await save('skinData', data);
   return data;
+}
+
+const defaultMonsterSummonData = createDefaultMonsterSummonData();
+
+export async function loadMonsterSummonData(): Promise<MonsterSummonData> {
+  const data = await load<MonsterSummonData>(
+    'monsterSummonData',
+    defaultMonsterSummonData,
+  );
+  const normalized = ensureMonsterSummonData(data);
+  if (JSON.stringify(data) !== JSON.stringify(normalized)) {
+    await save('monsterSummonData', normalized);
+  }
+  return normalized;
+}
+
+export async function saveMonsterSummonData(
+  data: MonsterSummonData,
+): Promise<void> {
+  await save('monsterSummonData', ensureMonsterSummonData(data));
+}
+
+export async function grantMonsterSummonReward(
+  worldId: number,
+): Promise<MonsterSummonData> {
+  const data = await loadMonsterSummonData();
+  const updated = addPendingSummonReward(data, worldId);
+  await saveMonsterSummonData(updated);
+  return updated;
+}
+
+export async function drawMonsterSummonReward(worldId: number) {
+  const data = await loadMonsterSummonData();
+  const result = drawWorldSummon(data, worldId);
+  await saveMonsterSummonData(result.data);
+  return result;
+}
+
+export async function claimMonsterSummonFragmentReward(worldId: number) {
+  const data = await loadMonsterSummonData();
+  const result = claimMonsterSummonFragmentsRuntime(data, worldId);
+  await saveMonsterSummonData(result.data);
+  return result;
+}
+
+export async function buyMonsterSummon(summonId: string) {
+  const data = await loadMonsterSummonData();
+  const result = buyMonsterSummonWithFragments(data, summonId);
+  await saveMonsterSummonData(result.data);
+  return result;
+}
+
+export async function convertMonsterSummonToFragments(summonId: string) {
+  const data = await loadMonsterSummonData();
+  const result = convertMonsterSummonToFragmentsRuntime(data, summonId);
+  await saveMonsterSummonData(result.data);
+  return result;
+}
+
+export async function selectMonsterSummon(
+  summonId: string | null,
+): Promise<MonsterSummonData> {
+  const data = await loadMonsterSummonData();
+  const updated = selectMonsterSummonRuntime(data, summonId);
+  await saveMonsterSummonData(updated);
+  return updated;
+}
+
+export async function gainMonsterSummonExp(
+  summonId: string,
+  expAmount: number,
+): Promise<MonsterSummonData> {
+  const data = await loadMonsterSummonData();
+  const updated = applyMonsterSummonExp(data, summonId, expAmount);
+  await saveMonsterSummonData(updated);
+  return updated;
+}
+
+export async function chooseMonsterSummonSkill(
+  summonId: string,
+  skillKey: MonsterSummonSkillKey,
+): Promise<MonsterSummonData> {
+  const data = await loadMonsterSummonData();
+  const updated = chooseMonsterSummonSkillRuntime(data, summonId, skillKey);
+  await saveMonsterSummonData(updated);
+  return updated;
 }
 
 // Codex data (local cache)

@@ -89,6 +89,9 @@ import {
   saveUnlockedTitles,
   updateLocalCodex,
   gainSummonExp,
+  gainMonsterSummonExp,
+  grantMonsterSummonReward,
+  loadMonsterSummonData,
   loadSkinData,
 } from '../stores/gameStore';
 import { flushPlayerStateNow } from '../services/playerState';
@@ -142,6 +145,13 @@ import {
   mergeSkinPieceGenerationOptions,
 } from '../game/skinSummonRuntime';
 import {
+  getMonsterSummonBattleStats,
+  getMonsterSummonExpRequired,
+  getMonsterSummonGaugeGain,
+  getSelectedMonsterSummonLoadout,
+  type MonsterSummonSkillKey,
+} from '../game/monsterSummonRuntime';
+import {
   consumeRaidSkillGauge,
   getRaidSkillCharges,
   getRaidSkillEffectiveMultiplier,
@@ -152,6 +162,7 @@ import {
   getMonsterPoseSource,
   getRaidBossSpriteSet,
   getRaidSummonSpriteSet,
+  getRaidSummonSpriteSetById,
   MonsterSpritePose,
 } from '../assets/monsterSprites';
 import {
@@ -508,6 +519,13 @@ export default function RaidScreen({ route, navigation }: any) {
   const [summonAttack, setSummonAttack] = useState(0);
   const [summonActive, setSummonActive] = useState(false);
   const [summonRemainingMs, setSummonRemainingMs] = useState(0);
+  const [summonName, setSummonName] = useState('');
+  const [summonLevel, setSummonLevel] = useState(1);
+  const [summonExp, setSummonExp] = useState(0);
+  const [summonExpRequired, setSummonExpRequired] = useState(1);
+  const [selectedMonsterSummonId, setSelectedMonsterSummonId] = useState<
+    string | null
+  >(null);
   const [summonAttackPulse, setSummonAttackPulse] = useState(0);
   const [summonOverlayVisible, setSummonOverlayVisible] = useState(false);
   const [summonReturning, setSummonReturning] = useState(false);
@@ -593,6 +611,12 @@ export default function RaidScreen({ route, navigation }: any) {
   const summonActiveRef = useRef(false);
   const summonRemainingMsRef = useRef(0);
   const activeSummonIdRef = useRef<string | null>(null);
+  const selectedMonsterSummonIdRef = useRef<string | null>(null);
+  const selectedMonsterSummonEvolutionRef = useRef(0);
+  const selectedMonsterSummonSkillsRef = useRef<MonsterSummonSkillKey[]>([]);
+  const monsterSummonGaugeGainMultiplierRef = useRef(1);
+  const monsterSummonExpGainMultiplierRef = useRef(1);
+  const monsterSummonDoubleAttackChanceRef = useRef(0);
   const summonExpEarnedRef = useRef(0);
   const summonLevelRef = useRef(1);
   const summonExpRef = useRef(0);
@@ -1223,6 +1247,40 @@ export default function RaidScreen({ route, navigation }: any) {
   }, []);
 
   const grantSummonBattleExp = useCallback((damage: number) => {
+    const monsterSummonId = selectedMonsterSummonIdRef.current;
+    if (monsterSummonId && damage > 0) {
+      const expGain = Math.max(
+        1,
+        Math.round(damage * monsterSummonExpGainMultiplierRef.current),
+      );
+      summonExpEarnedRef.current += expGain;
+      summonExpRef.current += expGain;
+
+      let leveled = false;
+      while (
+        summonExpRef.current >= getMonsterSummonExpRequired(summonLevelRef.current)
+      ) {
+        summonExpRef.current -= getMonsterSummonExpRequired(summonLevelRef.current);
+        summonLevelRef.current += 1;
+        leveled = true;
+      }
+
+      setSummonLevel(summonLevelRef.current);
+      setSummonExp(summonExpRef.current);
+      setSummonExpRequired(getMonsterSummonExpRequired(summonLevelRef.current));
+
+      if (leveled) {
+        const nextStats = getMonsterSummonBattleStats(monsterSummonId, {
+          level: summonLevelRef.current,
+          evolutionStage: selectedMonsterSummonEvolutionRef.current,
+          skills: selectedMonsterSummonSkillsRef.current,
+        });
+        summonAttackRef.current = nextStats.attack;
+        setSummonAttack(nextStats.attack);
+      }
+      return;
+    }
+
     const skinId = activeSkinIdRef.current;
     if (skinId <= 0 || damage <= 0) {
       return;
@@ -1741,6 +1799,12 @@ export default function RaidScreen({ route, navigation }: any) {
     setFeverActive(false);
     setFeverRemainingMs(0);
     activeSkinIdRef.current = 0;
+    selectedMonsterSummonIdRef.current = null;
+    selectedMonsterSummonEvolutionRef.current = 0;
+    selectedMonsterSummonSkillsRef.current = [];
+    monsterSummonGaugeGainMultiplierRef.current = 1;
+    monsterSummonExpGainMultiplierRef.current = 1;
+    monsterSummonDoubleAttackChanceRef.current = 0;
     summonGaugeRef.current = 0;
     summonGaugeRequiredRef.current = 0;
     summonAttackRef.current = 0;
@@ -1758,6 +1822,11 @@ export default function RaidScreen({ route, navigation }: any) {
     setSummonAttack(0);
     setSummonActive(false);
     setSummonRemainingMs(0);
+    setSummonName('');
+    setSummonLevel(1);
+    setSummonExp(0);
+    setSummonExpRequired(1);
+    setSelectedMonsterSummonId(null);
     setSummonAttackPulse(0);
     setSummonOverlayVisible(false);
     setSummonReturning(false);
@@ -1808,6 +1877,7 @@ export default function RaidScreen({ route, navigation }: any) {
           settings,
           nextGameData,
           skinData,
+          monsterSummonData,
           selectedCharacter,
           isAdmin,
         ] = await withTimeout(
@@ -1817,6 +1887,7 @@ export default function RaidScreen({ route, navigation }: any) {
             loadGameSettings(),
             loadGameData(),
             loadSkinData(),
+            loadMonsterSummonData(),
             getSelectedCharacter(),
             getAdminStatus().catch(() => false),
           ]),
@@ -1837,18 +1908,53 @@ export default function RaidScreen({ route, navigation }: any) {
         setActiveSkin(skinData.activeSkinId);
         activeSkinIdRef.current = skinData.activeSkinId;
         const skinLoadout = getActiveSkinLoadout(skinData);
-        summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
-        summonAttackRef.current = skinLoadout.summonAttack;
-        summonRemainingMsRef.current = skinLoadout.summonDurationMs;
-        summonLevelRef.current = skinLoadout.summonProgress?.level ?? 1;
-        summonExpRef.current = skinLoadout.summonProgress?.exp ?? 0;
-        summonAttackMultiplierRef.current =
-          skinLoadout.effects.summonAttackMultiplier;
+        const monsterLoadout = getSelectedMonsterSummonLoadout(monsterSummonData);
+        if (monsterLoadout) {
+          selectedMonsterSummonIdRef.current = monsterLoadout.definition.id;
+          selectedMonsterSummonEvolutionRef.current =
+            monsterLoadout.progress.evolutionStage;
+          selectedMonsterSummonSkillsRef.current = monsterLoadout.progress.skills;
+          monsterSummonGaugeGainMultiplierRef.current =
+            monsterLoadout.stats.gaugeGainMultiplier;
+          monsterSummonExpGainMultiplierRef.current =
+            monsterLoadout.stats.expGainMultiplier;
+          monsterSummonDoubleAttackChanceRef.current =
+            monsterLoadout.stats.doubleAttackChance;
+          summonGaugeRequiredRef.current = monsterLoadout.stats.gaugeRequired;
+          summonAttackRef.current = monsterLoadout.stats.attack;
+          summonRemainingMsRef.current = monsterLoadout.stats.durationMs;
+          summonLevelRef.current = monsterLoadout.progress.level;
+          summonExpRef.current = monsterLoadout.progress.exp;
+          summonAttackMultiplierRef.current = 1;
+        } else {
+          selectedMonsterSummonIdRef.current = null;
+          selectedMonsterSummonEvolutionRef.current = 0;
+          selectedMonsterSummonSkillsRef.current = [];
+          monsterSummonGaugeGainMultiplierRef.current = 1;
+          monsterSummonExpGainMultiplierRef.current = 1;
+          monsterSummonDoubleAttackChanceRef.current = 0;
+          summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
+          summonAttackRef.current = skinLoadout.summonAttack;
+          summonRemainingMsRef.current = skinLoadout.summonDurationMs;
+          summonLevelRef.current = skinLoadout.summonProgress?.level ?? 1;
+          summonExpRef.current = skinLoadout.summonProgress?.exp ?? 0;
+          summonAttackMultiplierRef.current =
+            skinLoadout.effects.summonAttackMultiplier;
+        }
         if (mounted) {
           setSkinBoardBg(getSkinBoardBg());
-          setSummonGaugeRequired(skinLoadout.summonGaugeRequired);
-          setSummonAttack(skinLoadout.summonAttack);
-          setSummonRemainingMs(skinLoadout.summonDurationMs);
+          setSelectedMonsterSummonId(monsterLoadout?.definition.id ?? null);
+          setSummonName(monsterLoadout?.definition.name ?? '');
+          setSummonLevel(summonLevelRef.current);
+          setSummonExp(summonExpRef.current);
+          setSummonExpRequired(
+            monsterLoadout
+              ? monsterLoadout.stats.expRequired
+              : getSummonExpRequired(summonLevelRef.current),
+          );
+          setSummonGaugeRequired(summonGaugeRequiredRef.current);
+          setSummonAttack(summonAttackRef.current);
+          setSummonRemainingMs(summonRemainingMsRef.current);
         }
 
         const instancePromise = withTimeout(
@@ -2704,7 +2810,13 @@ export default function RaidScreen({ route, navigation }: any) {
         return;
       }
 
-      const summonDamage = Math.max(1, Math.round(summonAttackRef.current));
+      const summonDamage = Math.max(
+        1,
+        Math.round(
+          summonAttackRef.current *
+            (Math.random() < monsterSummonDoubleAttackChanceRef.current ? 2 : 1),
+        ),
+      );
       const eventId = createRaidEventId('summon_damage');
       const summonId = activeSummonIdRef.current;
       setSummonAttackPulse(prev => prev + 1);
@@ -3322,19 +3434,21 @@ export default function RaidScreen({ route, navigation }: any) {
       }
 
       setMyTotalDamage(prev => prev + finalDamage);
-      if (
-        activeSkinIdRef.current > 0 &&
-        summonGaugeRequiredRef.current > 0 &&
-        !summonActiveRef.current
-      ) {
-        const nextGauge = Math.min(
-          summonGaugeRequiredRef.current,
-          summonGaugeRef.current +
-            getSummonGaugeGain(
+      if (summonGaugeRequiredRef.current > 0 && !summonActiveRef.current) {
+        const gaugeGain = selectedMonsterSummonIdRef.current
+          ? getMonsterSummonGaugeGain(
+              blockCount,
+              totalLinesCleared,
+              monsterSummonGaugeGainMultiplierRef.current,
+            )
+          : getSummonGaugeGain(
               activeSkinIdRef.current,
               blockCount,
               totalLinesCleared,
-            ),
+            );
+        const nextGauge = Math.min(
+          summonGaugeRequiredRef.current,
+          summonGaugeRef.current + gaugeGain,
         );
         summonGaugeRef.current = nextGauge;
         setSummonGauge(nextGauge);
@@ -3897,6 +4011,16 @@ export default function RaidScreen({ route, navigation }: any) {
       const progress = await loadNormalRaidProgress();
       const preview = getNormalRaidRewardPreview(bossStage, progress);
       const updatedProgress = await recordNormalRaidKill(progress, bossStage);
+      const reachedSummonReward =
+        preview.killCountAfter > 0 && preview.killCountAfter % 10 === 0;
+      if (reachedSummonReward) {
+        await grantMonsterSummonReward(bossStage);
+        Alert.alert(
+          '소환수 획득 가능',
+          '일반 레이드를 10번 클리어했습니다. 도감 메뉴에서 소환수 획득을 확인하세요.',
+          [{text: '닫기'}],
+        );
+      }
       if (preview.firstClearReward) {
         await claimFirstClearDia(updatedProgress, bossStage);
       }
@@ -3925,7 +4049,15 @@ export default function RaidScreen({ route, navigation }: any) {
       const existing = await loadUnlockedTitles();
       await saveUnlockedTitles([...existing, ...rewardData.titlesUnlocked]);
     }
-    if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
+    if (
+      selectedMonsterSummonIdRef.current &&
+      summonExpEarnedRef.current > 0
+    ) {
+      await gainMonsterSummonExp(
+        selectedMonsterSummonIdRef.current,
+        summonExpEarnedRef.current,
+      );
+    } else if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
       await gainSummonExp(activeSkinIdRef.current, summonExpEarnedRef.current);
     }
     const clearTimeMs =
@@ -4051,15 +4183,20 @@ export default function RaidScreen({ route, navigation }: any) {
     return t('raid.boardFull');
   };
 
-  const bossSpriteSet = getRaidBossSpriteSet(bossStage);
+  const bossSpriteSet = getRaidBossSpriteSet(
+    bossStage,
+    creatorRaidRuntime?.monsterName ?? bossName,
+  );
   const bossSprite =
     getMonsterPoseSource(bossSpriteSet, bossPose) ??
     getMonsterPoseSource(bossSpriteSet, 'idle');
-  const summonSpriteSet = getRaidSummonSpriteSet(bossStage);
+  const summonSpriteSet =
+    getRaidSummonSpriteSetById(selectedMonsterSummonId) ??
+    getRaidSummonSpriteSet(bossStage);
   useEffect(() => {
     setBossPose('idle');
   }, [bossStage]);
-  const hasSummon = activeSkinIdRef.current > 0 && summonGaugeRequired > 0;
+  const hasSummon = summonGaugeRequired > 0;
   const summonButtonDisabled =
     !hasSummon ||
     (summonGauge < summonGaugeRequired && !summonActive) ||
@@ -4257,8 +4394,8 @@ export default function RaidScreen({ route, navigation }: any) {
           <Text style={styles.summonTitle}>소환수</Text>
           <Text style={styles.summonMeta}>
             {hasSummon
-              ? `${summonSpriteSet?.name ?? 'Summon'} · 공격 ${summonAttack}`
-              : '미장착'}
+              ? `${summonName || summonSpriteSet?.name || '소환수'} Lv.${summonLevel} · 공격 ${summonAttack}`
+              : '도감에서 소환수를 획득하세요'}
           </Text>
         </View>
         <View style={styles.summonBarBg}>
@@ -4280,8 +4417,8 @@ export default function RaidScreen({ route, navigation }: any) {
             {hasSummon
               ? `게이지 ${summonGauge}/${
                   summonGaugeRequired || '-'
-                } · ${Math.ceil(summonRemainingMs / 1000)}초`
-              : '활성 스킨 없음'}
+                } · ${Math.ceil(summonRemainingMs / 1000)}초 · EXP ${summonExp}/${summonExpRequired}`
+              : '일반 레이드 10회 보상으로 획득'}
           </Text>
           <TouchableOpacity
             onPress={handleToggleSummon}

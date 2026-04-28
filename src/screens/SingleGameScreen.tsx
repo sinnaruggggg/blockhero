@@ -31,6 +31,7 @@ import BoardSkillCastEffect, {
 } from '../components/BoardSkillCastEffect';
 import PiecePlacementEffect from '../components/PiecePlacementEffect';
 import LineClearEffect from '../components/LineClearEffect';
+import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import VisualElementView, {
   buildVisualAutomationLabel,
@@ -102,6 +103,8 @@ import {
   getLevelModeBreakthroughState,
   getUnlockedSpecialPieceShapeIndices,
   gainSummonExp,
+  gainMonsterSummonExp,
+  loadMonsterSummonData,
   loadSkinData,
   recordLevelModeBreakthroughSuccess,
   resetLevelModeBreakthrough,
@@ -121,11 +124,21 @@ import {
   applySkinIncomingDamage,
   applySkinRewardBonuses,
   getActiveSkinLoadout,
+  getSummonAttack,
+  getSummonExpRequired,
   getSummonGaugeGain,
   mergeSkinPieceGenerationOptions,
 } from '../game/skinSummonRuntime';
 import {
+  getMonsterSummonBattleStats,
+  getMonsterSummonExpRequired,
+  getMonsterSummonGaugeGain,
+  getSelectedMonsterSummonLoadout,
+  type MonsterSummonSkillKey,
+} from '../game/monsterSummonRuntime';
+import {
   getMonsterPoseSource,
+  getRaidSummonSpriteSetById,
   getWorldMonsterSpriteSet,
   MonsterSpritePose,
 } from '../assets/monsterSprites';
@@ -449,6 +462,16 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const [summonAttack, setSummonAttack] = useState(0);
   const [summonActive, setSummonActive] = useState(false);
   const [summonRemainingMs, setSummonRemainingMs] = useState(0);
+  const [summonName, setSummonName] = useState('');
+  const [summonLevel, setSummonLevel] = useState(1);
+  const [summonExp, setSummonExp] = useState(0);
+  const [summonExpRequired, setSummonExpRequired] = useState(1);
+  const [selectedMonsterSummonId, setSelectedMonsterSummonId] = useState<
+    string | null
+  >(null);
+  const [summonAttackPulse, setSummonAttackPulse] = useState(0);
+  const [summonOverlayVisible, setSummonOverlayVisible] = useState(false);
+  const [summonReturning, setSummonReturning] = useState(false);
   const [nextPieces, setNextPieces] = useState<Piece[]>([]);
   const [selectedCharacterId, setSelectedCharacterId] =
     useState<string>('knight');
@@ -463,6 +486,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
   } | null>(null);
   const [comboBurstValue, setComboBurstValue] = useState(0);
   const [monsterHits, setMonsterHits] = useState<FloatingDamageHit[]>([]);
+  const [summonMonsterHits, setSummonMonsterHits] = useState<
+    FloatingDamageHit[]
+  >([]);
   const [monsterImpactHit, setMonsterImpactHit] =
     useState<FloatingDamageHit | null>(null);
   const [placementEffect, setPlacementEffect] = useState<{
@@ -526,6 +552,15 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const summonAttackRef = useRef(0);
   const summonActiveRef = useRef(false);
   const summonRemainingMsRef = useRef(0);
+  const selectedMonsterSummonIdRef = useRef<string | null>(null);
+  const selectedMonsterSummonEvolutionRef = useRef(0);
+  const selectedMonsterSummonSkillsRef = useRef<MonsterSummonSkillKey[]>([]);
+  const monsterSummonGaugeGainMultiplierRef = useRef(1);
+  const monsterSummonExpGainMultiplierRef = useRef(1);
+  const monsterSummonDoubleAttackChanceRef = useRef(0);
+  const summonLevelRef = useRef(1);
+  const summonExpRef = useRef(0);
+  const summonAttackMultiplierRef = useRef(1);
   const summonExpEarnedRef = useRef(0);
   const diamondsEarnedRef = useRef(0);
   const nextPiecesRef = useRef<Piece[]>([]);
@@ -618,6 +653,14 @@ export default function SingleGameScreen({ route, navigation }: any) {
     const nextHit = { id: hitId, damage };
     setMonsterHits(current => pushFloatingDamageHit(current, hitId, damage));
     setMonsterImpactHit(nextHit);
+  }, []);
+
+  const queueSummonMonsterHit = useCallback((damage: number) => {
+    floatingHitIdRef.current += 1;
+    const hitId = floatingHitIdRef.current;
+    setSummonMonsterHits(current =>
+      pushFloatingDamageHit(current, hitId, damage),
+    );
   }, []);
 
   const getCurrentPieceOptions = useCallback(
@@ -805,11 +848,20 @@ export default function SingleGameScreen({ route, navigation }: any) {
     damageReductionBuffUntilRef.current = 0;
     skillEffectsRef.current = getCharacterSkillEffects(null, null);
     activeSkinIdRef.current = 0;
+    selectedMonsterSummonIdRef.current = null;
+    selectedMonsterSummonEvolutionRef.current = 0;
+    selectedMonsterSummonSkillsRef.current = [];
+    monsterSummonGaugeGainMultiplierRef.current = 1;
+    monsterSummonExpGainMultiplierRef.current = 1;
+    monsterSummonDoubleAttackChanceRef.current = 0;
     summonGaugeRef.current = 0;
     summonGaugeRequiredRef.current = 0;
     summonAttackRef.current = 0;
     summonActiveRef.current = false;
     summonRemainingMsRef.current = 0;
+    summonLevelRef.current = 1;
+    summonExpRef.current = 0;
+    summonAttackMultiplierRef.current = 1;
     summonExpEarnedRef.current = 0;
     diamondsEarnedRef.current = 0;
     gameDataRef.current = null;
@@ -832,11 +884,20 @@ export default function SingleGameScreen({ route, navigation }: any) {
     setSummonAttack(0);
     setSummonActive(false);
     setSummonRemainingMs(0);
+    setSummonName('');
+    setSummonLevel(1);
+    setSummonExp(0);
+    setSummonExpRequired(1);
+    setSelectedMonsterSummonId(null);
+    setSummonAttackPulse(0);
+    setSummonOverlayVisible(false);
+    setSummonReturning(false);
     setComboRemainingMs(0);
     setLevelUpState(null);
     stopComboShakeAnimation();
     setComboBurstValue(0);
     setMonsterHits([]);
+    setSummonMonsterHits([]);
     setMonsterImpactHit(null);
     setPlacementEffect(null);
     setLineClearEffect(null);
@@ -864,10 +925,18 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
     (async () => {
       try {
-        const [loadedGameData, skinData, charId, settings, isAdmin] =
+        const [
+          loadedGameData,
+          skinData,
+          monsterSummonData,
+          charId,
+          settings,
+          isAdmin,
+        ] =
           await Promise.all([
             loadGameData(),
             loadSkinData(),
+            loadMonsterSummonData(),
             getSelectedCharacter(),
             loadGameSettings(),
             getAdminStatus().catch(() => false),
@@ -887,13 +956,52 @@ export default function SingleGameScreen({ route, navigation }: any) {
         setSkinBoardBg(getSkinBoardBg());
 
         const skinLoadout = getActiveSkinLoadout(skinData);
+        const monsterLoadout = getSelectedMonsterSummonLoadout(monsterSummonData);
         activeSkinIdRef.current = skinLoadout.skinId;
-        summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
-        summonAttackRef.current = skinLoadout.summonAttack;
-        summonRemainingMsRef.current = skinLoadout.summonDurationMs;
-        setSummonGaugeRequired(skinLoadout.summonGaugeRequired);
-        setSummonAttack(skinLoadout.summonAttack);
-        setSummonRemainingMs(skinLoadout.summonDurationMs);
+        if (monsterLoadout) {
+          selectedMonsterSummonIdRef.current = monsterLoadout.definition.id;
+          selectedMonsterSummonEvolutionRef.current =
+            monsterLoadout.progress.evolutionStage;
+          selectedMonsterSummonSkillsRef.current = monsterLoadout.progress.skills;
+          monsterSummonGaugeGainMultiplierRef.current =
+            monsterLoadout.stats.gaugeGainMultiplier;
+          monsterSummonExpGainMultiplierRef.current =
+            monsterLoadout.stats.expGainMultiplier;
+          monsterSummonDoubleAttackChanceRef.current =
+            monsterLoadout.stats.doubleAttackChance;
+          summonGaugeRequiredRef.current = monsterLoadout.stats.gaugeRequired;
+          summonAttackRef.current = monsterLoadout.stats.attack;
+          summonRemainingMsRef.current = monsterLoadout.stats.durationMs;
+          summonLevelRef.current = monsterLoadout.progress.level;
+          summonExpRef.current = monsterLoadout.progress.exp;
+          summonAttackMultiplierRef.current = 1;
+        } else {
+          selectedMonsterSummonIdRef.current = null;
+          selectedMonsterSummonEvolutionRef.current = 0;
+          selectedMonsterSummonSkillsRef.current = [];
+          monsterSummonGaugeGainMultiplierRef.current = 1;
+          monsterSummonExpGainMultiplierRef.current = 1;
+          monsterSummonDoubleAttackChanceRef.current = 0;
+          summonGaugeRequiredRef.current = skinLoadout.summonGaugeRequired;
+          summonAttackRef.current = skinLoadout.summonAttack;
+          summonRemainingMsRef.current = skinLoadout.summonDurationMs;
+          summonLevelRef.current = skinLoadout.summonProgress?.level ?? 1;
+          summonExpRef.current = skinLoadout.summonProgress?.exp ?? 0;
+          summonAttackMultiplierRef.current =
+            skinLoadout.effects.summonAttackMultiplier;
+        }
+        setSelectedMonsterSummonId(monsterLoadout?.definition.id ?? null);
+        setSummonName(monsterLoadout?.definition.name ?? '');
+        setSummonLevel(summonLevelRef.current);
+        setSummonExp(summonExpRef.current);
+        setSummonExpRequired(
+          monsterLoadout
+            ? monsterLoadout.stats.expRequired
+            : getSummonExpRequired(summonLevelRef.current),
+        );
+        setSummonGaugeRequired(summonGaugeRequiredRef.current);
+        setSummonAttack(summonAttackRef.current);
+        setSummonRemainingMs(summonRemainingMsRef.current);
         const levelModeBreakthroughState =
           getLevelModeBreakthroughState(loadedGameData);
         const levelModeBreakthroughCount =
@@ -1205,6 +1313,70 @@ export default function SingleGameScreen({ route, navigation }: any) {
     }, FEVER_DURATION + skillEffectsRef.current.feverDurationBonusMs);
   }, []);
 
+  const grantSummonBattleExp = useCallback((damage: number) => {
+    const monsterSummonId = selectedMonsterSummonIdRef.current;
+    if (monsterSummonId && damage > 0) {
+      const expGain = Math.max(
+        1,
+        Math.round(damage * monsterSummonExpGainMultiplierRef.current),
+      );
+      summonExpEarnedRef.current += expGain;
+      summonExpRef.current += expGain;
+
+      let leveled = false;
+      while (
+        summonExpRef.current >= getMonsterSummonExpRequired(summonLevelRef.current)
+      ) {
+        summonExpRef.current -= getMonsterSummonExpRequired(summonLevelRef.current);
+        summonLevelRef.current += 1;
+        leveled = true;
+      }
+
+      setSummonLevel(summonLevelRef.current);
+      setSummonExp(summonExpRef.current);
+      setSummonExpRequired(getMonsterSummonExpRequired(summonLevelRef.current));
+
+      if (leveled) {
+        const nextStats = getMonsterSummonBattleStats(monsterSummonId, {
+          level: summonLevelRef.current,
+          evolutionStage: selectedMonsterSummonEvolutionRef.current,
+          skills: selectedMonsterSummonSkillsRef.current,
+        });
+        summonAttackRef.current = nextStats.attack;
+        setSummonAttack(nextStats.attack);
+      }
+      return;
+    }
+
+    const skinId = activeSkinIdRef.current;
+    if (skinId <= 0 || damage <= 0) {
+      return;
+    }
+
+    const expGain = Math.max(1, Math.round(damage));
+    summonExpEarnedRef.current += expGain;
+    summonExpRef.current += expGain;
+
+    let leveled = false;
+    while (summonExpRef.current >= getSummonExpRequired(summonLevelRef.current)) {
+      summonExpRef.current -= getSummonExpRequired(summonLevelRef.current);
+      summonLevelRef.current += 1;
+      leveled = true;
+    }
+
+    if (leveled) {
+      const multiplier =
+        summonAttackMultiplierRef.current ||
+        getActiveSkinLoadout({activeSkinId: skinId}).effects.summonAttackMultiplier;
+      const nextAttack = Math.max(
+        1,
+        Math.round(getSummonAttack(skinId, summonLevelRef.current) * multiplier),
+      );
+      summonAttackRef.current = nextAttack;
+      setSummonAttack(nextAttack);
+    }
+  }, []);
+
   useEffect(() => {
     if (!summonActive || summonRemainingMs <= 0 || gameOver) {
       return;
@@ -1217,6 +1389,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         if (next <= 0) {
           summonActiveRef.current = false;
           setSummonActive(false);
+          setSummonReturning(true);
         }
         return next;
       });
@@ -1269,6 +1442,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
 
       gameOverRef.current = true;
       setGameOver(true);
+      summonActiveRef.current = false;
+      setSummonActive(false);
+      setSummonReturning(false);
+      setSummonOverlayVisible(false);
 
       if (comboTimerRef.current) {
         clearTimeout(comboTimerRef.current);
@@ -1296,7 +1473,15 @@ export default function SingleGameScreen({ route, navigation }: any) {
         levelClears: success ? 1 : 0,
       });
 
-      if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
+      if (
+        selectedMonsterSummonIdRef.current &&
+        summonExpEarnedRef.current > 0
+      ) {
+        await gainMonsterSummonExp(
+          selectedMonsterSummonIdRef.current,
+          summonExpEarnedRef.current,
+        );
+      } else if (activeSkinIdRef.current > 0 && summonExpEarnedRef.current > 0) {
         await gainSummonExp(
           activeSkinIdRef.current,
           summonExpEarnedRef.current,
@@ -1434,6 +1619,56 @@ export default function SingleGameScreen({ route, navigation }: any) {
       stopComboShakeAnimation,
     ],
   );
+
+  useEffect(() => {
+    if (!summonActive || summonRemainingMsRef.current <= 0 || gameOver) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      if (
+        !summonActiveRef.current ||
+        summonRemainingMsRef.current <= 0 ||
+        gameOverRef.current ||
+        monsterHpRef.current <= 0
+      ) {
+        return;
+      }
+
+      const summonDamage = Math.max(
+        1,
+        Math.round(
+          summonAttackRef.current *
+            (Math.random() < monsterSummonDoubleAttackChanceRef.current ? 2 : 1),
+        ),
+      );
+      setSummonAttackPulse(previous => previous + 1);
+      triggerMonsterPose('hurt', 220);
+      queueSummonMonsterHit(summonDamage);
+      grantSummonBattleExp(summonDamage);
+
+      const nextMonsterHp = Math.max(0, monsterHpRef.current - summonDamage);
+      monsterHpRef.current = nextMonsterHp;
+      setMonsterHp(nextMonsterHp);
+      animateMonsterHpBar(nextMonsterHp / maxMonsterHp);
+      totalDamageRef.current += summonDamage;
+
+      if (nextMonsterHp <= 0) {
+        setTimeout(() => endGame(true), 120);
+      }
+    }, 1800);
+
+    return () => clearInterval(timer);
+  }, [
+    animateMonsterHpBar,
+    endGame,
+    gameOver,
+    grantSummonBattleExp,
+    maxMonsterHp,
+    queueSummonMonsterHit,
+    summonActive,
+    triggerMonsterPose,
+  ]);
 
   const applyMonsterAttack = useCallback(() => {
     if (gameOverRef.current || monsterHpRef.current <= 0) {
@@ -1829,14 +2064,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
           didClear: turnResult.didClear,
         },
       ).damage;
-      const summonBonus =
-        summonActiveRef.current && summonRemainingMsRef.current > 0
-          ? summonAttackRef.current
-          : 0;
-      const damageThisTurn = skinDamage + summonBonus;
-      if (summonBonus > 0) {
-        summonExpEarnedRef.current += Math.max(1, Math.round(summonBonus / 6));
-      }
+      const damageThisTurn = skinDamage;
       if (damageThisTurn > 0) {
         setPlayerAttackPulse(previous => previous + 1);
         triggerMonsterPose('hurt', 260);
@@ -1854,15 +2082,17 @@ export default function SingleGameScreen({ route, navigation }: any) {
       totalDamageRef.current += damageThisTurn;
       linesClearedRef.current += totalLines;
 
-      if (
-        activeSkinIdRef.current > 0 &&
-        summonGaugeRequiredRef.current > 0 &&
-        !summonActiveRef.current
-      ) {
+      if (summonGaugeRequiredRef.current > 0 && !summonActiveRef.current) {
+        const gaugeGain = selectedMonsterSummonIdRef.current
+          ? getMonsterSummonGaugeGain(
+              blockCount,
+              totalLines,
+              monsterSummonGaugeGainMultiplierRef.current,
+            )
+          : getSummonGaugeGain(activeSkinIdRef.current, blockCount, totalLines);
         const nextGauge = Math.min(
           summonGaugeRequiredRef.current,
-          summonGaugeRef.current +
-            getSummonGaugeGain(activeSkinIdRef.current, blockCount, totalLines),
+          summonGaugeRef.current + gaugeGain,
         );
         summonGaugeRef.current = nextGauge;
         setSummonGauge(nextGauge);
@@ -2016,10 +2246,16 @@ export default function SingleGameScreen({ route, navigation }: any) {
     if (!summonActiveRef.current) {
       summonGaugeRef.current = 0;
       setSummonGauge(0);
+      setSummonReturning(false);
+      setSummonOverlayVisible(true);
+      summonActiveRef.current = true;
+      setSummonActive(true);
+      return;
     }
 
-    summonActiveRef.current = !summonActiveRef.current;
-    setSummonActive(summonActiveRef.current);
+    summonActiveRef.current = false;
+    setSummonActive(false);
+    setSummonReturning(true);
   }, []);
 
   const decrementRunItemSlot = useCallback((slotIndex?: number) => {
@@ -2346,6 +2582,12 @@ export default function SingleGameScreen({ route, navigation }: any) {
       </Text>
     );
   };
+  const summonSpriteSet = getRaidSummonSpriteSetById(selectedMonsterSummonId);
+  const hasSummon = summonGaugeRequired > 0;
+  const handleSummonOverlayDone = useCallback(() => {
+    setSummonReturning(false);
+    setSummonOverlayVisible(false);
+  }, []);
 
   const renderBattleLane = () => (
     <View style={styles.battleLane}>
@@ -2421,12 +2663,12 @@ export default function SingleGameScreen({ route, navigation }: any) {
             </Text>
           </View>
 
-          {activeSkinIdRef.current > 0 && summonGaugeRequired > 0 && (
+          {hasSummon && (
             <View style={styles.summonInlineCard}>
               <View style={styles.summonInlineHeader}>
                 <Text style={styles.summonInlineTitle}>소환수</Text>
                 <Text style={styles.summonInlineMeta}>
-                  공격 {summonAttack} / {Math.ceil(summonRemainingMs / 1000)}초
+                  {summonName || summonSpriteSet?.name || '소환수'} Lv.{summonLevel}
                 </Text>
               </View>
               <View style={styles.summonInlineTrack}>
@@ -2445,7 +2687,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
               </View>
               <View style={styles.summonInlineFooter}>
                 <Text style={styles.summonInlineMeta}>
-                  {summonGauge}/{summonGaugeRequired}
+                  공격 {summonAttack} / {Math.ceil(summonRemainingMs / 1000)}초
                 </Text>
                 <TouchableOpacity
                   onPress={handleToggleSummon}
@@ -2466,6 +2708,10 @@ export default function SingleGameScreen({ route, navigation }: any) {
                   </Text>
                 </TouchableOpacity>
               </View>
+              <Text style={styles.summonInlineMeta}>
+                게이지 {summonGauge}/{summonGaugeRequired} · EXP {summonExp}/
+                {summonExpRequired}
+              </Text>
             </View>
           )}
         </View>
@@ -2481,6 +2727,17 @@ export default function SingleGameScreen({ route, navigation }: any) {
           ]}
         >
           {renderMonsterAvatar(68, -1)}
+          <View pointerEvents="none" style={styles.levelSummonOverlayHost}>
+            <RaidSummonOverlay
+              visible={summonOverlayVisible}
+              returning={summonReturning}
+              attackPulse={summonAttackPulse}
+              spawnIndex={0}
+              spriteSet={summonSpriteSet}
+              compact
+              onReturnDone={handleSummonOverlayDone}
+            />
+          </View>
           {monsterImpactHit && (
             <HitEffect
               key={`monster-hit-${monsterImpactHit.id}`}
@@ -2502,6 +2759,18 @@ export default function SingleGameScreen({ route, navigation }: any) {
                   damage={hit.damage}
                   stackIndex={index}
                   baseTop={8}
+                />
+              ))}
+            {summonMonsterHits
+              .slice()
+              .reverse()
+              .map((hit, index) => (
+                <FloatingDamageLabel
+                  key={`monster-summon-flash-${hit.id}`}
+                  damage={hit.damage}
+                  stackIndex={index}
+                  baseTop={30}
+                  variant="summon"
                 />
               ))}
           </View>
@@ -3344,6 +3613,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'visible',
     zIndex: 8,
+  },
+  levelSummonOverlayHost: {
+    position: 'absolute',
+    left: -58,
+    top: -24,
+    width: 120,
+    height: 100,
+    overflow: 'visible',
+    zIndex: 6,
   },
   monsterEmojiCompact: {
     fontSize: 34,

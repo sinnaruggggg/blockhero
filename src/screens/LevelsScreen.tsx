@@ -353,9 +353,17 @@ export default function LevelsScreen({ navigation }: any) {
                         >
                           {isBoss ? (
                             <>
-                              {getWorldMonsterSprite(level.world) ? (
+                              {getWorldMonsterSprite(
+                                level.world,
+                                level.goal.monsterName,
+                              ) ? (
                                 <Image
-                                  source={getWorldMonsterSprite(level.world)!}
+                                  source={
+                                    getWorldMonsterSprite(
+                                      level.world,
+                                      level.goal.monsterName,
+                                    )!
+                                  }
                                   resizeMode="contain"
                                   fadeDuration={0}
                                   style={styles.bossSprite}

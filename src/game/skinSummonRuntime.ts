@@ -112,16 +112,16 @@ const SKIN_EFFECTS: Record<number, Omit<SkinBattleEffects, 'attackBonusMultiplie
 };
 
 const SUMMON_DEFINITIONS: Record<number, SummonDefinition> = {
-  1: {skinId: 1, name: '점액 전령', gaugeRequired: 100, baseAttack: 30, attackGrowthPerLevel: 5, activeDurationMs: 300_000},
-  2: {skinId: 2, name: '독안개 정령', gaugeRequired: 100, baseAttack: 38, attackGrowthPerLevel: 6, activeDurationMs: 300_000},
-  3: {skinId: 3, name: '가시 수호수', gaugeRequired: 100, baseAttack: 46, attackGrowthPerLevel: 6, activeDurationMs: 300_000},
-  4: {skinId: 4, name: '물결 정령', gaugeRequired: 100, baseAttack: 54, attackGrowthPerLevel: 7, activeDurationMs: 300_000},
-  5: {skinId: 5, name: '해일 사도', gaugeRequired: 100, baseAttack: 62, attackGrowthPerLevel: 8, activeDurationMs: 300_000},
-  6: {skinId: 6, name: '수정 골렘', gaugeRequired: 100, baseAttack: 72, attackGrowthPerLevel: 8, activeDurationMs: 300_000},
-  7: {skinId: 7, name: '천둥 매', gaugeRequired: 100, baseAttack: 82, attackGrowthPerLevel: 9, activeDurationMs: 300_000},
-  8: {skinId: 8, name: '소용돌이 군주', gaugeRequired: 100, baseAttack: 94, attackGrowthPerLevel: 9, activeDurationMs: 300_000},
-  9: {skinId: 9, name: '다이아 골렘', gaugeRequired: 100, baseAttack: 108, attackGrowthPerLevel: 10, activeDurationMs: 300_000},
-  10: {skinId: 10, name: '크라운 드래곤', gaugeRequired: 100, baseAttack: 124, attackGrowthPerLevel: 12, activeDurationMs: 300_000},
+  1: {skinId: 1, name: '점액 전령', gaugeRequired: 100, baseAttack: 30, attackGrowthPerLevel: 5, activeDurationMs: 30_000},
+  2: {skinId: 2, name: '독안개 정령', gaugeRequired: 100, baseAttack: 38, attackGrowthPerLevel: 6, activeDurationMs: 30_000},
+  3: {skinId: 3, name: '가시 수호수', gaugeRequired: 100, baseAttack: 46, attackGrowthPerLevel: 6, activeDurationMs: 30_000},
+  4: {skinId: 4, name: '물결 정령', gaugeRequired: 100, baseAttack: 54, attackGrowthPerLevel: 7, activeDurationMs: 30_000},
+  5: {skinId: 5, name: '해일 사도', gaugeRequired: 100, baseAttack: 62, attackGrowthPerLevel: 8, activeDurationMs: 30_000},
+  6: {skinId: 6, name: '수정 골렘', gaugeRequired: 100, baseAttack: 72, attackGrowthPerLevel: 8, activeDurationMs: 30_000},
+  7: {skinId: 7, name: '천둥 매', gaugeRequired: 100, baseAttack: 82, attackGrowthPerLevel: 9, activeDurationMs: 30_000},
+  8: {skinId: 8, name: '소용돌이 군주', gaugeRequired: 100, baseAttack: 94, attackGrowthPerLevel: 9, activeDurationMs: 30_000},
+  9: {skinId: 9, name: '다이아 골렘', gaugeRequired: 100, baseAttack: 108, attackGrowthPerLevel: 10, activeDurationMs: 30_000},
+  10: {skinId: 10, name: '크라운 드래곤', gaugeRequired: 100, baseAttack: 124, attackGrowthPerLevel: 12, activeDurationMs: 30_000},
 };
 
 function createDefaultProgress(): SummonProgressData {
@@ -198,7 +198,7 @@ export function getSummonDefinition(skinId: number): SummonDefinition | null {
       gaugeRequired: 100,
       baseAttack: 24 + skinId * 8,
       attackGrowthPerLevel: 4 + Math.floor(skinId / 2),
-      activeDurationMs: 300_000,
+      activeDurationMs: 30_000,
     }
   );
 }
@@ -224,12 +224,16 @@ export function getSummonAttack(skinId: number, level: number): number {
   return summon.baseAttack + Math.max(0, level - 1) * summon.attackGrowthPerLevel;
 }
 
-export function getSummonDurationMs(skinId: number): number {
-  return getSummonDefinition(skinId)?.activeDurationMs ?? 0;
+export function getSummonDurationMs(skinId: number, level = 1): number {
+  const baseDuration = getSummonDefinition(skinId)?.activeDurationMs ?? 0;
+  if (baseDuration <= 0) {
+    return 0;
+  }
+  return baseDuration + Math.max(0, level - 1) * 5000;
 }
 
 export function getSummonExpRequired(level: number): number {
-  return 100 + Math.max(0, level - 1) * 60;
+  return (100 + Math.max(0, level - 1) * 60) * 20;
 }
 
 export function applySummonExp(
@@ -269,7 +273,8 @@ export function getActiveSkinLoadout(
   const summonProgress = getSummonProgressForSkin(skinData?.summonProgress, skinId);
   const summonDurationMs = Math.max(
     0,
-    getSummonDurationMs(skinId) + effects.summonDurationBonusMs,
+    getSummonDurationMs(skinId, summonProgress?.level ?? 1) +
+      effects.summonDurationBonusMs,
   );
 
   return {
@@ -351,4 +356,3 @@ export function getSummonGaugeGain(
   const baseGain = blockCount + clearedLines * 6;
   return Math.max(1, Math.round(baseGain * effects.summonGaugeGainMultiplier));
 }
-
