@@ -7,17 +7,19 @@ import {
   subscribeCharacterVisualTunings,
 } from '../stores/characterVisualTuning';
 
-const IMG_KNIGHT_IDLE_A = require('../assets/sprites/knight_idle_a.png');
-const IMG_KNIGHT_IDLE_B = require('../assets/sprites/knight_idle_b.png');
-const IMG_KNIGHT_ATTACK = require('../assets/sprites/knight_attack.png');
+const IMG_KNIGHT_IDLE_A = require('../assets/sprites/optimized/knight_idle_a.png');
+const IMG_KNIGHT_IDLE_B = require('../assets/sprites/optimized/knight_idle_b.png');
+const IMG_KNIGHT_ATTACK = require('../assets/sprites/optimized/knight_attack.png');
 
 const IDLE_FRAME_COLS = 9;
 const IDLE_FRAME_ROWS = 5;
 const IDLE_TOTAL_FRAMES = 90;
 const IDLE_PING_PONG_LEN = IDLE_TOTAL_FRAMES * 2 - 2;
-const IDLE_FRAME_W = 700;
-const IDLE_FRAME_H = 956;
+const IDLE_FRAME_W = 350;
+const IDLE_FRAME_H = 478;
 const IDLE_SHEET_H = IDLE_FRAME_H * IDLE_FRAME_ROWS;
+const ATTACK_FRAME_W = 591;
+const ATTACK_FRAME_H = 360;
 
 type KnightSpriteProps = {
   size?: number;
@@ -110,11 +112,13 @@ export default function KnightSprite({
   const idleRow = Math.floor(idleSheetFrame / IDLE_FRAME_COLS);
   const attackCol = counter % tuning.attackFrameCols;
   const attackRow = Math.floor(counter / tuning.attackFrameCols);
-  const attackBaseScale = displayH / tuning.attackFrameHeight;
+  const attackFrameW = ATTACK_FRAME_W;
+  const attackFrameH = ATTACK_FRAME_H;
+  const attackBaseScale = displayH / attackFrameH;
   const attackScale = attackBaseScale * tuning.attackScaleMultiplier;
-  const attackDisplayW = Math.round(tuning.attackFrameWidth * attackScale);
-  const attackDisplayH = Math.round(tuning.attackFrameHeight * attackScale);
-  const attackSheetH = tuning.attackFrameHeight * tuning.attackFrameRows;
+  const attackDisplayW = Math.round(attackFrameW * attackScale);
+  const attackDisplayH = Math.round(attackFrameH * attackScale);
+  const attackSheetH = attackFrameH * tuning.attackFrameRows;
   const attackLeft = Math.round((size - attackDisplayW) / 2 + tuning.attackOffsetX);
   const attackBottom = tuning.attackOffsetY;
 
@@ -185,7 +189,7 @@ export default function KnightSprite({
         <Image
           source={IMG_KNIGHT_ATTACK}
           style={{
-            width: tuning.attackFrameWidth * tuning.attackFrameCols * attackScale,
+            width: attackFrameW * tuning.attackFrameCols * attackScale,
             height: attackSheetH * attackScale,
             transform: [
               {translateX: -attackCol * attackDisplayW},

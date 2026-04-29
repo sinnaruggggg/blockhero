@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-const introImage = require('../assets/ui/intro.jpg');
+const introImage = require('../assets/ui/optimized/intro.jpg');
 const MIN_SPLASH_VISIBLE_MS = 3000;
 
 interface IntroScreenProps {

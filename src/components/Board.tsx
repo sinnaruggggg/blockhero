@@ -78,24 +78,32 @@ interface BoardProps {
   placementEffectId?: number | null;
 }
 
+type PlacementEffectCell = { row: number; col: number };
+
+function sameCellList(
+  a: PlacementEffectCell[] = [],
+  b: PlacementEffectCell[] = [],
+) {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i].row !== b[i].row || a[i].col !== b[i].col) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const Cell = React.memo(function Cell({
   cell,
-  isPreview,
-  previewColor,
-  previewIsGem,
-  previewIsItem,
-  previewItemType,
-  isInvalid,
   size,
   placementVfxKey,
 }: {
   cell: CellValue;
-  isPreview: boolean;
-  previewColor?: string;
-  previewIsGem?: boolean;
-  previewIsItem?: boolean;
-  previewItemType?: string;
-  isInvalid: boolean;
   size: number;
   placementVfxKey?: number | null;
 }) {
@@ -125,7 +133,7 @@ const Cell = React.memo(function Cell({
     outputRange: [0, 0.62, 0.2, 0],
   });
 
-  if (!cell && !isPreview) {
+  if (!cell) {
     return (
       <View
         style={{
@@ -137,28 +145,6 @@ const Cell = React.memo(function Cell({
           borderColor: 'rgba(255,255,255,0.07)',
         }}
       />
-    );
-  }
-
-  if (!cell && isPreview) {
-    const color = isInvalid ? '#ef4444' : previewColor || '#ffffff';
-    return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: 3,
-          backgroundColor: color,
-          opacity: isInvalid ? 0.25 : 0.4,
-        }}
-      >
-        <SpecialBlockBadge
-          isGem={previewIsGem}
-          isItem={previewIsItem}
-          itemType={previewItemType}
-          size={size}
-        />
-      </View>
     );
   }
 
@@ -327,6 +313,71 @@ const Cell = React.memo(function Cell({
   );
 });
 
+type BoardGridProps = {
+  board: BoardType;
+  cellSize: number;
+  gap: number;
+  onCellPress?: (row: number, col: number) => void;
+  placementEffectCells: PlacementEffectCell[];
+  placementEffectId?: number | null;
+};
+
+const BoardGrid = React.memo(function BoardGrid({
+  board,
+  cellSize,
+  gap,
+  onCellPress,
+  placementEffectCells,
+  placementEffectId,
+}: BoardGridProps) {
+  const placementEffectMap = new Set(
+    placementEffectCells.map(cell => `${cell.row},${cell.col}`),
+  );
+
+  return (
+    <>
+      {board.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row', gap }}>
+          {row.map((cell, c) => {
+            const placementVfxKey = placementEffectMap.has(`${r},${c}`)
+              ? placementEffectId
+              : null;
+            const cellNode = (
+              <View key={c} style={{ width: cellSize, height: cellSize }}>
+                <Cell
+                  cell={cell}
+                  size={cellSize}
+                  placementVfxKey={placementVfxKey}
+                />
+              </View>
+            );
+
+            if (onCellPress) {
+              return (
+                <TouchableOpacity
+                  key={c}
+                  activeOpacity={0.7}
+                  onPress={() => onCellPress(r, c)}
+                >
+                  {cellNode}
+                </TouchableOpacity>
+              );
+            }
+            return cellNode;
+          })}
+        </View>
+      ))}
+    </>
+  );
+}, (prev, next) =>
+  prev.board === next.board &&
+  prev.cellSize === next.cellSize &&
+  prev.gap === next.gap &&
+  prev.onCellPress === next.onCellPress &&
+  prev.placementEffectId === next.placementEffectId &&
+  sameCellList(prev.placementEffectCells, next.placementEffectCells),
+);
+
 const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
   {
     board,
@@ -355,39 +406,7 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
     { small, compact },
   );
   const { cellSize, gap, padding } = metrics;
-
-  const previewMap = useRef(
-    new Map<
-      string,
-      {
-        color: string;
-        isGem?: boolean;
-        isItem?: boolean;
-        itemType?: string;
-      }
-    >(),
-  );
-  previewMap.current.clear();
-  for (const p of previewCells) {
-    previewMap.current.set(`${p.row},${p.col}`, {
-      color: p.color,
-      isGem: p.isGem,
-      isItem: p.isItem,
-      itemType: p.itemType,
-    });
-  }
-
-  const clearGuideMap = useRef(new Set<string>());
-  clearGuideMap.current.clear();
-  for (const g of clearGuideCells) {
-    clearGuideMap.current.add(`${g.row},${g.col}`);
-  }
-
-  const placementEffectMap = useRef(new Set<string>());
-  placementEffectMap.current.clear();
-  for (const p of placementEffectCells) {
-    placementEffectMap.current.add(`${p.row},${p.col}`);
-  }
+  const cellStep = cellSize + gap;
 
   return (
     <View
@@ -408,50 +427,55 @@ const BoardComponent = forwardRef<View, BoardProps>(function BoardComponent(
         <View style={[styles.corner, styles.cornerBottomLeft]} />
         <View style={[styles.corner, styles.cornerBottomRight]} />
       </View>
-      {board.map((row, r) => (
-        <View key={r} style={{ flexDirection: 'row', gap }}>
-          {row.map((cell, c) => {
-            const key = `${r},${c}`;
-            const previewCell = previewMap.current.get(key);
-            const isPreview = previewCell !== undefined;
-            const isClearGuide = clearGuideMap.current.has(key);
-            const placementVfxKey = placementEffectMap.current.has(key)
-              ? placementEffectId
-              : null;
-            const cellNode = (
-              <View key={c} style={{ width: cellSize, height: cellSize }}>
-                <Cell
-                  cell={cell}
-                  isPreview={isPreview}
-                  previewColor={previewCell?.color}
-                  previewIsGem={previewCell?.isGem}
-                  previewIsItem={previewCell?.isItem}
-                  previewItemType={previewCell?.itemType}
-                  isInvalid={invalidPreview && isPreview}
-                  size={cellSize}
-                  placementVfxKey={placementVfxKey}
-                />
-                {isClearGuide && (
-                  <View
-                    style={styles.clearGuideOverlay}
-                  />
-                )}
-              </View>
-            );
-            if (onCellPress) {
-              return (
-                <TouchableOpacity
-                  key={c}
-                  activeOpacity={0.7}
-                  onPress={() => onCellPress(r, c)}
-                >
-                  {cellNode}
-                </TouchableOpacity>
-              );
-            }
-            return cellNode;
-          })}
-        </View>
+      <BoardGrid
+        board={board}
+        cellSize={cellSize}
+        gap={gap}
+        onCellPress={onCellPress}
+        placementEffectCells={placementEffectCells}
+        placementEffectId={placementEffectId}
+      />
+      {previewCells.map((previewCell, index) => {
+        const color = invalidPreview ? '#ef4444' : previewCell.color || '#ffffff';
+        return (
+          <View
+            key={`${previewCell.row},${previewCell.col},${index}`}
+            pointerEvents="none"
+            style={[
+              styles.previewOverlay,
+              {
+                left: padding + previewCell.col * cellStep,
+                top: padding + previewCell.row * cellStep,
+                width: cellSize,
+                height: cellSize,
+                backgroundColor: color,
+                opacity: invalidPreview ? 0.25 : 0.4,
+              },
+            ]}
+          >
+            <SpecialBlockBadge
+              isGem={previewCell.isGem}
+              isItem={previewCell.isItem}
+              itemType={previewCell.itemType}
+              size={cellSize}
+            />
+          </View>
+        );
+      })}
+      {clearGuideCells.map((guideCell, index) => (
+        <View
+          key={`${guideCell.row},${guideCell.col},${index}`}
+          pointerEvents="none"
+          style={[
+            styles.clearGuideOverlay,
+            {
+              left: padding + guideCell.col * cellStep,
+              top: padding + guideCell.row * cellStep,
+              width: cellSize,
+              height: cellSize,
+            },
+          ]}
+        />
       ))}
     </View>
   );
@@ -514,8 +538,12 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255,255,220,0.72)',
   },
+  previewOverlay: {
+    position: 'absolute',
+    borderRadius: 3,
+  },
   clearGuideOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
     borderRadius: 3,
     backgroundColor: 'rgba(255, 214, 80, 0.62)',
     borderWidth: 2,

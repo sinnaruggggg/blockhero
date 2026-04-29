@@ -1,15 +1,15 @@
 import React, {useState, useEffect} from 'react';
 import {View, Image} from 'react-native';
 
-const IMG_MAGE_A = require('../assets/sprites/mage_idle_a.png'); // rows 0-4
-const IMG_MAGE_B = require('../assets/sprites/mage_idle_b.png'); // rows 5-9
+const IMG_MAGE_A = require('../assets/sprites/optimized/mage_idle_a.png'); // rows 0-4
+const IMG_MAGE_B = require('../assets/sprites/optimized/mage_idle_b.png'); // rows 5-9
 
 const FRAME_COLS = 10;
 const FRAME_ROWS_PER_SHEET = 5;
 const TOTAL_FRAMES = 100;
 const PING_PONG_LEN = TOTAL_FRAMES * 2 - 2;
-const FRAME_W = 720;
-const FRAME_H = 1088;
+const FRAME_W = 360;
+const FRAME_H = 544;
 const SHEET_H = FRAME_H * FRAME_ROWS_PER_SHEET;
 
 export default function MageSprite({size = 150}: {size?: number}) {

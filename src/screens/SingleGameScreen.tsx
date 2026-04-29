@@ -267,6 +267,7 @@ const COMBO_PARTICLE_POINTS = [
   { x: -98, y: 34, color: '#c084fc' },
   { x: -106, y: -2, color: '#22c55e' },
 ];
+const COMBO_GAUGE_TICK_MS = 200;
 
 const HIT_FRAMES = [
   require('../assets/effects/hit_00.png'),
@@ -1096,6 +1097,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       }
       if (enemyAttackRef.current) {
         clearInterval(enemyAttackRef.current);
+        enemyAttackRef.current = null;
       }
       stopComboShakeAnimation();
       clearNotice();
@@ -1382,7 +1384,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   }, []);
 
   useEffect(() => {
-    if (!summonActive || summonRemainingMs <= 0 || gameOver) {
+    if (!summonActive || summonRemainingMsRef.current <= 0 || gameOver) {
       return;
     }
 
@@ -1400,7 +1402,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameOver, summonActive, summonRemainingMs]);
+  }, [gameOver, summonActive]);
 
   useEffect(() => {
     const effects = skillEffectsRef.current;
@@ -1467,6 +1469,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       }
       if (enemyAttackRef.current) {
         clearInterval(enemyAttackRef.current);
+        enemyAttackRef.current = null;
       }
 
       const dailyStats = await loadDailyStats();
@@ -1752,6 +1755,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     return () => {
       if (enemyAttackRef.current) {
         clearInterval(enemyAttackRef.current);
+        enemyAttackRef.current = null;
       }
     };
   }, [applyMonsterAttack, enemyStats.attackIntervalMs, gameOver]);
@@ -1901,7 +1905,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
         clearInterval(comboTickerRef.current);
         comboTickerRef.current = null;
       }
-    }, 100);
+    }, COMBO_GAUGE_TICK_MS);
 
     comboTimerRef.current = setTimeout(() => {
       setCombo(0);

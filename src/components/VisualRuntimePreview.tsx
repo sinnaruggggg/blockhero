@@ -39,7 +39,7 @@ import {
   type StartingItemLoadoutSlot,
 } from '../constants/itemCatalog';
 
-const LEVEL_BG = require('../assets/ui/grassland_bg.jpg');
+const LEVEL_BG = require('../assets/ui/optimized/grassland_bg.jpg');
 
 const SAMPLE_ITEMS = {
   refresh: 2,

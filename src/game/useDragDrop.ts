@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
+import { unstable_batchedUpdates } from 'react-native';
 import {
   Board,
   Piece,
@@ -372,9 +373,6 @@ export function useDragDrop(
           snapResult.r,
           snapResult.c,
         );
-        setPreviewCells(cells);
-        setInvalidPreview(false);
-
         // Predict clear lines
         const { rows: clearRows, cols: clearCols } = predictClearLines(
           board,
@@ -395,13 +393,19 @@ export function useDragDrop(
             }
           }
         }
-        setClearGuideCells(guide);
+        unstable_batchedUpdates(() => {
+          setPreviewCells(cells);
+          setInvalidPreview(false);
+          setClearGuideCells(guide);
+        });
       } else {
         // No valid placement nearby - hide preview
         if (lastPreviewPos.current !== null) {
-          setPreviewCells([]);
-          setInvalidPreview(false);
-          setClearGuideCells([]);
+          unstable_batchedUpdates(() => {
+            setPreviewCells([]);
+            setInvalidPreview(false);
+            setClearGuideCells([]);
+          });
           lastPreviewPos.current = null;
           lastRawPos.current = null;
         }
@@ -425,10 +429,12 @@ export function useDragDrop(
       // If we have a current snap position, use it directly (sticky)
       const currentSnap = lastPreviewPos.current;
 
-      setDraggingIndex(null);
-      setPreviewCells([]);
-      setInvalidPreview(false);
-      setClearGuideCells([]);
+      unstable_batchedUpdates(() => {
+        setDraggingIndex(null);
+        setPreviewCells([]);
+        setInvalidPreview(false);
+        setClearGuideCells([]);
+      });
       lastPreviewPos.current = null;
       lastRawPos.current = null;
 
@@ -491,10 +497,12 @@ export function useDragDrop(
   );
 
   const onDragCancel = useCallback((_index: number) => {
-    setDraggingIndex(null);
-    setPreviewCells([]);
-    setInvalidPreview(false);
-    setClearGuideCells([]);
+    unstable_batchedUpdates(() => {
+      setDraggingIndex(null);
+      setPreviewCells([]);
+      setInvalidPreview(false);
+      setClearGuideCells([]);
+    });
     lastPreviewPos.current = null;
     lastRawPos.current = null;
   }, []);

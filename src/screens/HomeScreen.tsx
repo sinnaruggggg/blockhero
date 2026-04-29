@@ -74,7 +74,7 @@ const W = SCREEN_W;
 const H = SCREEN_H;
 const HOME_BACKGROUND_SCALE = 1.1;
 
-const IMG_BG = require('../assets/ui/background.jpg');
+const IMG_BG = require('../assets/ui/optimized/background.jpg');
 const IMG_TITLE = require('../assets/ui/title.png');
 const IMG_PROFILE = require('../assets/ui/profile.png');
 const IMG_SETTINGS = require('../assets/ui/settings.png');

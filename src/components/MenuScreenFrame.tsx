@@ -11,7 +11,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from './BackImageButton';
 
-const IMG_BG = require('../assets/ui/background.jpg');
+const IMG_BG = require('../assets/ui/optimized/background.jpg');
 
 export default function MenuScreenFrame({
   title,
