@@ -52,7 +52,7 @@ import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
 import NextPiecePreview from '../components/NextPiecePreview';
-import KnightSprite from '../components/KnightSprite';
+import CharacterSprite from '../components/CharacterSprite';
 import { useDragDrop } from '../game/useDragDrop';
 import { LEVELS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import {
@@ -284,11 +284,6 @@ const HIT_FRAMES = [
 
 const WORLD_BACKGROUND_IMAGES: Partial<Record<number, any>> = {
   1: require('../assets/ui/grassland_bg.jpg'),
-};
-
-const CHARACTER_PORTRAITS: Partial<Record<string, any>> = {
-  knight: require('../assets/ui/hero_knight.png'),
-  mage: require('../assets/ui/hero_mage.png'),
 };
 
 const WORLD_BACKGROUND_TINTS: Record<number, string> = {
@@ -2486,7 +2481,6 @@ export default function SingleGameScreen({ route, navigation }: any) {
     attackPulse: number = 0,
     facing: 1 | -1 = 1,
   ) => {
-    const visual = CHARACTER_VISUALS[characterId] ?? CHARACTER_VISUALS.knight;
     const tuning =
       characterVisualTunings[
         characterId as keyof typeof characterVisualTunings
@@ -2499,50 +2493,14 @@ export default function SingleGameScreen({ route, navigation }: any) {
       ],
     };
 
-    if (characterId === 'knight') {
-      return (
-        <View style={battleTransform}>
-          <KnightSprite
-            size={Math.round(size * 0.84)}
-            attackPulse={attackPulse}
-            facing={facing}
-          />
-        </View>
-      );
-    }
-    const portraitSource = CHARACTER_PORTRAITS[characterId];
-    if (portraitSource) {
-      return (
-        <View style={battleTransform}>
-          <Image
-            source={portraitSource}
-            resizeMode="contain"
-            style={{
-              width: size * 0.96,
-              height: size * 1.18,
-              transform: [{ scaleX: facing }],
-            }}
-          />
-        </View>
-      );
-    }
     return (
       <View style={battleTransform}>
-        <View
-          style={[
-            styles.characterFallbackBadge,
-            { width: size * 0.82, height: size * 0.82 },
-          ]}
-        >
-          <Text
-            style={[
-              styles.characterFallbackEmoji,
-              { fontSize: size * 0.44, transform: [{ scaleX: facing }] },
-            ]}
-          >
-            {visual.emoji}
-          </Text>
-        </View>
+        <CharacterSprite
+          characterId={characterId}
+          size={size}
+          attackPulse={attackPulse}
+          facing={facing}
+        />
       </View>
     );
   };

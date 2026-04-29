@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import MageSprite from '../components/MageSprite';
-import KnightSprite from '../components/KnightSprite';
+import CharacterSprite from '../components/CharacterSprite';
 import GameBottomNav from '../components/GameBottomNav';
 import ItemLoadoutModal from '../components/ItemLoadoutModal';
 import {CHARACTER_CLASSES, getCharacterAtk, getCharacterHp} from '../constants/characters';
@@ -341,10 +340,6 @@ export default function HomeScreen({navigation}: any) {
 
   const renderCharacterPreview = useCallback(
     (characterId: string, size: number, compact: boolean = false) => {
-      const visual =
-        CHARACTER_CLASSES.find(characterClass => characterClass.id === characterId) ??
-        CHARACTER_CLASSES[0];
-      const theme = CHARACTER_THEMES[characterId] ?? CHARACTER_THEMES.knight;
       const tuning =
         characterVisualTunings[
           characterId as keyof typeof characterVisualTunings
@@ -357,42 +352,12 @@ export default function HomeScreen({navigation}: any) {
         ],
       };
 
-      if (characterId === 'mage') {
-        return (
-          <View style={[styles.modalSpriteWrap, showcaseTransform]}>
-            <View style={styles.mageFlip}>
-              <MageSprite size={size} />
-            </View>
-          </View>
-        );
-      }
-
-      if (characterId === 'knight') {
-        return (
-          <View style={[styles.modalSpriteWrap, showcaseTransform]}>
-            <KnightSprite size={size} />
-          </View>
-        );
-      }
-
-      const badgeSize = compact ? size * 0.54 : size * 0.62;
       return (
-        <View
-          style={[
-            styles.charPreviewBadgeWrap,
-            styles.charEmojiBadge,
-            showcaseTransform,
-            {
-              width: badgeSize,
-              height: badgeSize,
-              borderRadius: badgeSize / 2,
-              backgroundColor: theme.accentSoft,
-              borderColor: theme.frame,
-            },
-          ]}>
-          <Text style={[styles.charEmojiBadgeText, {fontSize: badgeSize * 0.46}]}>
-            {visual.emoji}
-          </Text>
+        <View style={[styles.modalSpriteWrap, showcaseTransform]}>
+          <CharacterSprite
+            characterId={characterId}
+            size={compact ? size * 0.92 : size}
+          />
         </View>
       );
     },
@@ -408,62 +373,19 @@ export default function HomeScreen({navigation}: any) {
       ],
     };
 
-    if (selectedCharacterClass.id === 'mage') {
-      return (
-        <View style={[styles.mainCharacterSpriteWrap, showcaseTransform]}>
-          <View style={styles.mageFlip}>
-            <MageSprite size={MAGE_SIZE} />
-          </View>
-          <View style={styles.mageShadow} />
-        </View>
-      );
-    }
-
-    if (selectedCharacterClass.id === 'knight') {
-      return (
-        <View style={[styles.mainCharacterSpriteWrap, showcaseTransform]}>
-          <View style={styles.knightWrap}>
-            <View style={styles.knightShadow} />
-            <KnightSprite size={KNIGHT_DISPLAY_SIZE} />
-          </View>
-        </View>
-      );
-    }
-
-    const badgeSize = KNIGHT_DISPLAY_SIZE * 0.6;
     return (
       <View style={[styles.mainCharacterSpriteWrap, showcaseTransform]}>
-        <View
-          style={[
-            styles.mainCharacterEmojiBadge,
-            {
-              width: badgeSize,
-              height: badgeSize,
-              borderRadius: badgeSize / 2,
-              backgroundColor: selectedCharacterTheme.accentSoft,
-              borderColor: selectedCharacterTheme.frame,
-            },
-          ]}>
-          <Text
-            style={[
-              styles.mainCharacterEmojiText,
-              {
-                color: selectedCharacterTheme.ink,
-                fontSize: badgeSize * 0.46,
-              },
-            ]}>
-            {selectedCharacterClass.emoji}
-          </Text>
+        <View style={styles.knightWrap}>
+          <View style={styles.knightShadow} />
+          <CharacterSprite
+            characterId={selectedCharacterClass.id}
+            size={KNIGHT_DISPLAY_SIZE}
+          />
         </View>
-        <View style={styles.mainCharacterEmojiShadow} />
       </View>
     );
   }, [
-    selectedCharacterClass.emoji,
     selectedCharacterClass.id,
-    selectedCharacterTheme.accentSoft,
-    selectedCharacterTheme.frame,
-    selectedCharacterTheme.ink,
     selectedCharacterTuning.showcaseOffsetX,
     selectedCharacterTuning.showcaseOffsetY,
     selectedCharacterTuning.showcaseScaleMultiplier,
