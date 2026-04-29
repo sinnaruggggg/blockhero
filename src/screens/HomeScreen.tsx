@@ -50,8 +50,10 @@ import {
   getSelectedCharacter,
   setSelectedCharacter,
   GameData,
+  loadLastPlayedWorldId,
   saveStartingItemLoadout,
 } from '../stores/gameStore';
+import {getWorldBackgroundSource} from '../assets/worldBackgrounds';
 import {
   HEART_REGEN_MS,
   INFINITE_HEARTS_VALUE,
@@ -211,6 +213,7 @@ export default function HomeScreen({navigation}: any) {
   const [characterVisualTunings, setCharacterVisualTunings] = useState(
     getCachedCharacterVisualTunings(),
   );
+  const [homeBackgroundWorldId, setHomeBackgroundWorldId] = useState(1);
   const pendingGrantsCheckedRef = useRef(false);
   const announcementsLoadedRef = useRef(false);
 
@@ -257,6 +260,8 @@ export default function HomeScreen({navigation}: any) {
   );
   const mainCharacterTapWidth = Math.round(mainCharacterDisplayWidth * 0.5);
   const mainCharacterTapHeight = Math.round(mainCharacterDisplayHeight * 0.86);
+  const homeBackgroundSource =
+    getWorldBackgroundSource(homeBackgroundWorldId) ?? IMG_BG;
 
   useEffect(() => {
     setUpdateIntervalForType(SensorTypes.accelerometer, 50);
@@ -298,6 +303,25 @@ export default function HomeScreen({navigation}: any) {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshHomeBackground = () => {
+      loadLastPlayedWorldId().then(worldId => {
+        if (active) {
+          setHomeBackgroundWorldId(worldId);
+        }
+      });
+    };
+
+    refreshHomeBackground();
+    const unsubscribe = navigation.addListener?.('focus', refreshHomeBackground);
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [navigation]);
 
   const parallax = useCallback(
     (depth: number) => ({
@@ -685,7 +709,7 @@ export default function HomeScreen({navigation}: any) {
     return (
       <View style={styles.container}>
         <Animated.Image
-          source={IMG_BG}
+          source={homeBackgroundSource}
           style={[
             styles.bgImage,
             backgroundParallaxStyle(),
@@ -703,7 +727,7 @@ export default function HomeScreen({navigation}: any) {
   return (
     <View style={styles.container}>
       <Animated.Image
-        source={IMG_BG}
+        source={homeBackgroundSource}
         style={[
           styles.bgImage,
           backgroundParallaxStyle(),

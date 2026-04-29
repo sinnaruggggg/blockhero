@@ -56,6 +56,7 @@ import CharacterSprite from '../components/CharacterSprite';
 import KnightSprite from '../components/KnightSprite';
 import { useDragDrop } from '../game/useDragDrop';
 import { LEVELS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
+import {getWorldBackgroundSource} from '../assets/worldBackgrounds';
 import {
   createBoard,
   generatePlaceablePieces,
@@ -101,6 +102,7 @@ import {
   collectSpecialBlockRewards,
   GameData,
   getSelectedCharacter,
+  saveLastPlayedWorldId,
   getLevelModeBreakthroughState,
   getUnlockedSpecialPieceShapeIndices,
   gainSummonExp,
@@ -283,10 +285,6 @@ const HIT_FRAMES = [
   require('../assets/effects/hit_13.png'),
 ];
 
-const WORLD_BACKGROUND_IMAGES: Partial<Record<number, any>> = {
-  1: require('../assets/ui/grassland_bg.jpg'),
-};
-
 const CHARACTER_PORTRAITS: Partial<Record<string, any>> = {
   knight: require('../assets/ui/hero_knight.png'),
   mage: require('../assets/ui/hero_mage.png'),
@@ -418,6 +416,11 @@ export default function SingleGameScreen({ route, navigation }: any) {
   );
   const activeWorldId = creatorLevelRuntime?.worldId ?? activeLevel.world;
   const activeLevelName = creatorLevelRuntime?.name ?? activeLevel.name;
+
+  useEffect(() => {
+    void saveLastPlayedWorldId(activeWorldId);
+  }, [activeWorldId]);
+
   const activeObstacles = activeLevel.obstacles;
   const monster = creatorLevelRuntime
     ? {
@@ -2437,7 +2440,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   const monsterSprite =
     getMonsterPoseSource(monsterSpriteSet, monsterPose) ??
     getMonsterPoseSource(monsterSpriteSet, 'idle');
-  const backgroundImage = WORLD_BACKGROUND_IMAGES[activeWorldId] ?? null;
+  const backgroundImage = getWorldBackgroundSource(activeWorldId);
   const levelBackgroundOverride = getLevelBackgroundOverride(
     visualManifest,
     activeLevel.id,

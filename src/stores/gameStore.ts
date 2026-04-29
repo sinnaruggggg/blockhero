@@ -71,6 +71,8 @@ import {
   type BlockWorldToolInstance,
 } from './blockWorldToolStore';
 
+const LAST_PLAYED_WORLD_ID_KEY = 'lastPlayedWorldId';
+
 // Types
 export interface GameData {
   hearts: number;
@@ -873,6 +875,21 @@ export async function saveLevelProgress(
   };
   await save('levelProgress', updated);
   return updated;
+}
+
+export async function loadLastPlayedWorldId(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(LAST_PLAYED_WORLD_ID_KEY);
+    const parsed = Math.round(Number(raw));
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export async function saveLastPlayedWorldId(worldId: number): Promise<void> {
+  const safeWorldId = Math.max(1, Math.round(Number(worldId) || 1));
+  await AsyncStorage.setItem(LAST_PLAYED_WORLD_ID_KEY, String(safeWorldId));
 }
 
 // Endless stats
