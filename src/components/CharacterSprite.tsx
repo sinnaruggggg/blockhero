@@ -23,6 +23,7 @@ const CHARACTER_SPRITES: Record<string, CharacterSpriteSet> = {
 
 const FRAME_SIZE = 512;
 const FRAME_COUNT = 10;
+const IDLE_PING_PONG_COUNT = FRAME_COUNT * 2 - 2;
 
 type CharacterSpriteProps = {
   characterId: string;
@@ -64,7 +65,7 @@ export default function CharacterSprite({
           }
           return previous + 1;
         }
-        return (previous + 1) % FRAME_COUNT;
+        return (previous + 1) % IDLE_PING_PONG_COUNT;
       });
     }, frameMs);
 
@@ -72,6 +73,10 @@ export default function CharacterSprite({
   }, [pose]);
 
   const scale = size / FRAME_SIZE;
+  const sheetFrame =
+    pose === 'idle' && frame >= FRAME_COUNT
+      ? IDLE_PING_PONG_COUNT - frame
+      : frame;
 
   return (
     <View
@@ -88,7 +93,7 @@ export default function CharacterSprite({
         style={{
           width: FRAME_SIZE * FRAME_COUNT * scale,
           height: FRAME_SIZE * scale,
-          transform: [{translateX: -frame * size}],
+          transform: [{translateX: -sheetFrame * size}],
         }}
       />
     </View>
