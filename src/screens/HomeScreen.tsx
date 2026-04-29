@@ -1,5 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import CharacterSprite from '../components/CharacterSprite';
+import MageSprite from '../components/MageSprite';
+import KnightSprite from '../components/KnightSprite';
 import GameBottomNav from '../components/GameBottomNav';
 import ItemLoadoutModal from '../components/ItemLoadoutModal';
 import {CHARACTER_CLASSES, getCharacterAtk, getCharacterHp} from '../constants/characters';
@@ -238,13 +240,13 @@ export default function HomeScreen({navigation}: any) {
       ? MAGE_SIZE
       : selectedCharacterClass.id === 'knight'
         ? KNIGHT_DISPLAY_SIZE
-        : KNIGHT_DISPLAY_SIZE * 0.58;
+        : KNIGHT_DISPLAY_SIZE;
   const mainCharacterBaseHeight =
     selectedCharacterClass.id === 'mage'
       ? Math.round(MAGE_SIZE * (1088 / 720))
       : selectedCharacterClass.id === 'knight'
         ? Math.round(KNIGHT_DISPLAY_SIZE * (956 / 700))
-        : KNIGHT_DISPLAY_SIZE * 0.72;
+        : KNIGHT_DISPLAY_SIZE;
   const mainCharacterDisplayWidth = Math.max(
     mainCharacterBaseWidth * selectedCharacterTuning.showcaseScaleMultiplier,
     120,
@@ -352,6 +354,24 @@ export default function HomeScreen({navigation}: any) {
         ],
       };
 
+      if (characterId === 'mage') {
+        return (
+          <View style={[styles.modalSpriteWrap, showcaseTransform]}>
+            <View style={styles.mageFlip}>
+              <MageSprite size={size} />
+            </View>
+          </View>
+        );
+      }
+
+      if (characterId === 'knight') {
+        return (
+          <View style={[styles.modalSpriteWrap, showcaseTransform]}>
+            <KnightSprite size={size} />
+          </View>
+        );
+      }
+
       return (
         <View style={[styles.modalSpriteWrap, showcaseTransform]}>
           <CharacterSprite
@@ -372,6 +392,28 @@ export default function HomeScreen({navigation}: any) {
         {scale: selectedCharacterTuning.showcaseScaleMultiplier},
       ],
     };
+
+    if (selectedCharacterClass.id === 'mage') {
+      return (
+        <View style={[styles.mainCharacterSpriteWrap, showcaseTransform]}>
+          <View style={styles.mageFlip}>
+            <MageSprite size={MAGE_SIZE} />
+          </View>
+          <View style={styles.mageShadow} />
+        </View>
+      );
+    }
+
+    if (selectedCharacterClass.id === 'knight') {
+      return (
+        <View style={[styles.mainCharacterSpriteWrap, showcaseTransform]}>
+          <View style={styles.knightWrap}>
+            <View style={styles.knightShadow} />
+            <KnightSprite size={KNIGHT_DISPLAY_SIZE} />
+          </View>
+        </View>
+      );
+    }
 
     return (
       <View style={[styles.mainCharacterSpriteWrap, showcaseTransform]}>

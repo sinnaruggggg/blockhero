@@ -1,10 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {
-  Image,
-  type ImageSourcePropType,
-  type ImageStyle,
-  type StyleProp,
-} from 'react-native';
+import {Image, View, type ImageSourcePropType} from 'react-native';
 
 type CharacterSpriteSet = {
   idle: ImageSourcePropType;
@@ -12,34 +7,28 @@ type CharacterSpriteSet = {
 };
 
 const CHARACTER_SPRITES: Record<string, CharacterSpriteSet> = {
-  knight: {
-    idle: require('../assets/characters/knight_idle.png'),
-    attack: require('../assets/characters/knight_attack.png'),
-  },
-  mage: {
-    idle: require('../assets/characters/mage_idle.png'),
-    attack: require('../assets/characters/mage_attack.png'),
-  },
   archer: {
-    idle: require('../assets/characters/archer_idle.png'),
-    attack: require('../assets/characters/archer_attack.png'),
+    idle: require('../assets/characters/archer_idle_sheet.png'),
+    attack: require('../assets/characters/archer_attack_sheet.png'),
   },
   rogue: {
-    idle: require('../assets/characters/rogue_idle.png'),
-    attack: require('../assets/characters/rogue_attack.png'),
+    idle: require('../assets/characters/rogue_idle_sheet.png'),
+    attack: require('../assets/characters/rogue_attack_sheet.png'),
   },
   healer: {
-    idle: require('../assets/characters/healer_idle.png'),
-    attack: require('../assets/characters/healer_attack.png'),
+    idle: require('../assets/characters/healer_idle_sheet.png'),
+    attack: require('../assets/characters/healer_attack_sheet.png'),
   },
 };
+
+const FRAME_SIZE = 512;
+const FRAME_COUNT = 10;
 
 type CharacterSpriteProps = {
   characterId: string;
   size?: number;
   attackPulse?: number;
   facing?: 1 | -1;
-  style?: StyleProp<ImageStyle>;
 };
 
 export default function CharacterSprite({
@@ -47,11 +36,11 @@ export default function CharacterSprite({
   size = 120,
   attackPulse = 0,
   facing = 1,
-  style,
 }: CharacterSpriteProps) {
   const [pose, setPose] = useState<'idle' | 'attack'>('idle');
+  const [frame, setFrame] = useState(0);
   const previousAttackPulse = useRef(attackPulse);
-  const spriteSet = CHARACTER_SPRITES[characterId] ?? CHARACTER_SPRITES.knight;
+  const spriteSet = CHARACTER_SPRITES[characterId] ?? CHARACTER_SPRITES.archer;
 
   useEffect(() => {
     if (attackPulse <= previousAttackPulse.current) {
@@ -61,23 +50,47 @@ export default function CharacterSprite({
 
     previousAttackPulse.current = attackPulse;
     setPose('attack');
-    const timeout = setTimeout(() => setPose('idle'), 360);
-    return () => clearTimeout(timeout);
+    setFrame(0);
   }, [attackPulse]);
 
+  useEffect(() => {
+    const frameMs = pose === 'attack' ? 58 : 92;
+    const interval = setInterval(() => {
+      setFrame(previous => {
+        if (pose === 'attack') {
+          if (previous >= FRAME_COUNT - 1) {
+            setPose('idle');
+            return 0;
+          }
+          return previous + 1;
+        }
+        return (previous + 1) % FRAME_COUNT;
+      });
+    }, frameMs);
+
+    return () => clearInterval(interval);
+  }, [pose]);
+
+  const scale = size / FRAME_SIZE;
+
   return (
-    <Image
-      source={spriteSet[pose]}
-      resizeMode="contain"
-      fadeDuration={0}
-      style={[
-        {
-          width: size,
-          height: size,
-          transform: [{scaleX: facing}],
-        },
-        style,
-      ]}
-    />
+    <View
+      style={{
+        width: size,
+        height: size,
+        overflow: 'hidden',
+        transform: [{scaleX: facing}],
+      }}>
+      <Image
+        source={spriteSet[pose]}
+        resizeMode="stretch"
+        fadeDuration={0}
+        style={{
+          width: FRAME_SIZE * FRAME_COUNT * scale,
+          height: FRAME_SIZE * scale,
+          transform: [{translateX: -frame * size}],
+        }}
+      />
+    </View>
   );
 }

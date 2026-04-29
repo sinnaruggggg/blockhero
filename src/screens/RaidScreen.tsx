@@ -35,6 +35,7 @@ import RaidSummonOverlay from '../components/RaidSummonOverlay';
 import SkillTriggerBoardEffect from '../components/SkillTriggerBoardEffect';
 import SkillBar from '../components/SkillBar';
 import CharacterSprite from '../components/CharacterSprite';
+import KnightSprite from '../components/KnightSprite';
 import BaseVisualElementView, {
   buildVisualAutomationLabel,
   buildVisualElementStyle,
@@ -322,6 +323,11 @@ const RAID_CHARACTER_VISUALS: Record<string, { name: string; emoji: string }> =
     rogue: { name: '도적', emoji: '🗡️' },
     healer: { name: '힐러', emoji: '✨' },
   };
+
+const RAID_CHARACTER_PORTRAITS: Partial<Record<string, any>> = {
+  knight: require('../assets/ui/hero_knight.png'),
+  mage: require('../assets/ui/hero_mage.png'),
+};
 
 function withTimeout<T>(
   promise: Promise<T>,
@@ -4199,6 +4205,9 @@ export default function RaidScreen({ route, navigation }: any) {
   const myRaidVisual =
     RAID_CHARACTER_VISUALS[selectedCharacterRef.current ?? 'knight'] ??
     RAID_CHARACTER_VISUALS.knight;
+  const myRaidPortrait = selectedCharacterRef.current
+    ? RAID_CHARACTER_PORTRAITS[selectedCharacterRef.current]
+    : null;
   const allyParticipants = participants.filter(
     participant => participant.playerId !== playerIdRef.current,
   );
@@ -4278,6 +4287,34 @@ export default function RaidScreen({ route, navigation }: any) {
             { scale: tuning.battleScaleMultiplier },
           ],
         };
+
+        if (characterId === 'knight') {
+          return (
+            <View style={battleTransform}>
+              <KnightSprite
+                size={compact ? 40 : 44}
+                attackPulse={playerAttackPulse}
+                facing={1}
+              />
+            </View>
+          );
+        }
+
+        if (myRaidPortrait) {
+          return (
+            <View style={battleTransform}>
+              <Image
+                source={myRaidPortrait}
+                resizeMode="contain"
+                fadeDuration={0}
+                style={[
+                  styles.raidPlayerSpriteImage,
+                  compact && styles.raidPlayerSpriteImageCompact,
+                ]}
+              />
+            </View>
+          );
+        }
 
         return (
           <View style={battleTransform}>

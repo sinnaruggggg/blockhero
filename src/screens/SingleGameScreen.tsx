@@ -53,6 +53,7 @@ import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
 import NextPiecePreview from '../components/NextPiecePreview';
 import CharacterSprite from '../components/CharacterSprite';
+import KnightSprite from '../components/KnightSprite';
 import { useDragDrop } from '../game/useDragDrop';
 import { LEVELS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import {
@@ -284,6 +285,11 @@ const HIT_FRAMES = [
 
 const WORLD_BACKGROUND_IMAGES: Partial<Record<number, any>> = {
   1: require('../assets/ui/grassland_bg.jpg'),
+};
+
+const CHARACTER_PORTRAITS: Partial<Record<string, any>> = {
+  knight: require('../assets/ui/hero_knight.png'),
+  mage: require('../assets/ui/hero_mage.png'),
 };
 
 const WORLD_BACKGROUND_TINTS: Record<number, string> = {
@@ -2492,6 +2498,36 @@ export default function SingleGameScreen({ route, navigation }: any) {
         { scale: tuning.battleScaleMultiplier },
       ],
     };
+
+    if (characterId === 'knight') {
+      return (
+        <View style={battleTransform}>
+          <KnightSprite
+            size={Math.round(size * 0.84)}
+            attackPulse={attackPulse}
+            facing={facing}
+          />
+        </View>
+      );
+    }
+
+    const portraitSource = CHARACTER_PORTRAITS[characterId];
+    if (portraitSource) {
+      return (
+        <View style={battleTransform}>
+          <Image
+            source={portraitSource}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={{
+              width: size * 0.96,
+              height: size * 1.18,
+              transform: [{ scaleX: facing }],
+            }}
+          />
+        </View>
+      );
+    }
 
     return (
       <View style={battleTransform}>
