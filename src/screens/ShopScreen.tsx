@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -44,6 +45,7 @@ import {
   purchaseShopItem,
   upgradeRaidSkill,
 } from '../services/economyService';
+import {getItemIconSource} from '../assets/items/itemIcons';
 
 const RAID_SKILL_NAMES: Record<number, string> = {
   1: '기본',
@@ -319,6 +321,7 @@ export default function ShopScreen({ navigation }: any) {
           기본 아이템은 골드 또는 다이아로 구매합니다.
         </Text>
         {SHOP_ITEMS.map(item => {
+          const iconSource = getItemIconSource(item.itemKey);
           const goldPrice = getDiscountedGoldPrice(item);
           const discounted = goldPrice !== item.goldPrice;
           const heartsDisabled = item.type === 'hearts' && hasInfiniteHearts;
@@ -335,7 +338,15 @@ export default function ShopScreen({ navigation }: any) {
 
           return (
             <View key={item.id} style={styles.itemRow}>
-              <Text style={styles.itemEmoji}>{item.emoji}</Text>
+              {iconSource ? (
+                <Image
+                  source={iconSource}
+                  resizeMode="contain"
+                  style={styles.itemIcon}
+                />
+              ) : (
+                <Text style={styles.itemEmoji}>{item.emoji}</Text>
+              )}
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{getItemDisplayName(item)}</Text>
                 <Text style={styles.itemDesc}>{description}</Text>
@@ -377,13 +388,22 @@ export default function ShopScreen({ navigation }: any) {
           생성 풀에 영구 추가됩니다.
         </Text>
         {SPECIAL_PIECE_ITEMS.map(item => {
+          const iconSource = getItemIconSource(item.itemKey);
           const unlocked = isSpecialPieceUnlocked(
             gameData,
             item.itemKey as SpecialPieceUnlockKey,
           );
           return (
             <View key={item.id} style={styles.itemRow}>
-              <Text style={styles.itemEmoji}>{item.emoji}</Text>
+              {iconSource ? (
+                <Image
+                  source={iconSource}
+                  resizeMode="contain"
+                  style={styles.itemIcon}
+                />
+              ) : (
+                <Text style={styles.itemEmoji}>{item.emoji}</Text>
+              )}
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{getItemDisplayName(item)}</Text>
                 <Text style={styles.itemDesc}>
@@ -507,6 +527,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   itemEmoji: { fontSize: 22, width: 28, textAlign: 'center' },
+  itemIcon: { width: 30, height: 30 },
   itemInfo: { flex: 1 },
   itemName: { color: '#e2e8f0', fontSize: 14, fontWeight: '700' },
   itemDesc: { color: '#94a3b8', fontSize: 11, marginTop: 2 },

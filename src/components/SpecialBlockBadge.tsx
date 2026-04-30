@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import {Image, StyleSheet, Text, View} from 'react-native';
 import { getItemDefinition } from '../constants/itemCatalog';
+import {getItemIconSource} from '../assets/items/itemIcons';
 
 type SpecialBlockBadgeProps = {
   isGem?: boolean;
@@ -18,6 +19,7 @@ function getBadgeMeta(isGem: boolean, itemType?: string) {
       iconColor: '#ffffff',
       sizeScale: 0.88,
       diamond: true,
+      imageSource: null,
     };
   }
 
@@ -30,6 +32,7 @@ function getBadgeMeta(isGem: boolean, itemType?: string) {
       iconColor: '#ffffff',
       sizeScale: 0.9,
       diamond: false,
+      imageSource: null,
     };
   }
 
@@ -40,6 +43,7 @@ function getBadgeMeta(isGem: boolean, itemType?: string) {
     iconColor: item.badgeIconColor,
     sizeScale: item.sizeScale,
     diamond: false,
+    imageSource: getItemIconSource(item.key),
   };
 }
 
@@ -79,17 +83,28 @@ export default function SpecialBlockBadge({
           styles.iconWrap,
           meta.diamond ? styles.iconWrapDiamond : null,
         ]}>
-        <Text
-          style={[
-            styles.icon,
-            {
-              color: meta.iconColor,
-              fontSize,
-              lineHeight: fontSize + 1,
-            },
-          ]}>
-          {meta.icon}
-        </Text>
+        {meta.imageSource ? (
+          <Image
+            source={meta.imageSource}
+            resizeMode="contain"
+            style={{
+              width: Math.round(badgeSize * 0.86),
+              height: Math.round(badgeSize * 0.86),
+            }}
+          />
+        ) : (
+          <Text
+            style={[
+              styles.icon,
+              {
+                color: meta.iconColor,
+                fontSize,
+                lineHeight: fontSize + 1,
+              },
+            ]}>
+            {meta.icon}
+          </Text>
+        )}
       </View>
     </View>
   );

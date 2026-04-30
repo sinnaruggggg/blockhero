@@ -1,8 +1,9 @@
 import React from 'react';
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {Image, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {t} from '../i18n';
 import {RewardResult} from '../constants/raidRewards';
 import {getItemDefinition} from '../constants/itemCatalog';
+import {getItemIconSource} from '../assets/items/itemIcons';
 
 interface RaidRewardPopupProps {
   reward: RewardResult;
@@ -15,6 +16,7 @@ function getRewardItemMeta(key: string) {
   if (item) {
     return {
       emoji: item.emoji,
+      iconSource: getItemIconSource(item.key),
       label: item.label,
     };
   }
@@ -22,12 +24,14 @@ function getRewardItemMeta(key: string) {
   if (key === 'addTurns') {
     return {
       emoji: '➕',
+      iconSource: null,
       label: t('item.addTurns'),
     };
   }
 
   return {
     emoji: '🎁',
+    iconSource: null,
     label: t(`item.${key}`),
   };
 }
@@ -71,7 +75,15 @@ export default function RaidRewardPopup({
             const meta = getRewardItemMeta(key);
             return (
               <View key={key} style={styles.rewardRow}>
-                <Text style={styles.rewardEmoji}>{meta.emoji}</Text>
+                {meta.iconSource ? (
+                  <Image
+                    source={meta.iconSource}
+                    resizeMode="contain"
+                    style={styles.rewardIcon}
+                  />
+                ) : (
+                  <Text style={styles.rewardEmoji}>{meta.emoji}</Text>
+                )}
                 <Text style={styles.rewardValue}>
                   {meta.label} x{count}
                 </Text>
@@ -163,6 +175,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     width: 28,
     textAlign: 'center',
+  },
+  rewardIcon: {
+    width: 28,
+    height: 28,
   },
   rewardValue: {
     color: '#e2e8f0',

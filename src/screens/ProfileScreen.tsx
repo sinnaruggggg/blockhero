@@ -36,6 +36,7 @@ import {
   getEconomyErrorCode,
 } from '../services/economyService';
 import {ACTIVE_ITEM_KEYS, ITEM_DEFINITIONS} from '../constants/itemCatalog';
+import {getItemIconSource} from '../assets/items/itemIcons';
 
 const CHARACTER_OPTIONS = CHARACTER_CLASSES.map(character => ({
   id: character.id,
@@ -46,6 +47,7 @@ const CHARACTER_OPTIONS = CHARACTER_CLASSES.map(character => ({
 const ITEM_SUMMARY = ACTIVE_ITEM_KEYS.map(itemKey => ({
   key: itemKey,
   emoji: ITEM_DEFINITIONS[itemKey].emoji,
+  iconSource: getItemIconSource(itemKey),
   label: ITEM_DEFINITIONS[itemKey].label,
 }));
 
@@ -655,7 +657,15 @@ export default function ProfileScreen({navigation}: any) {
         <View style={styles.metricGrid}>
           {ITEM_SUMMARY.map(item => (
             <View key={item.key} style={styles.metricCard}>
-              <Text style={styles.metricEmoji}>{item.emoji}</Text>
+              {item.iconSource ? (
+                <Image
+                  source={item.iconSource}
+                  resizeMode="contain"
+                  style={styles.metricItemIcon}
+                />
+              ) : (
+                <Text style={styles.metricEmoji}>{item.emoji}</Text>
+              )}
               <Text style={styles.metricValue}>{gameData.items[item.key]}</Text>
               <Text style={styles.metricLabel}>{item.label}</Text>
             </View>
@@ -919,6 +929,11 @@ const styles = StyleSheet.create({
   metricEmoji: {
     fontSize: 24,
     marginBottom: 8,
+  },
+  metricItemIcon: {
+    width: 32,
+    height: 32,
+    marginBottom: 4,
   },
   metricValue: {
     color: '#4d2f17',

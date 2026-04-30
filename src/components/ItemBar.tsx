@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   ACTIVE_ITEM_KEYS,
   getItemDefinition,
@@ -7,6 +7,7 @@ import {
   type ActiveItemKey,
   type StartingItemLoadoutSlot,
 } from '../constants/itemCatalog';
+import {getItemIconSource} from '../assets/items/itemIcons';
 
 interface ItemBarProps {
   items: { [key: string]: number };
@@ -37,6 +38,7 @@ export default function ItemBar({
       <View style={styles.container}>
         {resolvedSlots.map(slot => {
           const item = slot.itemKey ? getItemDefinition(slot.itemKey) : null;
+          const iconSource = item ? getItemIconSource(item.key) : null;
           const selected = selectedItem === slot.itemKey;
           const disabled = !slot.itemKey || slot.effectiveCount <= 0;
 
@@ -57,13 +59,26 @@ export default function ItemBar({
                 }
               }}
               activeOpacity={disabled ? 1 : 0.7}>
-              <Text
-                style={[
-                  styles.emoji,
-                  item ? { fontSize: Math.round(20 * item.sizeScale) } : null,
-                ]}>
-                {item?.emoji ?? '+'}
-              </Text>
+              {iconSource ? (
+                <Image
+                  source={iconSource}
+                  resizeMode="contain"
+                  style={[
+                    styles.itemIcon,
+                    {transform: [{scale: item?.sizeScale ?? 1}]},
+                  ]}
+                />
+              ) : (
+                <Text
+                  style={[
+                    styles.emoji,
+                    item
+                      ? {fontSize: Math.round(20 * item.sizeScale)}
+                      : null,
+                  ]}>
+                  {item?.emoji ?? '+'}
+                </Text>
+              )}
               <Text style={styles.slotLabel}>
                 {item?.shortLabel ?? `빈 슬롯 ${slot.slotIndex + 1}`}
               </Text>
@@ -92,6 +107,7 @@ export default function ItemBar({
       {visibleItems.map(item => {
         const count = items[item.key] || 0;
         const selected = selectedItem === item.key;
+        const iconSource = getItemIconSource(item.key);
         return (
           <TouchableOpacity
             key={item.key}
@@ -102,9 +118,24 @@ export default function ItemBar({
             ]}
             onPress={() => onSelectItem(item.key)}
             activeOpacity={0.7}>
-            <Text style={[styles.emoji, { fontSize: Math.round(20 * item.sizeScale) }]}>
-              {item.emoji}
-            </Text>
+            {iconSource ? (
+              <Image
+                source={iconSource}
+                resizeMode="contain"
+                style={[
+                  styles.itemIcon,
+                  {transform: [{scale: item.sizeScale}]},
+                ]}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.emoji,
+                  {fontSize: Math.round(20 * item.sizeScale)},
+                ]}>
+                {item.emoji}
+              </Text>
+            )}
             <Text style={styles.slotLabel}>{item.shortLabel}</Text>
             <Text style={[styles.count, { color: item.countColor }]}>{count}</Text>
           </TouchableOpacity>
@@ -154,6 +185,10 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 20,
+  },
+  itemIcon: {
+    width: 30,
+    height: 30,
   },
   slotLabel: {
     color: '#e2e8f0',

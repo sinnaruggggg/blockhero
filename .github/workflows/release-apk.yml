@@ -78,7 +78,7 @@ jobs:
 
       - name: 릴리즈 APK 빌드
         working-directory: android
-        run: ./gradlew assembleRelease --stacktrace --no-daemon
+        run: ./gradlew :app:assembleGameRelease --stacktrace --no-daemon
 
       - name: 실패 로그 수집
         if: failure()
@@ -99,7 +99,7 @@ jobs:
       - name: APK 이름 정리
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk "release/BlockHero-Codex-${{ steps.version.outputs.version_name }}.apk"
+          cp android/app/build/outputs/apk/game/release/app-game-release.apk "release/BlockHero-Codex-${{ steps.version.outputs.version_name }}.apk"
 
       - name: 빌드 결과 보관
         uses: actions/upload-artifact@v4

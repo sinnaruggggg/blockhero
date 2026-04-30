@@ -54,6 +54,7 @@ import ItemBar from '../components/ItemBar';
 import NextPiecePreview from '../components/NextPiecePreview';
 import CharacterSprite from '../components/CharacterSprite';
 import KnightSprite from '../components/KnightSprite';
+import MageSprite from '../components/MageSprite';
 import { useDragDrop } from '../game/useDragDrop';
 import { LEVELS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
 import {getWorldBackgroundSource} from '../assets/worldBackgrounds';
@@ -2493,6 +2494,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
     size: number,
     attackPulse: number = 0,
     facing: 1 | -1 = 1,
+    assetProfile: 'normal' | 'battleLite' = 'normal',
   ) => {
     const tuning =
       characterVisualTunings[
@@ -2513,7 +2515,21 @@ export default function SingleGameScreen({ route, navigation }: any) {
             size={Math.round(size * 0.84)}
             attackPulse={attackPulse}
             facing={facing}
+            assetProfile={assetProfile}
           />
+        </View>
+      );
+    }
+
+    if (characterId === 'mage' && assetProfile === 'battleLite') {
+      return (
+        <View style={battleTransform}>
+          <View style={{transform: [{scaleX: facing}]}}>
+            <MageSprite
+              size={Math.round(size * 0.9)}
+              assetProfile="battleLite"
+            />
+          </View>
         </View>
       );
     }
@@ -2543,6 +2559,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
           size={size}
           attackPulse={attackPulse}
           facing={facing}
+          assetProfile={assetProfile}
         />
       </View>
     );
@@ -2553,6 +2570,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
       size,
       playerAttackPulse,
       1,
+      'battleLite',
     );
   };
   const renderMonsterAvatar = (size: number, facingMultiplier: 1 | -1 = 1) => {

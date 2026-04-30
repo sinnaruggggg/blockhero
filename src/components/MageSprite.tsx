@@ -3,21 +3,46 @@ import {View, Image} from 'react-native';
 
 const IMG_MAGE_A = require('../assets/sprites/optimized/mage_idle_a.png'); // rows 0-4
 const IMG_MAGE_B = require('../assets/sprites/optimized/mage_idle_b.png'); // rows 5-9
+const IMG_MAGE_A_BATTLE_LITE = require('../assets/sprites/battle_lite/mage_idle_a.png');
+const IMG_MAGE_B_BATTLE_LITE = require('../assets/sprites/battle_lite/mage_idle_b.png');
 
 const FRAME_COLS = 10;
 const FRAME_ROWS_PER_SHEET = 5;
 const TOTAL_FRAMES = 100;
 const PING_PONG_LEN = TOTAL_FRAMES * 2 - 2;
-const FRAME_W = 360;
-const FRAME_H = 544;
-const SHEET_H = FRAME_H * FRAME_ROWS_PER_SHEET;
+type SpriteAssetProfile = 'normal' | 'battleLite';
 
-export default function MageSprite({size = 150}: {size?: number}) {
+const SPRITE_PROFILES: Record<
+  SpriteAssetProfile,
+  {idleA: any; idleB: any; frameW: number; frameH: number}
+> = {
+  normal: {
+    idleA: IMG_MAGE_A,
+    idleB: IMG_MAGE_B,
+    frameW: 360,
+    frameH: 544,
+  },
+  battleLite: {
+    idleA: IMG_MAGE_A_BATTLE_LITE,
+    idleB: IMG_MAGE_B_BATTLE_LITE,
+    frameW: 180,
+    frameH: 272,
+  },
+};
+
+export default function MageSprite({
+  size = 150,
+  assetProfile = 'normal',
+}: {
+  size?: number;
+  assetProfile?: SpriteAssetProfile;
+}) {
   const [counter, setCounter] = useState(0);
   const [sheetALoaded, setSheetALoaded] = useState(false);
   const [sheetBLoaded, setSheetBLoaded] = useState(false);
-  const scale = size / FRAME_W;
-  const displayH = Math.round(FRAME_H * scale);
+  const spriteProfile = SPRITE_PROFILES[assetProfile];
+  const scale = size / spriteProfile.frameW;
+  const displayH = Math.round(spriteProfile.frameH * scale);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -47,10 +72,10 @@ export default function MageSprite({size = 150}: {size?: number}) {
         opacity: (bothLoaded && frame < 50) ? 1 : 0,
       }}>
         <Image
-          source={IMG_MAGE_A}
+          source={spriteProfile.idleA}
           style={{
-            width: FRAME_W * FRAME_COLS * scale,
-            height: SHEET_H * scale,
+            width: spriteProfile.frameW * FRAME_COLS * scale,
+            height: spriteProfile.frameH * FRAME_ROWS_PER_SHEET * scale,
             transform: [{translateX: -colA * size}, {translateY: -rowA * displayH}],
           }}
           resizeMode="stretch"
@@ -63,10 +88,10 @@ export default function MageSprite({size = 150}: {size?: number}) {
         opacity: (bothLoaded && frame >= 50) ? 1 : 0,
       }}>
         <Image
-          source={IMG_MAGE_B}
+          source={spriteProfile.idleB}
           style={{
-            width: FRAME_W * FRAME_COLS * scale,
-            height: SHEET_H * scale,
+            width: spriteProfile.frameW * FRAME_COLS * scale,
+            height: spriteProfile.frameH * FRAME_ROWS_PER_SHEET * scale,
             transform: [{translateX: -colB * size}, {translateY: -rowB * displayH}],
           }}
           resizeMode="stretch"

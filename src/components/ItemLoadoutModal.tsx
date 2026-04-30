@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ import {
   type ActiveItemKey,
   type StartingItemLoadoutSlot,
 } from '../constants/itemCatalog';
+import {getItemIconSource} from '../assets/items/itemIcons';
 
 interface ItemLoadoutModalProps {
   visible: boolean;
@@ -85,6 +87,7 @@ export default function ItemLoadoutModal({
           <View style={styles.slotRow}>
             {draft.map((slot, index) => {
               const item = getItemDefinition(slot.itemKey);
+              const iconSource = item ? getItemIconSource(item.key) : null;
               const maxCount = getMaxSelectableCount(items, slot.itemKey);
               const effectiveCount = Math.min(slot.count, maxCount);
               return (
@@ -99,15 +102,26 @@ export default function ItemLoadoutModal({
                   ]}
                   onPress={() => setActiveSlotIndex(index)}
                   activeOpacity={0.8}>
-                  <Text
-                    style={[
-                      styles.slotEmoji,
-                      item
-                        ? { fontSize: Math.round(24 * item.sizeScale) }
-                        : null,
-                    ]}>
-                    {item?.emoji ?? '+'}
-                  </Text>
+                  {iconSource ? (
+                    <Image
+                      source={iconSource}
+                      resizeMode="contain"
+                      style={[
+                        styles.slotIcon,
+                        {transform: [{scale: item?.sizeScale ?? 1}]},
+                      ]}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.slotEmoji,
+                        item
+                          ? { fontSize: Math.round(24 * item.sizeScale) }
+                          : null,
+                      ]}>
+                      {item?.emoji ?? '+'}
+                    </Text>
+                  )}
                   <Text style={styles.slotLabel}>
                     {item?.shortLabel ?? `빈 슬롯 ${index + 1}`}
                   </Text>
@@ -205,6 +219,7 @@ export default function ItemLoadoutModal({
 
                 const owned = items[itemKey] ?? 0;
                 const disabled = owned <= 0;
+                const iconSource = getItemIconSource(item.key);
 
                 return (
                   <TouchableOpacity
@@ -234,13 +249,24 @@ export default function ItemLoadoutModal({
                         ),
                       )
                     }>
-                    <Text
-                      style={[
-                        styles.itemChoiceEmoji,
-                        { fontSize: Math.round(20 * item.sizeScale) },
-                      ]}>
-                      {item.emoji}
-                    </Text>
+                    {iconSource ? (
+                      <Image
+                        source={iconSource}
+                        resizeMode="contain"
+                        style={[
+                          styles.itemChoiceIcon,
+                          {transform: [{scale: item.sizeScale}]},
+                        ]}
+                      />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.itemChoiceEmoji,
+                          { fontSize: Math.round(20 * item.sizeScale) },
+                        ]}>
+                        {item.emoji}
+                      </Text>
+                    )}
                     <Text style={styles.itemChoiceLabel}>{item.shortLabel}</Text>
                     <Text style={styles.itemChoiceOwned}>보유 {owned}</Text>
                   </TouchableOpacity>
@@ -318,6 +344,10 @@ const styles = StyleSheet.create({
   },
   slotEmoji: {
     fontSize: 24,
+  },
+  slotIcon: {
+    width: 34,
+    height: 34,
   },
   slotLabel: {
     marginTop: 4,
@@ -408,6 +438,10 @@ const styles = StyleSheet.create({
   },
   itemChoiceEmoji: {
     fontSize: 20,
+  },
+  itemChoiceIcon: {
+    width: 32,
+    height: 32,
   },
   itemChoiceLabel: {
     marginTop: 4,

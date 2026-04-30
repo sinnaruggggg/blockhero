@@ -6,22 +6,48 @@ type CharacterSpriteSet = {
   attack: ImageSourcePropType;
 };
 
-const CHARACTER_SPRITES: Record<string, CharacterSpriteSet> = {
-  archer: {
-    idle: require('../assets/characters/archer_idle_sheet.png'),
-    attack: require('../assets/characters/archer_attack_sheet.png'),
+type CharacterAssetProfile = 'normal' | 'battleLite';
+
+const CHARACTER_SPRITE_PROFILES: Record<
+  CharacterAssetProfile,
+  {frameSize: number; sprites: Record<string, CharacterSpriteSet>}
+> = {
+  normal: {
+    frameSize: 512,
+    sprites: {
+      archer: {
+        idle: require('../assets/characters/archer_idle_sheet.png'),
+        attack: require('../assets/characters/archer_attack_sheet.png'),
+      },
+      rogue: {
+        idle: require('../assets/characters/rogue_idle_sheet.png'),
+        attack: require('../assets/characters/rogue_attack_sheet.png'),
+      },
+      healer: {
+        idle: require('../assets/characters/healer_idle_sheet.png'),
+        attack: require('../assets/characters/healer_attack_sheet.png'),
+      },
+    },
   },
-  rogue: {
-    idle: require('../assets/characters/rogue_idle_sheet.png'),
-    attack: require('../assets/characters/rogue_attack_sheet.png'),
-  },
-  healer: {
-    idle: require('../assets/characters/healer_idle_sheet.png'),
-    attack: require('../assets/characters/healer_attack_sheet.png'),
+  battleLite: {
+    frameSize: 256,
+    sprites: {
+      archer: {
+        idle: require('../assets/characters/battle_lite/archer_idle_sheet.png'),
+        attack: require('../assets/characters/battle_lite/archer_attack_sheet.png'),
+      },
+      rogue: {
+        idle: require('../assets/characters/battle_lite/rogue_idle_sheet.png'),
+        attack: require('../assets/characters/battle_lite/rogue_attack_sheet.png'),
+      },
+      healer: {
+        idle: require('../assets/characters/battle_lite/healer_idle_sheet.png'),
+        attack: require('../assets/characters/battle_lite/healer_attack_sheet.png'),
+      },
+    },
   },
 };
 
-const FRAME_SIZE = 512;
 const FRAME_COUNT = 10;
 const IDLE_PING_PONG_COUNT = FRAME_COUNT * 2 - 2;
 
@@ -30,6 +56,7 @@ type CharacterSpriteProps = {
   size?: number;
   attackPulse?: number;
   facing?: 1 | -1;
+  assetProfile?: CharacterAssetProfile;
 };
 
 export default function CharacterSprite({
@@ -37,11 +64,14 @@ export default function CharacterSprite({
   size = 120,
   attackPulse = 0,
   facing = 1,
+  assetProfile = 'normal',
 }: CharacterSpriteProps) {
   const [pose, setPose] = useState<'idle' | 'attack'>('idle');
   const [frame, setFrame] = useState(0);
   const previousAttackPulse = useRef(attackPulse);
-  const spriteSet = CHARACTER_SPRITES[characterId] ?? CHARACTER_SPRITES.archer;
+  const spriteProfile = CHARACTER_SPRITE_PROFILES[assetProfile];
+  const spriteSet =
+    spriteProfile.sprites[characterId] ?? spriteProfile.sprites.archer;
 
   useEffect(() => {
     if (attackPulse <= previousAttackPulse.current) {
@@ -72,7 +102,7 @@ export default function CharacterSprite({
     return () => clearInterval(interval);
   }, [pose]);
 
-  const scale = size / FRAME_SIZE;
+  const scale = size / spriteProfile.frameSize;
   const sheetFrame =
     pose === 'idle' && frame >= FRAME_COUNT
       ? IDLE_PING_PONG_COUNT - frame
@@ -91,8 +121,8 @@ export default function CharacterSprite({
         resizeMode="stretch"
         fadeDuration={0}
         style={{
-          width: FRAME_SIZE * FRAME_COUNT * scale,
-          height: FRAME_SIZE * scale,
+          width: spriteProfile.frameSize * FRAME_COUNT * scale,
+          height: spriteProfile.frameSize * scale,
           transform: [{translateX: -sheetFrame * size}],
         }}
       />

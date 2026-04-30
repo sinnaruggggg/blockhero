@@ -10,22 +10,54 @@ import {
 const IMG_KNIGHT_IDLE_A = require('../assets/sprites/optimized/knight_idle_a.png');
 const IMG_KNIGHT_IDLE_B = require('../assets/sprites/optimized/knight_idle_b.png');
 const IMG_KNIGHT_ATTACK = require('../assets/sprites/optimized/knight_attack.png');
+const IMG_KNIGHT_IDLE_A_BATTLE_LITE = require('../assets/sprites/battle_lite/knight_idle_a.png');
+const IMG_KNIGHT_IDLE_B_BATTLE_LITE = require('../assets/sprites/battle_lite/knight_idle_b.png');
+const IMG_KNIGHT_ATTACK_BATTLE_LITE = require('../assets/sprites/battle_lite/knight_attack.png');
 
 const IDLE_FRAME_COLS = 9;
 const IDLE_FRAME_ROWS = 5;
 const IDLE_TOTAL_FRAMES = 90;
 const IDLE_PING_PONG_LEN = IDLE_TOTAL_FRAMES * 2 - 2;
-const IDLE_FRAME_W = 350;
-const IDLE_FRAME_H = 478;
-const IDLE_SHEET_H = IDLE_FRAME_H * IDLE_FRAME_ROWS;
-const ATTACK_FRAME_W = 591;
-const ATTACK_FRAME_H = 360;
+type SpriteAssetProfile = 'normal' | 'battleLite';
+
+const SPRITE_PROFILES: Record<
+  SpriteAssetProfile,
+  {
+    idleA: any;
+    idleB: any;
+    attack: any;
+    idleFrameW: number;
+    idleFrameH: number;
+    attackFrameW: number;
+    attackFrameH: number;
+  }
+> = {
+  normal: {
+    idleA: IMG_KNIGHT_IDLE_A,
+    idleB: IMG_KNIGHT_IDLE_B,
+    attack: IMG_KNIGHT_ATTACK,
+    idleFrameW: 350,
+    idleFrameH: 478,
+    attackFrameW: 591,
+    attackFrameH: 360,
+  },
+  battleLite: {
+    idleA: IMG_KNIGHT_IDLE_A_BATTLE_LITE,
+    idleB: IMG_KNIGHT_IDLE_B_BATTLE_LITE,
+    attack: IMG_KNIGHT_ATTACK_BATTLE_LITE,
+    idleFrameW: 175,
+    idleFrameH: 239,
+    attackFrameW: 296,
+    attackFrameH: 180,
+  },
+};
 
 type KnightSpriteProps = {
   size?: number;
   attackPulse?: number;
   facing?: 1 | -1;
   tuningOverride?: KnightVisualTuning;
+  assetProfile?: SpriteAssetProfile;
 };
 
 export default function KnightSprite({
@@ -33,6 +65,7 @@ export default function KnightSprite({
   attackPulse = 0,
   facing = 1,
   tuningOverride,
+  assetProfile = 'normal',
 }: KnightSpriteProps) {
   const [phase, setPhase] = useState<'idle' | 'attack'>('idle');
   const [counter, setCounter] = useState(0);
@@ -43,9 +76,10 @@ export default function KnightSprite({
     getCachedCharacterVisualTunings().knight,
   );
   const previousAttackPulse = useRef(attackPulse);
+  const spriteProfile = SPRITE_PROFILES[assetProfile];
   const tuning = tuningOverride ?? savedTuning;
-  const scale = size / IDLE_FRAME_W;
-  const displayH = Math.round(IDLE_FRAME_H * scale);
+  const scale = size / spriteProfile.idleFrameW;
+  const displayH = Math.round(spriteProfile.idleFrameH * scale);
 
   useEffect(() => {
     if (tuningOverride) {
@@ -112,8 +146,8 @@ export default function KnightSprite({
   const idleRow = Math.floor(idleSheetFrame / IDLE_FRAME_COLS);
   const attackCol = counter % tuning.attackFrameCols;
   const attackRow = Math.floor(counter / tuning.attackFrameCols);
-  const attackFrameW = ATTACK_FRAME_W;
-  const attackFrameH = ATTACK_FRAME_H;
+  const attackFrameW = spriteProfile.attackFrameW;
+  const attackFrameH = spriteProfile.attackFrameH;
   const attackBaseScale = displayH / attackFrameH;
   const attackScale = attackBaseScale * tuning.attackScaleMultiplier;
   const attackDisplayW = Math.round(attackFrameW * attackScale);
@@ -139,10 +173,10 @@ export default function KnightSprite({
           opacity: bothLoaded && phase === 'idle' && idleFrame < 45 ? 1 : 0,
         }}>
         <Image
-          source={IMG_KNIGHT_IDLE_A}
+          source={spriteProfile.idleA}
           style={{
-            width: IDLE_FRAME_W * IDLE_FRAME_COLS * scale,
-            height: IDLE_SHEET_H * scale,
+            width: spriteProfile.idleFrameW * IDLE_FRAME_COLS * scale,
+            height: spriteProfile.idleFrameH * IDLE_FRAME_ROWS * scale,
             transform: [
               {translateX: -idleCol * size},
               {translateY: -idleRow * displayH},
@@ -162,10 +196,10 @@ export default function KnightSprite({
           opacity: bothLoaded && phase === 'idle' && idleFrame >= 45 ? 1 : 0,
         }}>
         <Image
-          source={IMG_KNIGHT_IDLE_B}
+          source={spriteProfile.idleB}
           style={{
-            width: IDLE_FRAME_W * IDLE_FRAME_COLS * scale,
-            height: IDLE_SHEET_H * scale,
+            width: spriteProfile.idleFrameW * IDLE_FRAME_COLS * scale,
+            height: spriteProfile.idleFrameH * IDLE_FRAME_ROWS * scale,
             transform: [
               {translateX: -idleCol * size},
               {translateY: -idleRow * displayH},
@@ -187,7 +221,7 @@ export default function KnightSprite({
           opacity: attackSheetLoaded && phase === 'attack' ? 1 : 0,
         }}>
         <Image
-          source={IMG_KNIGHT_ATTACK}
+          source={spriteProfile.attack}
           style={{
             width: attackFrameW * tuning.attackFrameCols * attackScale,
             height: attackSheetH * attackScale,
