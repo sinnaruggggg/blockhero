@@ -177,8 +177,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rewardIcon: {
-    width: 28,
-    height: 28,
+    width: 56,
+    height: 56,
   },
   rewardValue: {
     color: '#e2e8f0',

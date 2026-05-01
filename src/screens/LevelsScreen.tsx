@@ -12,20 +12,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
 import ItemLoadoutModal from '../components/ItemLoadoutModal';
-import { getWorldMonsterSprite } from '../assets/monsterSprites';
+import { getRaidBossSprite } from '../assets/monsterSprites';
 import {
   INFINITE_HEARTS_VALUE,
   LEVELS,
   WORLDS,
   formatHeartValue,
 } from '../constants';
+import {RAID_BOSSES} from '../constants/raidBosses';
 import { useCreatorConfig } from '../hooks/useCreatorConfig';
 import { getCharacterSkillEffects } from '../game/characterSkillEffects';
 import { getLevelModeBreakthroughBonusRate } from '../game/levelModeBreakthrough';
-import {
-  getCreatorLevelConfig,
-  getCreatorRaidConfig,
-} from '../game/creatorManifest';
+import {resolveCreatorRaidRuntime} from '../game/creatorManifest';
 import {
   getNextUnlockedLevel,
   getWorldProgressSummary,
@@ -44,9 +42,17 @@ import {
   saveStartingItemLoadout,
   useHeart as consumeHeart,
 } from '../stores/gameStore';
+import {t} from '../i18n';
 
 const { width: screenWidth } = Dimensions.get('window');
 const cellSize = (screenWidth - 32 - 5 * 8) / 6;
+
+function resolveI18nName(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  return value.startsWith('raid.') ? t(value) : value;
+}
 
 export default function LevelsScreen({ navigation }: any) {
   const { manifest: creatorManifest } = useCreatorConfig();
@@ -252,11 +258,29 @@ export default function LevelsScreen({ navigation }: any) {
           const isExpanded = expandedWorld === world.id;
           const worldFirstLevel = (world.id - 1) * 30 + 1;
           const isWorldUnlocked = unlockedLevel >= worldFirstLevel;
-          const creatorBossRaid = getCreatorRaidConfig(
+          const creatorNormalRaidRuntime = resolveCreatorRaidRuntime(
             creatorManifest,
-            'boss',
+            'normal',
             world.id,
           );
+          const staticNormalRaidBoss =
+            RAID_BOSSES.find(entry => entry.stage === world.id) ?? null;
+          const worldBossDisplay = {
+            name:
+              resolveI18nName(
+                creatorNormalRaidRuntime?.monsterName ??
+                  creatorNormalRaidRuntime?.name ??
+                  staticNormalRaidBoss?.nameKey,
+              ) ?? world.bossName,
+            emoji:
+              creatorNormalRaidRuntime?.monsterEmoji ??
+              staticNormalRaidBoss?.emoji ??
+              world.bossEmoji,
+            color:
+              creatorNormalRaidRuntime?.monsterColor ??
+              staticNormalRaidBoss?.color ??
+              world.bossColor,
+          };
 
           return (
             <View key={world.id} style={styles.worldSection}>
@@ -328,14 +352,9 @@ export default function LevelsScreen({ navigation }: any) {
                       const isCurrent = level.id === unlockedLevel;
                       const stageInWorld = ((level.id - 1) % 30) + 1;
                       const isBoss = stageInWorld === 30;
-                      const creatorLevel = getCreatorLevelConfig(
-                        creatorManifest,
-                        level.id,
-                      );
-                      const bossEmoji =
-                        creatorLevel?.enemyOverrides.monsterEmoji ??
-                        creatorLevel?.enemyOverrides.displayName ??
-                        level.goal.monsterEmoji;
+                      const bossSprite = isBoss
+                        ? getRaidBossSprite(level.world, worldBossDisplay.name)
+                        : null;
 
                       return (
                         <TouchableOpacity
@@ -353,26 +372,16 @@ export default function LevelsScreen({ navigation }: any) {
                         >
                           {isBoss ? (
                             <>
-                              {getWorldMonsterSprite(
-                                level.world,
-                                level.goal.monsterName,
-                              ) ? (
+                              {bossSprite ? (
                                 <Image
-                                  source={
-                                    getWorldMonsterSprite(
-                                      level.world,
-                                      level.goal.monsterName,
-                                    )!
-                                  }
+                                  source={bossSprite}
                                   resizeMode="contain"
                                   fadeDuration={0}
                                   style={styles.bossSprite}
                                 />
                               ) : (
                                 <Text style={styles.bossEmoji}>
-                                  {typeof bossEmoji === 'string'
-                                    ? bossEmoji
-                                    : level.goal.monsterEmoji}
+                                  {worldBossDisplay.emoji}
                                 </Text>
                               )}
                               <Text style={styles.bossLabel}>보스</Text>
@@ -408,8 +417,8 @@ export default function LevelsScreen({ navigation }: any) {
                   style={[styles.bossRaidUnlock, { borderColor: world.color }]}
                 >
                   <Text style={styles.bossRaidText}>
-                    {world.bossEmoji} 보스 레이드 해금:{' '}
-                    {creatorBossRaid?.name ?? world.bossName}
+                    {worldBossDisplay.emoji} 보스 레이드 해금:{' '}
+                    {worldBossDisplay.name}
                   </Text>
                 </View>
               )}

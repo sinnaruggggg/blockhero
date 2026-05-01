@@ -4323,6 +4323,10 @@ export default function RaidScreen({ route, navigation }: any) {
               size={compact ? 52 : 58}
               attackPulse={playerAttackPulse}
               facing={1}
+              assetProfile="battleLite"
+              attackScaleMultiplier={tuning.attackScaleMultiplier}
+              attackOffsetX={tuning.attackOffsetX}
+              attackOffsetY={tuning.attackOffsetY}
             />
           </View>
         );

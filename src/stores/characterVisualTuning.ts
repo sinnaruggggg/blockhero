@@ -9,6 +9,9 @@ export type BaseCharacterVisualTuning = {
   battleScaleMultiplier: number;
   battleOffsetX: number;
   battleOffsetY: number;
+  attackScaleMultiplier: number;
+  attackOffsetX: number;
+  attackOffsetY: number;
 };
 
 export type KnightAttackTuning = {
@@ -35,6 +38,8 @@ export type CharacterVisualTuningMap = {
   healer: BaseCharacterVisualTuning;
 };
 
+type MigratedCharacterId = 'archer' | 'rogue' | 'healer';
+
 const STORAGE_KEY = 'character_visual_tuning_v1';
 
 const BASE_DEFAULTS: BaseCharacterVisualTuning = {
@@ -44,11 +49,44 @@ const BASE_DEFAULTS: BaseCharacterVisualTuning = {
   battleScaleMultiplier: 1,
   battleOffsetX: 0,
   battleOffsetY: 0,
+  attackScaleMultiplier: 1,
+  attackOffsetX: 0,
+  attackOffsetY: 0,
+};
+
+const LEGACY_BASE_DEFAULTS: BaseCharacterVisualTuning = {
+  ...BASE_DEFAULTS,
+};
+
+const PREVIOUS_HEALER_BASE_DEFAULTS: BaseCharacterVisualTuning = {
+  ...BASE_DEFAULTS,
+  showcaseScaleMultiplier: 1.32,
+  battleScaleMultiplier: 1.32,
+};
+
+const CHARACTER_BASE_DEFAULTS: Record<CharacterId, BaseCharacterVisualTuning> = {
+  knight: {...BASE_DEFAULTS},
+  mage: {...BASE_DEFAULTS},
+  archer: {
+    ...BASE_DEFAULTS,
+    showcaseScaleMultiplier: 1.32,
+    battleScaleMultiplier: 1.32,
+  },
+  rogue: {
+    ...BASE_DEFAULTS,
+    showcaseScaleMultiplier: 1.24,
+    battleScaleMultiplier: 1.24,
+  },
+  healer: {
+    ...BASE_DEFAULTS,
+    showcaseScaleMultiplier: 1.16,
+    battleScaleMultiplier: 1.16,
+  },
 };
 
 export const DEFAULT_CHARACTER_VISUAL_TUNINGS: CharacterVisualTuningMap = {
   knight: {
-    ...BASE_DEFAULTS,
+    ...CHARACTER_BASE_DEFAULTS.knight,
     attackScaleMultiplier: 1,
     attackOffsetX: 0,
     attackOffsetY: 0,
@@ -59,10 +97,10 @@ export const DEFAULT_CHARACTER_VISUAL_TUNINGS: CharacterVisualTuningMap = {
     attackFrameHeight: 720,
     attackFrameMs: 52,
   },
-  mage: {...BASE_DEFAULTS},
-  archer: {...BASE_DEFAULTS},
-  rogue: {...BASE_DEFAULTS},
-  healer: {...BASE_DEFAULTS},
+  mage: {...CHARACTER_BASE_DEFAULTS.mage},
+  archer: {...CHARACTER_BASE_DEFAULTS.archer},
+  rogue: {...CHARACTER_BASE_DEFAULTS.rogue},
+  healer: {...CHARACTER_BASE_DEFAULTS.healer},
 };
 
 let cachedTunings: CharacterVisualTuningMap = DEFAULT_CHARACTER_VISUAL_TUNINGS;
@@ -112,7 +150,74 @@ function sanitizeBaseTuning(
     ),
     battleOffsetX: Math.round(clamp(roundMaybe(merged.battleOffsetX), -240, 240)),
     battleOffsetY: Math.round(clamp(roundMaybe(merged.battleOffsetY), -240, 240)),
+    attackScaleMultiplier: clamp(
+      Number.isFinite(merged.attackScaleMultiplier)
+        ? merged.attackScaleMultiplier
+        : BASE_DEFAULTS.attackScaleMultiplier,
+      0.4,
+      3,
+    ),
+    attackOffsetX: Math.round(
+      clamp(roundMaybe(merged.attackOffsetX), -240, 240),
+    ),
+    attackOffsetY: Math.round(
+      clamp(roundMaybe(merged.attackOffsetY), -240, 240),
+    ),
   };
+}
+
+function matchesBaseDefaults(
+  tuning: BaseCharacterVisualTuning,
+  defaults: BaseCharacterVisualTuning,
+) {
+  return (
+    tuning.showcaseScaleMultiplier === defaults.showcaseScaleMultiplier &&
+    tuning.showcaseOffsetX === defaults.showcaseOffsetX &&
+    tuning.showcaseOffsetY === defaults.showcaseOffsetY &&
+    tuning.battleScaleMultiplier === defaults.battleScaleMultiplier &&
+    tuning.battleOffsetX === defaults.battleOffsetX &&
+    tuning.battleOffsetY === defaults.battleOffsetY &&
+    tuning.attackScaleMultiplier === defaults.attackScaleMultiplier &&
+    tuning.attackOffsetX === defaults.attackOffsetX &&
+    tuning.attackOffsetY === defaults.attackOffsetY
+  );
+}
+
+function hasLegacyBaseDefaults(tuning: BaseCharacterVisualTuning) {
+  return matchesBaseDefaults(tuning, LEGACY_BASE_DEFAULTS);
+}
+
+export function migrateCharacterVisualTuningDefaults(
+  tunings: CharacterVisualTuningMap,
+): CharacterVisualTuningMap {
+  let changed = false;
+  const nextTunings: CharacterVisualTuningMap = {
+    ...tunings,
+  };
+
+  (['archer', 'rogue', 'healer'] as MigratedCharacterId[]).forEach(
+    characterId => {
+    const currentTuning = nextTunings[characterId];
+    const normalizedDefault = DEFAULT_CHARACTER_VISUAL_TUNINGS[characterId];
+    if (
+      characterId === 'healer' &&
+      matchesBaseDefaults(currentTuning, PREVIOUS_HEALER_BASE_DEFAULTS)
+    ) {
+      nextTunings[characterId] = normalizedDefault;
+      changed = true;
+      return;
+    }
+    if (
+      hasLegacyBaseDefaults(currentTuning) &&
+      !hasLegacyBaseDefaults(normalizedDefault)
+    ) {
+      nextTunings[characterId] = normalizedDefault;
+      changed = true;
+    }
+    },
+  );
+
+  return changed ? nextTunings : tunings;
 }
 
 export function sanitizeCharacterVisualTuning(
@@ -229,7 +334,14 @@ export async function loadCharacterVisualTunings() {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw) {
-      publish(sanitizeCharacterVisualTuningMap(JSON.parse(raw)));
+      const sanitizedTunings = sanitizeCharacterVisualTuningMap(JSON.parse(raw));
+      const migratedTunings = migrateCharacterVisualTuningDefaults(
+        sanitizedTunings,
+      );
+      if (migratedTunings !== sanitizedTunings) {
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(migratedTunings));
+      }
+      publish(migratedTunings);
       return cachedTunings;
     }
   } catch {}

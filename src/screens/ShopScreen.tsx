@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   itemEmoji: { fontSize: 22, width: 28, textAlign: 'center' },
-  itemIcon: { width: 30, height: 30 },
+  itemIcon: { width: 60, height: 60 },
   itemInfo: { flex: 1 },
   itemName: { color: '#e2e8f0', fontSize: 14, fontWeight: '700' },
   itemDesc: { color: '#94a3b8', fontSize: 11, marginTop: 2 },

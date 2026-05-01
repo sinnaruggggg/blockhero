@@ -346,8 +346,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   slotIcon: {
-    width: 34,
-    height: 34,
+    width: 68,
+    height: 68,
   },
   slotLabel: {
     marginTop: 4,
@@ -440,8 +440,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   itemChoiceIcon: {
-    width: 32,
-    height: 32,
+    width: 64,
+    height: 64,
   },
   itemChoiceLabel: {
     marginTop: 4,

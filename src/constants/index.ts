@@ -156,14 +156,14 @@ export interface LevelDef {
 // ─── World definitions ────────────────────────────────────────
 export const WORLDS = [
   {id: 1,  name: '초원',      color: '#22c55e', emoji: '🌿', bossName: '킹슬라임',     bossEmoji: '👑', bossColor: '#4ade80'},
-  {id: 2,  name: '사막',      color: '#f59e0b', emoji: '🏜️', bossName: '전갈왕',       bossEmoji: '🦂', bossColor: '#fbbf24'},
-  {id: 3,  name: '설원',      color: '#93c5fd', emoji: '❄️', bossName: '설빙 여왕',    bossEmoji: '👸', bossColor: '#bfdbfe'},
-  {id: 4,  name: '해저 동굴', color: '#06b6d4', emoji: '🌊', bossName: '크라켄',       bossEmoji: '🦑', bossColor: '#22d3ee'},
-  {id: 5,  name: '독림',      color: '#84cc16', emoji: '🌿', bossName: '히드라',       bossEmoji: '🐍', bossColor: '#a3e635'},
-  {id: 6,  name: '고대 유적', color: '#d97706', emoji: '🏛️', bossName: '메두사',       bossEmoji: '🐉', bossColor: '#f59e0b'},
-  {id: 7,  name: '암흑 성',   color: '#7c3aed', emoji: '🏰', bossName: '리치 킹',      bossEmoji: '💀', bossColor: '#a78bfa'},
-  {id: 8,  name: '천공 섬',   color: '#38bdf8', emoji: '☁️', bossName: '천둥 용',      bossEmoji: '⚡', bossColor: '#7dd3fc'},
-  {id: 9,  name: '심연',      color: '#1e3a5f', emoji: '🌑', bossName: '심연의 군주',  bossEmoji: '👿', bossColor: '#334155'},
+  {id: 2,  name: '사막',      color: '#f59e0b', emoji: '🏜️', bossName: '샌드 스콜피온', bossEmoji: '🦂', bossColor: '#f59e0b'},
+  {id: 3,  name: '설원',      color: '#93c5fd', emoji: '❄️', bossName: '프로스트 위치', bossEmoji: '❄️', bossColor: '#93c5fd'},
+  {id: 4,  name: '해저 동굴', color: '#06b6d4', emoji: '🌊', bossName: '크라켄',       bossEmoji: '🦑', bossColor: '#06b6d4'},
+  {id: 5,  name: '독림',      color: '#84cc16', emoji: '🌿', bossName: '데저트 팬텀',  bossEmoji: '👻', bossColor: '#84cc16'},
+  {id: 6,  name: '고대 유적', color: '#d97706', emoji: '🏛️', bossName: '메두사',       bossEmoji: '🐉', bossColor: '#d97706'},
+  {id: 7,  name: '암흑 성',   color: '#7c3aed', emoji: '🏰', bossName: '리치 킹',      bossEmoji: '💀', bossColor: '#7c3aed'},
+  {id: 8,  name: '천공 섬',   color: '#38bdf8', emoji: '☁️', bossName: '천둥 록',      bossEmoji: '⚡', bossColor: '#38bdf8'},
+  {id: 9,  name: '심연',      color: '#1e3a5f', emoji: '🌑', bossName: '사막의 군주',  bossEmoji: '👑', bossColor: '#334155'},
   {id: 10, name: '화산지대',  color: '#dc2626', emoji: '🌋', bossName: '레드 드래곤',  bossEmoji: '🐲', bossColor: '#ef4444'},
 ];
 
@@ -214,7 +214,7 @@ const WORLD_MONSTERS: WorldMonsters[] = [
     boss: [
       {name: '사막 골렘',   emoji: '🪨', color: '#d97706'},
       {name: '스핑크스',    emoji: '🦁', color: '#f59e0b'},
-      {name: '전갈왕',      emoji: '🦂', color: '#ef4444'},
+      {name: '샌드 스콜피온', emoji: '🦂', color: '#f59e0b'},
     ],
   },
   // World 3 — 설원
@@ -232,7 +232,7 @@ const WORLD_MONSTERS: WorldMonsters[] = [
     boss: [
       {name: '빙하 드래곤', emoji: '🐉', color: '#60a5fa'},
       {name: '눈보라 정령', emoji: '❄️', color: '#93c5fd'},
-      {name: '설빙 여왕',   emoji: '👸', color: '#38bdf8'},
+      {name: '프로스트 위치', emoji: '❄️', color: '#93c5fd'},
     ],
   },
   // World 4 — 해저 동굴
@@ -268,7 +268,7 @@ const WORLD_MONSTERS: WorldMonsters[] = [
     boss: [
       {name: '독 골렘',    emoji: '🟣', color: '#8b5cf6'},
       {name: '킹 독거미',  emoji: '🕷️', color: '#7c3aed'},
-      {name: '히드라',     emoji: '🐍', color: '#6d28d9'},
+      {name: '데저트 팬텀', emoji: '👻', color: '#84cc16'},
     ],
   },
   // World 6 — 고대 유적
@@ -322,7 +322,7 @@ const WORLD_MONSTERS: WorldMonsters[] = [
     boss: [
       {name: '스톰 피닉스', emoji: '🔥', color: '#f97316'},
       {name: '천공 가디언', emoji: '☁️', color: '#7dd3fc'},
-      {name: '천둥 용',     emoji: '⚡', color: '#facc15'},
+      {name: '천둥 록',     emoji: '⚡', color: '#38bdf8'},
     ],
   },
   // World 9 — 심연
@@ -340,7 +340,7 @@ const WORLD_MONSTERS: WorldMonsters[] = [
     boss: [
       {name: '심연 왕',    emoji: '👑', color: '#1e293b'},
       {name: '공허의 신',  emoji: '🌑', color: '#0f172a'},
-      {name: '심연의 군주', emoji: '👿', color: '#020617'},
+      {name: '사막의 군주', emoji: '👑', color: '#334155'},
     ],
   },
   // World 10 — 화산지대

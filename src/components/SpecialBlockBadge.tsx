@@ -88,8 +88,8 @@ export default function SpecialBlockBadge({
             source={meta.imageSource}
             resizeMode="contain"
             style={{
-              width: Math.round(badgeSize * 0.86),
-              height: Math.round(badgeSize * 0.86),
+              width: Math.round(badgeSize * 1.72),
+              height: Math.round(badgeSize * 1.72),
             }}
           />
         ) : (

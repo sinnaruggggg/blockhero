@@ -187,8 +187,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   itemIcon: {
-    width: 30,
-    height: 30,
+    width: 60,
+    height: 60,
   },
   slotLabel: {
     color: '#e2e8f0',

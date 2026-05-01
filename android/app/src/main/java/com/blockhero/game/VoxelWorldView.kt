@@ -50,6 +50,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
   private val faces = ArrayList<ProjectedFace>(2500)
   private val projected = FloatArray(12)
   private val skyProjected = FloatArray(3)
+  private val sceneryProjected = FloatArray(18)
   private val blocks = ByteArray(WORLD_WIDTH * WORLD_HEIGHT * WORLD_DEPTH)
 
   private var cameraX = 16.5f
@@ -234,6 +235,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     super.onDraw(canvas)
     drawSky(canvas)
     drawWorld(canvas)
+    drawAtmosphericPerspective(canvas)
     drawCrosshair(canvas)
     drawHud(canvas)
     drawNativeMovePad(canvas)
@@ -370,8 +372,8 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       when (direction) {
         MOVE_UP -> nextMoveZ += 1f
         MOVE_DOWN -> nextMoveZ -= 1f
-        MOVE_LEFT -> nextMoveX -= 1f
-        MOVE_RIGHT -> nextMoveX += 1f
+        MOVE_LEFT -> nextMoveX += 1f
+        MOVE_RIGHT -> nextMoveX -= 1f
       }
     }
 
@@ -690,6 +692,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     drawCloudDirection(canvas, -0.78f, 0.36f, -0.50f, 1.1f)
     drawCloudDirection(canvas, 0.18f, 0.50f, -0.84f, 0.86f)
     drawCloudDirection(canvas, 0.72f, 0.42f, 0.32f, 0.95f)
+    drawDistantScenery(canvas)
   }
 
   private fun drawSunDirection(
@@ -753,6 +756,186 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     canvas.drawCircle(cx + 51f * density * scale, cy + 4f * density * scale, 13f * density * scale, paint)
   }
 
+  private fun drawDistantScenery(canvas: Canvas) {
+    paint.isAntiAlias = true
+    drawDistantMountains(canvas)
+    drawDistantVillage(canvas)
+  }
+
+  private fun drawDistantMountains(canvas: Canvas) {
+    drawDistantMountain(canvas, -12f, -50f, 1f, 0f, 5.4f, 34f, 17f)
+    drawDistantMountain(canvas, 16f, -54f, 1f, 0f, 5.1f, 42f, 22f)
+    drawDistantMountain(canvas, 48f, -52f, 1f, 0f, 5.6f, 38f, 19f)
+    drawDistantMountain(canvas, 82f, -48f, 1f, 0f, 5.2f, 36f, 18f)
+
+    drawDistantMountain(canvas, 121f, -8f, 0f, 1f, 5.1f, 36f, 18f)
+    drawDistantMountain(canvas, 124f, 35f, 0f, 1f, 5.5f, 44f, 21f)
+    drawDistantMountain(canvas, 118f, 80f, 0f, 1f, 5.3f, 38f, 18f)
+
+    drawDistantMountain(canvas, 84f, 121f, 1f, 0f, 5.2f, 40f, 19f)
+    drawDistantMountain(canvas, 39f, 126f, 1f, 0f, 5.4f, 46f, 22f)
+    drawDistantMountain(canvas, -7f, 119f, 1f, 0f, 5.1f, 38f, 17f)
+
+    drawDistantMountain(canvas, -49f, 82f, 0f, 1f, 5.5f, 36f, 18f)
+    drawDistantMountain(canvas, -53f, 35f, 0f, 1f, 5.2f, 42f, 20f)
+    drawDistantMountain(canvas, -47f, -8f, 0f, 1f, 5.3f, 34f, 17f)
+  }
+
+  private fun drawDistantMountain(
+    canvas: Canvas,
+    peakX: Float,
+    peakZ: Float,
+    axisX: Float,
+    axisZ: Float,
+    baseY: Float,
+    mountainWidth: Float,
+    mountainHeight: Float,
+  ) {
+    val half = mountainWidth * 0.5f
+    val normalX = -axisZ
+    val normalZ = axisX
+    val ridgeOffset = mountainWidth * 0.08f
+    val leftX = peakX - axisX * half - normalX * ridgeOffset
+    val leftZ = peakZ - axisZ * half - normalZ * ridgeOffset
+    val centerX = peakX + normalX * ridgeOffset
+    val centerZ = peakZ + normalZ * ridgeOffset
+    val rightX = peakX + axisX * half - normalX * ridgeOffset
+    val rightZ = peakZ + axisZ * half - normalZ * ridgeOffset
+    val capHalf = mountainWidth * 0.09f
+    val capY = baseY + mountainHeight * 0.72f
+
+    if (
+      !projectBackdrop(leftX, baseY, leftZ, sceneryProjected, 0) ||
+        !projectBackdrop(centerX, baseY - 0.5f, centerZ, sceneryProjected, 3) ||
+        !projectBackdrop(rightX, baseY, rightZ, sceneryProjected, 6) ||
+        !projectBackdrop(peakX, baseY + mountainHeight, peakZ, sceneryProjected, 9) ||
+        !projectBackdrop(peakX - axisX * capHalf, capY, peakZ - axisZ * capHalf, sceneryProjected, 12) ||
+        !projectBackdrop(peakX + axisX * capHalf, capY, peakZ + axisZ * capHalf, sceneryProjected, 15)
+    ) {
+      return
+    }
+
+    val minX = minOf(sceneryProjected[0], sceneryProjected[3], sceneryProjected[6], sceneryProjected[9])
+    val maxX = maxOf(sceneryProjected[0], sceneryProjected[3], sceneryProjected[6], sceneryProjected[9])
+    val minY = minOf(sceneryProjected[1], sceneryProjected[4], sceneryProjected[7], sceneryProjected[10])
+    val maxY = maxOf(sceneryProjected[1], sceneryProjected[4], sceneryProjected[7], sceneryProjected[10])
+    if (maxX < -width * 0.25f || minX > width * 1.25f || maxY < -height * 0.25f || minY > height * 1.15f) {
+      return
+    }
+
+    val depth =
+      (sceneryProjected[2] + sceneryProjected[5] + sceneryProjected[8] + sceneryProjected[11]) * 0.25f
+    val visibility = distanceVisibility(depth, MOUNTAIN_FOG_NEAR, MOUNTAIN_FOG_FAR, 0.08f)
+    val alpha = (76 + visibility * 150f).toInt().coerceIn(60, 220)
+    val leftColor = withAlpha(fogToSky(Color.rgb(72, 111, 107), visibility), alpha)
+    val rightColor = withAlpha(fogToSky(Color.rgb(52, 86, 98), visibility * 0.9f), alpha)
+    val snowColor = withAlpha(fogToSky(Color.rgb(238, 244, 246), visibility), (alpha * 0.78f).toInt())
+
+    path.reset()
+    path.moveTo(sceneryProjected[0], sceneryProjected[1])
+    path.lineTo(sceneryProjected[9], sceneryProjected[10])
+    path.lineTo(sceneryProjected[3], sceneryProjected[4])
+    path.close()
+    paint.style = Paint.Style.FILL
+    paint.color = leftColor
+    canvas.drawPath(path, paint)
+
+    path.reset()
+    path.moveTo(sceneryProjected[3], sceneryProjected[4])
+    path.lineTo(sceneryProjected[9], sceneryProjected[10])
+    path.lineTo(sceneryProjected[6], sceneryProjected[7])
+    path.close()
+    paint.color = rightColor
+    canvas.drawPath(path, paint)
+
+    path.reset()
+    path.moveTo(sceneryProjected[12], sceneryProjected[13])
+    path.lineTo(sceneryProjected[9], sceneryProjected[10])
+    path.lineTo(sceneryProjected[15], sceneryProjected[16])
+    path.close()
+    paint.color = snowColor
+    canvas.drawPath(path, paint)
+
+    if (visibility > 0.2f) {
+      paint.style = Paint.Style.STROKE
+      paint.strokeWidth = 1f * density
+      paint.color = withAlpha(fogToSky(Color.rgb(223, 237, 240), visibility), (alpha * 0.48f).toInt())
+      canvas.drawLine(sceneryProjected[9], sceneryProjected[10], sceneryProjected[3], sceneryProjected[4], paint)
+    }
+  }
+
+  private fun drawDistantVillage(canvas: Canvas) {
+    drawDistantHouse(canvas, 11f, -7f, 1f, 0f, 5.9f, 2.6f, Color.rgb(207, 151, 91), Color.rgb(139, 78, 54))
+    drawDistantHouse(canvas, 22f, -10f, 1f, 0f, 5.7f, 3.2f, Color.rgb(221, 169, 104), Color.rgb(151, 86, 57))
+    drawDistantHouse(canvas, 35f, -8f, 1f, 0f, 5.9f, 2.8f, Color.rgb(198, 143, 86), Color.rgb(130, 74, 53))
+    drawDistantHouse(canvas, 49f, -11f, 1f, 0f, 5.8f, 3.1f, Color.rgb(225, 174, 111), Color.rgb(143, 83, 54))
+    drawDistantHouse(canvas, 63f, -7f, 1f, 0f, 5.9f, 2.7f, Color.rgb(204, 148, 88), Color.rgb(130, 78, 56))
+
+    drawDistantHouse(canvas, 78f, 11f, 0f, 1f, 5.9f, 2.6f, Color.rgb(213, 160, 99), Color.rgb(140, 78, 54))
+    drawDistantHouse(canvas, -7f, 54f, 0f, 1f, 5.8f, 2.8f, Color.rgb(208, 154, 93), Color.rgb(132, 76, 55))
+    drawDistantHouse(canvas, 34f, 78f, 1f, 0f, 5.9f, 2.7f, Color.rgb(218, 165, 101), Color.rgb(144, 82, 55))
+  }
+
+  private fun drawDistantHouse(
+    canvas: Canvas,
+    centerX: Float,
+    centerZ: Float,
+    axisX: Float,
+    axisZ: Float,
+    baseY: Float,
+    houseSize: Float,
+    bodyColor: Int,
+    roofColor: Int,
+  ) {
+    val half = houseSize * 0.72f
+    val bodyTop = baseY + houseSize * 1.05f
+    val roofTop = baseY + houseSize * 1.68f
+
+    if (
+      !projectBackdrop(centerX - axisX * half, baseY, centerZ - axisZ * half, sceneryProjected, 0) ||
+        !projectBackdrop(centerX + axisX * half, baseY, centerZ + axisZ * half, sceneryProjected, 3) ||
+        !projectBackdrop(centerX + axisX * half, bodyTop, centerZ + axisZ * half, sceneryProjected, 6) ||
+        !projectBackdrop(centerX - axisX * half, bodyTop, centerZ - axisZ * half, sceneryProjected, 9) ||
+        !projectBackdrop(centerX, roofTop, centerZ, sceneryProjected, 12)
+    ) {
+      return
+    }
+
+    val depth = (sceneryProjected[2] + sceneryProjected[5] + sceneryProjected[8] + sceneryProjected[11]) * 0.25f
+    val visibility = distanceVisibility(depth, VILLAGE_FOG_NEAR, VILLAGE_FOG_FAR, 0.12f)
+    val alpha = (72 + visibility * 150f).toInt().coerceIn(58, 218)
+    val minX = minOf(sceneryProjected[0], sceneryProjected[3], sceneryProjected[6], sceneryProjected[9], sceneryProjected[12])
+    val maxX = maxOf(sceneryProjected[0], sceneryProjected[3], sceneryProjected[6], sceneryProjected[9], sceneryProjected[12])
+    if (maxX < -40f * density || minX > width + 40f * density) {
+      return
+    }
+
+    path.reset()
+    path.moveTo(sceneryProjected[0], sceneryProjected[1])
+    path.lineTo(sceneryProjected[3], sceneryProjected[4])
+    path.lineTo(sceneryProjected[6], sceneryProjected[7])
+    path.lineTo(sceneryProjected[9], sceneryProjected[10])
+    path.close()
+    paint.style = Paint.Style.FILL
+    paint.color = withAlpha(fogToSky(bodyColor, visibility), alpha)
+    canvas.drawPath(path, paint)
+
+    path.reset()
+    path.moveTo(sceneryProjected[9], sceneryProjected[10])
+    path.lineTo(sceneryProjected[12], sceneryProjected[13])
+    path.lineTo(sceneryProjected[6], sceneryProjected[7])
+    path.close()
+    paint.color = withAlpha(fogToSky(roofColor, visibility * 0.88f), alpha)
+    canvas.drawPath(path, paint)
+
+    if (visibility > 0.32f) {
+      paint.style = Paint.Style.STROKE
+      paint.strokeWidth = 0.8f * density
+      paint.color = withAlpha(Color.rgb(245, 229, 177), (alpha * 0.42f).toInt())
+      canvas.drawLine(sceneryProjected[9], sceneryProjected[10], sceneryProjected[6], sceneryProjected[7], paint)
+    }
+  }
+
   private fun projectSkyDirection(
     dirX: Float,
     dirY: Float,
@@ -784,6 +967,37 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     out[0] = width * 0.5f + cameraSpaceX * focal / cameraSpaceDepth
     out[1] = height * 0.48f - cameraSpaceY * focal / cameraSpaceDepth
     out[2] = cameraSpaceDepth
+    return true
+  }
+
+  private fun projectBackdrop(
+    wx: Float,
+    wy: Float,
+    wz: Float,
+    out: FloatArray,
+    offset: Int,
+  ): Boolean {
+    val dx = wx - cameraX
+    val dy = wy - cameraY
+    val dz = wz - cameraZ
+    val sinYaw = sin(yaw)
+    val cosYaw = cos(yaw)
+    val cameraSpaceX = cosYaw * dx - sinYaw * dz
+    val cameraSpaceZ = sinYaw * dx + cosYaw * dz
+    val sinPitch = sin(pitch)
+    val cosPitch = cos(pitch)
+    val cameraSpaceY = cosPitch * dy - sinPitch * cameraSpaceZ
+    val cameraSpaceDepth = sinPitch * dy + cosPitch * cameraSpaceZ
+
+    if (cameraSpaceDepth <= BACKDROP_NEAR_PLANE) {
+      return false
+    }
+
+    val focal = width * 0.68f
+    val centerY = height * 0.49f
+    out[offset] = width * 0.5f + cameraSpaceX * focal / cameraSpaceDepth
+    out[offset + 1] = centerY - cameraSpaceY * focal / cameraSpaceDepth
+    out[offset + 2] = cameraSpaceDepth
     return true
   }
 
@@ -902,7 +1116,7 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
       points[i] = projected[i]
     }
 
-    val fog = (1f - depth / RENDER_DISTANCE).coerceIn(0.18f, 1f)
+    val fog = distanceVisibility(depth, FOG_START_DISTANCE, RENDER_DISTANCE, 0.07f)
     val color = fogToSky(shade(blockColor(block), shade), fog)
     faces.add(ProjectedFace(points, depth, color, block, face, x, y, z, selected))
   }
@@ -1568,6 +1782,28 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     paint.textAlign = Paint.Align.LEFT
   }
 
+  private fun drawAtmosphericPerspective(canvas: Canvas) {
+    val horizonY =
+      (height * (0.50f + pitch * 0.18f)).coerceIn(height * 0.18f, height * 0.86f)
+    paint.style = Paint.Style.FILL
+    paint.color = Color.argb(38, 184, 216, 243)
+    canvas.drawRect(
+      0f,
+      horizonY - 10f * density,
+      width.toFloat(),
+      min(height.toFloat(), horizonY + height * 0.36f),
+      paint,
+    )
+    paint.color = Color.argb(30, 224, 238, 249)
+    canvas.drawRect(
+      0f,
+      horizonY - 30f * density,
+      width.toFloat(),
+      horizonY + 22f * density,
+      paint,
+    )
+  }
+
   private fun canMineBlock(block: Int): Boolean {
     return when (block) {
       GRASS, DIRT -> selectedTool == TOOL_SHOVEL
@@ -1679,6 +1915,19 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     return Color.rgb(r.coerceIn(0, 255), g.coerceIn(0, 255), b.coerceIn(0, 255))
   }
 
+  private fun distanceVisibility(depth: Float, near: Float, far: Float, minimum: Float): Float {
+    return (1f - ((depth - near) / (far - near))).coerceIn(minimum, 1f)
+  }
+
+  private fun withAlpha(color: Int, alpha: Int): Int {
+    return Color.argb(
+      alpha.coerceIn(0, 255),
+      Color.red(color),
+      Color.green(color),
+      Color.blue(color),
+    )
+  }
+
   companion object {
     private const val WORLD_WIDTH = 72
     private const val WORLD_DEPTH = 72
@@ -1686,6 +1935,12 @@ class VoxelWorldView(context: Context) : View(context), Choreographer.FrameCallb
     private const val RENDER_RADIUS = 8
     private const val BOTTOM_FACE_RADIUS = 4
     private const val RENDER_DISTANCE = 13f
+    private const val FOG_START_DISTANCE = 5.5f
+    private const val BACKDROP_NEAR_PLANE = 0.08f
+    private const val MOUNTAIN_FOG_NEAR = 36f
+    private const val MOUNTAIN_FOG_FAR = 118f
+    private const val VILLAGE_FOG_NEAR = 18f
+    private const val VILLAGE_FOG_FAR = 72f
     private const val TEXTURE_DISTANCE = 4f
     private const val EDGE_DISTANCE = 9f
     private const val NEAR_PLANE = 0.035f

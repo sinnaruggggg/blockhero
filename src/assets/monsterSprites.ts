@@ -508,6 +508,7 @@ const WORLD_MONSTER_NAME_SPRITE_SETS: Record<string, MonsterSpriteSet> = {
   '사막 골렘': MONSTER_SPRITES.desertGolem,
   스핑크스: MONSTER_SPRITES.sphinx,
   전갈왕: MONSTER_SPRITES.scorpionKing,
+  '샌드 스콜피온': MONSTER_SPRITES.scorpionKing,
 
   '얼음 늑대': MONSTER_SPRITES.iceWolf,
   '눈 토끼': MONSTER_SPRITES.snowRabbit,
@@ -518,6 +519,7 @@ const WORLD_MONSTER_NAME_SPRITE_SETS: Record<string, MonsterSpriteSet> = {
   '빙하 드래곤': MONSTER_SPRITES.glacierDragon,
   '눈보라 정령': MONSTER_SPRITES.blizzardSpirit,
   '설빙 여왕': MONSTER_SPRITES.iceQueen,
+  '프로스트 위치': MONSTER_SPRITES.iceQueen,
 
   해파리: MONSTER_SPRITES.jellyfish,
   '조개 기사': MONSTER_SPRITES.shellKnight,
@@ -538,6 +540,7 @@ const WORLD_MONSTER_NAME_SPRITE_SETS: Record<string, MonsterSpriteSet> = {
   '독 골렘': MONSTER_SPRITES.poisonGolem,
   '킹 독거미': MONSTER_SPRITES.kingSpider,
   히드라: MONSTER_SPRITES.hydra,
+  '데저트 팬텀': MONSTER_SPRITES.hydra,
 
   석상: MONSTER_SPRITES.stoneStatue,
   '저주받은 풍뎅이': MONSTER_SPRITES.cursedScarab,
@@ -568,6 +571,7 @@ const WORLD_MONSTER_NAME_SPRITE_SETS: Record<string, MonsterSpriteSet> = {
   '스톰 피닉스': MONSTER_SPRITES.stormPhoenix,
   '천공 가디언': MONSTER_SPRITES.skyGuardianBoss,
   '천둥 용': MONSTER_SPRITES.thunderDragon,
+  '천둥 록': MONSTER_SPRITES.thunderDragon,
 
   '허공 슬라임': MONSTER_SPRITES.voidSlime,
   '암흑 거머리': MONSTER_SPRITES.darkLeech,
@@ -578,6 +582,7 @@ const WORLD_MONSTER_NAME_SPRITE_SETS: Record<string, MonsterSpriteSet> = {
   '심연 왕': MONSTER_SPRITES.abyssKing,
   '공허의 신': MONSTER_SPRITES.voidGod,
   '심연의 군주': MONSTER_SPRITES.abyssLord,
+  '사막의 군주': MONSTER_SPRITES.abyssLord,
 
   '용암 슬라임': MONSTER_SPRITES.lavaSlime,
   '불 도마뱀': MONSTER_SPRITES.fireLizard,
@@ -661,14 +666,14 @@ export interface RaidSummonSpriteSet {
 
 const RAID_SUMMON_SPRITES: Record<number, RaidSummonSpriteSet> = {
   1: {name: '슬라임', ...MONSTER_SPRITES.slime, scale: 1.25},
-  2: {name: '전갈왕', ...MONSTER_SPRITES.scorpionKing, scale: 1},
-  3: {name: '설빙 여왕', ...MONSTER_SPRITES.iceQueen, scale: 1},
+  2: {name: '샌드 스콜피온', ...MONSTER_SPRITES.scorpionKing, scale: 1},
+  3: {name: '프로스트 위치', ...MONSTER_SPRITES.iceQueen, scale: 1},
   4: {name: '크라켄', ...MONSTER_SPRITES.kraken, scale: 1},
-  5: {name: '히드라', ...MONSTER_SPRITES.hydra, scale: 1},
+  5: {name: '데저트 팬텀', ...MONSTER_SPRITES.hydra, scale: 1},
   6: {name: '메두사', ...MONSTER_SPRITES.medusa, scale: 1},
   7: {name: '리치 킹', ...MONSTER_SPRITES.lichKing, scale: 1},
-  8: {name: '천둥 용', ...MONSTER_SPRITES.thunderDragon, scale: 1},
-  9: {name: '심연의 군주', ...MONSTER_SPRITES.abyssLord, scale: 1},
+  8: {name: '천둥 록', ...MONSTER_SPRITES.thunderDragon, scale: 1},
+  9: {name: '사막의 군주', ...MONSTER_SPRITES.abyssLord, scale: 1},
   10: {name: '레드 드래곤', ...MONSTER_SPRITES.redDragon, scale: 1},
 };
 

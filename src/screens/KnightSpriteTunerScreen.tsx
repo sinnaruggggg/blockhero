@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import BackImageButton from '../components/BackImageButton';
+import CharacterSprite from '../components/CharacterSprite';
 import KnightSprite from '../components/KnightSprite';
 import MageSprite from '../components/MageSprite';
 import {CHARACTER_CLASSES} from '../constants/characters';
@@ -126,28 +127,28 @@ const BASE_FIELD_CONFIGS: FieldConfig<BaseFieldKey>[] = [
     step: 2,
     helper: '아래는 +, 위는 -',
   },
-];
-
-const KNIGHT_FIELD_CONFIGS: FieldConfig<KnightFieldKey>[] = [
   {
     key: 'attackScaleMultiplier',
     label: '공격 배율',
     step: 0.05,
     precision: 2,
-    helper: '대기 대비 공격 모션 크기',
+    helper: '공격 모션에만 적용되는 크기',
   },
   {
     key: 'attackOffsetX',
     label: '공격 X 오프셋',
     step: 2,
-    helper: '오른쪽은 +, 왼쪽은 -',
+    helper: '공격 모션에만 적용',
   },
   {
     key: 'attackOffsetY',
     label: '공격 Y 오프셋',
     step: 2,
-    helper: '아래는 +, 위는 -',
+    helper: '공격 모션에만 적용',
   },
+];
+
+const KNIGHT_FIELD_CONFIGS: FieldConfig<KnightFieldKey>[] = [
   {
     key: 'attackFrameCols',
     label: '공격 열 수',
@@ -317,19 +318,16 @@ function TuningStage({
 
   return (
     <View style={[styles.previewVisualWrap, transformStyle]}>
-      <View
-        style={[
-          styles.previewBadge,
-          styles.previewBadgeSmall,
-          {
-            backgroundColor: theme.accentSoft,
-            borderColor: theme.frame,
-          },
-        ]}>
-        <Text style={[styles.previewBadgeText, styles.previewBadgeTextSmall, {color: theme.ink}]}>
-          {visual.emoji}
-        </Text>
-      </View>
+      <CharacterSprite
+        characterId={characterId}
+        size={68}
+        attackPulse={attackPulse}
+        facing={-1}
+        assetProfile="battleLite"
+        attackScaleMultiplier={config.attackScaleMultiplier}
+        attackOffsetX={config.attackOffsetX}
+        attackOffsetY={config.attackOffsetY}
+      />
     </View>
   );
 }
@@ -384,19 +382,14 @@ export default function KnightSpriteTunerScreen({navigation}: any) {
   const currentConfig = configMap[selectedCharacterId];
   const currentTheme = CHARACTER_THEMES[selectedCharacterId];
   const isKnight = selectedCharacterId === 'knight';
-  const currentKnightConfig = currentConfig as KnightVisualTuning;
 
   useEffect(() => {
     setDrafts(buildDrafts(selectedCharacterId, currentConfig));
   }, [currentConfig, selectedCharacterId]);
 
   const previewSummary = useMemo(() => {
-    if (!isKnight) {
-      return `메인 ${currentConfig.showcaseScaleMultiplier.toFixed(2)}x / 전투 ${currentConfig.battleScaleMultiplier.toFixed(2)}x`;
-    }
-
-    return `메인 ${currentConfig.showcaseScaleMultiplier.toFixed(2)}x / 전투 ${currentConfig.battleScaleMultiplier.toFixed(2)}x / 공격 ${currentKnightConfig.attackScaleMultiplier.toFixed(2)}x`;
-  }, [currentConfig, currentKnightConfig.attackScaleMultiplier, isKnight]);
+    return `메인 ${currentConfig.showcaseScaleMultiplier.toFixed(2)}x / 전투 ${currentConfig.battleScaleMultiplier.toFixed(2)}x / 공격 ${currentConfig.attackScaleMultiplier.toFixed(2)}x`;
+  }, [currentConfig]);
 
   const applyValue = useCallback(
     (key: string, rawValue: string) => {
@@ -544,13 +537,11 @@ export default function KnightSpriteTunerScreen({navigation}: any) {
                   attackPulse={attackPulse}
                 />
               </View>
-              {isKnight ? (
-                <TouchableOpacity
-                  style={[styles.previewBtn, {backgroundColor: currentTheme.accent}]}
-                  onPress={() => setAttackPulse(previous => previous + 1)}>
-                  <Text style={styles.previewBtnText}>공격 재생</Text>
-                </TouchableOpacity>
-              ) : null}
+              <TouchableOpacity
+                style={[styles.previewBtn, {backgroundColor: currentTheme.accent}]}
+                onPress={() => setAttackPulse(previous => previous + 1)}>
+                <Text style={styles.previewBtnText}>공격 재생</Text>
+              </TouchableOpacity>
             </View>
           </View>
 

@@ -47,7 +47,10 @@ import {
   type VisualViewport,
 } from '../game/visualConfig';
 import { scaleGameplayUnit } from '../game/layoutScale';
-import { resolveCreatorLevelRuntime } from '../game/creatorManifest';
+import {
+  resolveCreatorLevelRuntime,
+  resolveCreatorRaidRuntime,
+} from '../game/creatorManifest';
 import Board from '../components/Board';
 import PieceSelector from '../components/PieceSelector';
 import ItemBar from '../components/ItemBar';
@@ -57,6 +60,7 @@ import KnightSprite from '../components/KnightSprite';
 import MageSprite from '../components/MageSprite';
 import { useDragDrop } from '../game/useDragDrop';
 import { LEVELS, COMBO_TIMEOUT_MS, FEVER_DURATION } from '../constants';
+import {RAID_BOSSES} from '../constants/raidBosses';
 import {getWorldBackgroundSource} from '../assets/worldBackgrounds';
 import {
   createBoard,
@@ -142,6 +146,7 @@ import {
 } from '../game/monsterSummonRuntime';
 import {
   getMonsterPoseSource,
+  getRaidBossSpriteSet,
   getRaidSummonSpriteSetById,
   getWorldMonsterSpriteSet,
   MonsterSpritePose,
@@ -292,6 +297,13 @@ const CHARACTER_PORTRAITS: Partial<Record<string, any>> = {
   mage: require('../assets/ui/hero_mage.png'),
 };
 
+function resolveI18nName(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  return value.startsWith('raid.') ? t(value) : value;
+}
+
 const WORLD_BACKGROUND_TINTS: Record<number, string> = {
   1: 'rgba(6, 16, 14, 0.62)',
   2: 'rgba(39, 22, 7, 0.66)',
@@ -417,6 +429,15 @@ export default function SingleGameScreen({ route, navigation }: any) {
     levelId,
   );
   const activeWorldId = creatorLevelRuntime?.worldId ?? activeLevel.world;
+  const activeStageNumberInWorld =
+    creatorLevelRuntime?.stageNumberInWorld ?? ((activeLevel.id - 1) % 30) + 1;
+  const isWorldBossStage = activeStageNumberInWorld === 30;
+  const normalRaidBossRuntime = isWorldBossStage
+    ? resolveCreatorRaidRuntime(creatorManifest, 'normal', activeWorldId)
+    : null;
+  const staticNormalRaidBoss = isWorldBossStage
+    ? RAID_BOSSES.find(entry => entry.stage === activeWorldId) ?? null
+    : null;
   const activeLevelName = creatorLevelRuntime?.name ?? activeLevel.name;
 
   useEffect(() => {
@@ -424,7 +445,7 @@ export default function SingleGameScreen({ route, navigation }: any) {
   }, [activeWorldId]);
 
   const activeObstacles = activeLevel.obstacles;
-  const monster = creatorLevelRuntime
+  const baseMonster = creatorLevelRuntime
     ? {
         monsterHp: creatorLevelRuntime.monsterHp,
         monsterName: creatorLevelRuntime.monsterName,
@@ -432,6 +453,26 @@ export default function SingleGameScreen({ route, navigation }: any) {
         monsterColor: creatorLevelRuntime.monsterColor,
       }
     : activeLevel.goal;
+  const monster =
+    isWorldBossStage && (normalRaidBossRuntime || staticNormalRaidBoss)
+      ? {
+          ...baseMonster,
+          monsterName:
+            resolveI18nName(
+              normalRaidBossRuntime?.monsterName ??
+                normalRaidBossRuntime?.name ??
+                staticNormalRaidBoss?.nameKey,
+            ) ?? baseMonster.monsterName,
+          monsterEmoji:
+            normalRaidBossRuntime?.monsterEmoji ??
+            staticNormalRaidBoss?.emoji ??
+            baseMonster.monsterEmoji,
+          monsterColor:
+            normalRaidBossRuntime?.monsterColor ??
+            staticNormalRaidBoss?.color ??
+            baseMonster.monsterColor,
+        }
+      : baseMonster;
   const maxMonsterHp = getAdjustedLevelMonsterHp(
     monster.monsterHp,
     activeWorldId,
@@ -2438,10 +2479,12 @@ export default function SingleGameScreen({ route, navigation }: any) {
     COMBO_TIMEOUT_MS + skillEffectsRef.current.comboWindowBonusMs;
   const playerVisual =
     CHARACTER_VISUALS[selectedCharacterId] ?? CHARACTER_VISUALS.knight;
-  const monsterSpriteSet = getWorldMonsterSpriteSet(
-    activeWorldId,
-    monster.monsterName,
-  );
+  const monsterSpriteSet = isWorldBossStage
+    ? getRaidBossSpriteSet(activeWorldId, monster.monsterName)
+    : getWorldMonsterSpriteSet(
+        activeWorldId,
+        monster.monsterName,
+      );
   const monsterSprite =
     getMonsterPoseSource(monsterSpriteSet, monsterPose) ??
     getMonsterPoseSource(monsterSpriteSet, 'idle');
@@ -2560,6 +2603,9 @@ export default function SingleGameScreen({ route, navigation }: any) {
           attackPulse={attackPulse}
           facing={facing}
           assetProfile={assetProfile}
+          attackScaleMultiplier={tuning.attackScaleMultiplier}
+          attackOffsetX={tuning.attackOffsetX}
+          attackOffsetY={tuning.attackOffsetY}
         />
       </View>
     );
@@ -3331,7 +3377,13 @@ export default function SingleGameScreen({ route, navigation }: any) {
             <View style={styles.victoryMainRow}>
               <View style={styles.victoryAvatarSlot}>
                 <View style={styles.victoryAvatarFrame}>
-                  {renderCharacterPortrait(victoryState.characterId, 86)}
+                  {renderCharacterPortrait(
+                    victoryState.characterId,
+                    86,
+                    0,
+                    1,
+                    'battleLite',
+                  )}
                 </View>
                 <Text style={styles.victoryAvatarName}>
                   {
@@ -3426,7 +3478,13 @@ export default function SingleGameScreen({ route, navigation }: any) {
                 <View
                   style={[styles.victoryAvatarFrame, styles.defeatAvatarFrame]}
                 >
-                  {renderCharacterPortrait(defeatState.characterId, 86)}
+                  {renderCharacterPortrait(
+                    defeatState.characterId,
+                    86,
+                    0,
+                    1,
+                    'battleLite',
+                  )}
                 </View>
                 <Text style={styles.victoryAvatarName}>
                   {

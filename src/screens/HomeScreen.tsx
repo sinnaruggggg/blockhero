@@ -93,6 +93,11 @@ const TOP_ICON_SIZE = W * 0.12;
 const KNIGHT_SIZE = W * 0.57 * 1.5;
 const MAGE_SIZE = KNIGHT_SIZE / 1.3;
 const KNIGHT_DISPLAY_SIZE = KNIGHT_SIZE / 1.3;
+const SHOWCASE_CHARACTER_FACING: Record<string, 1 | -1> = {
+  archer: -1,
+  rogue: -1,
+};
+const FINAL_SIZE_SHOWCASE_CHARACTERS = new Set(['archer', 'rogue', 'healer']);
 
 const CHARACTERS = CHARACTER_CLASSES.map(characterClass => ({
   id: characterClass.id,
@@ -370,11 +375,14 @@ export default function HomeScreen({navigation}: any) {
         characterVisualTunings[
           characterId as keyof typeof characterVisualTunings
         ] ?? characterVisualTunings.knight;
+      const shouldRenderAtFinalSize =
+        FINAL_SIZE_SHOWCASE_CHARACTERS.has(characterId);
+      const previewScale = tuning.showcaseScaleMultiplier * (compact ? 0.8 : 1);
       const showcaseTransform = {
         transform: [
           {translateX: tuning.showcaseOffsetX},
           {translateY: tuning.showcaseOffsetY},
-          {scale: tuning.showcaseScaleMultiplier * (compact ? 0.8 : 1)},
+          ...(shouldRenderAtFinalSize ? [] : [{scale: previewScale}]),
         ],
       };
 
@@ -400,7 +408,12 @@ export default function HomeScreen({navigation}: any) {
         <View style={[styles.modalSpriteWrap, showcaseTransform]}>
           <CharacterSprite
             characterId={characterId}
-            size={compact ? size * 0.92 : size}
+            size={
+              (compact ? size * 0.92 : size) *
+              (shouldRenderAtFinalSize ? previewScale : 1)
+            }
+            facing={SHOWCASE_CHARACTER_FACING[characterId] ?? 1}
+            assetProfile={characterId === 'healer' ? 'lobbyHd' : 'normal'}
           />
         </View>
       );
@@ -409,11 +422,16 @@ export default function HomeScreen({navigation}: any) {
   );
 
   const renderSelectedCharacterShowcase = useCallback(() => {
+    const shouldRenderAtFinalSize = FINAL_SIZE_SHOWCASE_CHARACTERS.has(
+      selectedCharacterClass.id,
+    );
     const showcaseTransform = {
       transform: [
         {translateX: selectedCharacterTuning.showcaseOffsetX},
         {translateY: selectedCharacterTuning.showcaseOffsetY},
-        {scale: selectedCharacterTuning.showcaseScaleMultiplier},
+        ...(shouldRenderAtFinalSize
+          ? []
+          : [{scale: selectedCharacterTuning.showcaseScaleMultiplier}]),
       ],
     };
 
@@ -445,7 +463,16 @@ export default function HomeScreen({navigation}: any) {
           <View style={styles.knightShadow} />
           <CharacterSprite
             characterId={selectedCharacterClass.id}
-            size={KNIGHT_DISPLAY_SIZE}
+            size={
+              KNIGHT_DISPLAY_SIZE *
+              (shouldRenderAtFinalSize
+                ? selectedCharacterTuning.showcaseScaleMultiplier
+                : 1)
+            }
+            facing={SHOWCASE_CHARACTER_FACING[selectedCharacterClass.id] ?? 1}
+            assetProfile={
+              selectedCharacterClass.id === 'healer' ? 'lobbyHd' : 'normal'
+            }
           />
         </View>
       </View>

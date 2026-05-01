@@ -121,7 +121,7 @@ const WORLD_SUMMON_ROWS: Array<
     {id: 'w02_desert_fox', name: '사막 여우', spriteKey: 'desertFox'},
     {id: 'w02_desert_golem', name: '사막 골렘', spriteKey: 'desertGolem'},
     {id: 'w02_sphinx', name: '스핑크스', spriteKey: 'sphinx'},
-    {id: 'w02_scorpion_king', name: '전갈왕', spriteKey: 'scorpionKing'},
+    {id: 'w02_scorpion_king', name: '샌드 스콜피온', spriteKey: 'scorpionKing'},
   ],
   [
     {id: 'w03_ice_wolf', name: '얼음 늑대', spriteKey: 'iceWolf'},
@@ -132,7 +132,7 @@ const WORLD_SUMMON_ROWS: Array<
     {id: 'w03_frozen_golem', name: '동결 골렘', spriteKey: 'frozenGolem'},
     {id: 'w03_glacier_dragon', name: '빙하 드래곤', spriteKey: 'glacierDragon'},
     {id: 'w03_blizzard_spirit', name: '눈보라 정령', spriteKey: 'blizzardSpirit'},
-    {id: 'w03_ice_queen', name: '설빙 여왕', spriteKey: 'iceQueen'},
+    {id: 'w03_ice_queen', name: '프로스트 위치', spriteKey: 'iceQueen'},
   ],
   [
     {id: 'w04_jellyfish', name: '해파리', spriteKey: 'jellyfish'},
@@ -154,7 +154,7 @@ const WORLD_SUMMON_ROWS: Array<
     {id: 'w05_poison_treant', name: '독 트레인트', spriteKey: 'poisonTreant'},
     {id: 'w05_poison_golem', name: '독 골렘', spriteKey: 'poisonGolem'},
     {id: 'w05_king_spider', name: '킹 독거미', spriteKey: 'kingSpider'},
-    {id: 'w05_hydra', name: '히드라', spriteKey: 'hydra'},
+    {id: 'w05_hydra', name: '데저트 팬텀', spriteKey: 'hydra'},
   ],
   [
     {id: 'w06_stone_statue', name: '석상', spriteKey: 'stoneStatue'},
@@ -187,7 +187,7 @@ const WORLD_SUMMON_ROWS: Array<
     {id: 'w08_celestial_knight', name: '천상 기사', spriteKey: 'celestialKnight'},
     {id: 'w08_storm_phoenix', name: '스톰 피닉스', spriteKey: 'stormPhoenix'},
     {id: 'w08_sky_guardian_boss', name: '천공 가디언', spriteKey: 'skyGuardianBoss'},
-    {id: 'w08_thunder_dragon', name: '천둥 용', spriteKey: 'thunderDragon'},
+    {id: 'w08_thunder_dragon', name: '천둥 록', spriteKey: 'thunderDragon'},
   ],
   [
     {id: 'w09_void_slime', name: '허공 슬라임', spriteKey: 'voidSlime'},
@@ -198,7 +198,7 @@ const WORLD_SUMMON_ROWS: Array<
     {id: 'w09_void_dragon', name: '허공 드래곤', spriteKey: 'voidDragon'},
     {id: 'w09_abyss_king', name: '심연 왕', spriteKey: 'abyssKing'},
     {id: 'w09_void_god', name: '공허의 신', spriteKey: 'voidGod'},
-    {id: 'w09_abyss_lord', name: '심연의 군주', spriteKey: 'abyssLord'},
+    {id: 'w09_abyss_lord', name: '사막의 군주', spriteKey: 'abyssLord'},
   ],
   [
     {id: 'w10_lava_slime', name: '용암 슬라임', spriteKey: 'lavaSlime'},
