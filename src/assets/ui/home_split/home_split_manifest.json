@@ -1,0 +1,127 @@
+{
+  "source": "C:/www/game/blockhero_codex/이미지/UI/메인로비",
+  "reference": "home_reference_full.png",
+  "background": "background_clean.png",
+  "states": {
+    "profile_card": {
+      "normal": "profile_card.png",
+      "pressed": "profile_card_pressed.png"
+    },
+    "energy_pill": {
+      "normal": "energy_pill.png",
+      "pressed": "energy_pill_pressed.png"
+    },
+    "gold_pill": {
+      "normal": "gold_pill.png",
+      "pressed": "gold_pill_pressed.png"
+    },
+    "gem_pill": {
+      "normal": "gem_pill.png",
+      "pressed": "gem_pill_pressed.png"
+    },
+    "settings_button": {
+      "normal": "settings_button.png",
+      "pressed": "settings_button_pressed.png"
+    },
+    "side_event": {
+      "normal": "side_event.png",
+      "pressed": "side_event_pressed.png",
+      "alert": "side_event_alert.png",
+      "alertPressed": "side_event_alert_pressed.png"
+    },
+    "side_quest": {
+      "normal": "side_quest.png",
+      "pressed": "side_quest_pressed.png",
+      "alert": "side_quest_alert.png",
+      "alertPressed": "side_quest_alert_pressed.png"
+    },
+    "side_achievement": {
+      "normal": "side_achievement.png",
+      "pressed": "side_achievement_pressed.png",
+      "alert": "side_achievement_alert.png",
+      "alertPressed": "side_achievement_alert_pressed.png"
+    },
+    "side_mail": {
+      "normal": "side_mail.png",
+      "pressed": "side_mail_pressed.png",
+      "alert": "side_mail_alert.png",
+      "alertPressed": "side_mail_alert_pressed.png"
+    },
+    "side_shop": {
+      "normal": "side_shop.png",
+      "pressed": "side_shop_pressed.png",
+      "alert": "side_shop_alert.png",
+      "alertPressed": "side_shop_alert_pressed.png"
+    },
+    "side_pass": {
+      "normal": "side_pass.png",
+      "pressed": "side_pass_pressed.png",
+      "alert": "side_pass_alert.png",
+      "alertPressed": "side_pass_alert_pressed.png"
+    },
+    "side_friends": {
+      "normal": "side_friends.png",
+      "pressed": "side_friends_pressed.png",
+      "alert": "side_friends_alert.png",
+      "alertPressed": "side_friends_alert_pressed.png"
+    },
+    "primary_play": {
+      "normal": "primary_play.png",
+      "pressed": "primary_play_pressed.png"
+    },
+    "mode_battle": {
+      "normal": "mode_battle.png",
+      "pressed": "mode_battle_pressed.png",
+      "alert": "mode_battle_alert.png",
+      "alertPressed": "mode_battle_alert_pressed.png"
+    },
+    "mode_raid": {
+      "normal": "mode_raid.png",
+      "pressed": "mode_raid_pressed.png",
+      "alert": "mode_raid_alert.png",
+      "alertPressed": "mode_raid_alert_pressed.png"
+    },
+    "mode_endless": {
+      "normal": "mode_endless.png",
+      "pressed": "mode_endless_pressed.png",
+      "alert": "mode_endless_alert.png",
+      "alertPressed": "mode_endless_alert_pressed.png"
+    },
+    "mode_ranking": {
+      "normal": "mode_ranking.png",
+      "pressed": "mode_ranking_pressed.png",
+      "alert": "mode_ranking_alert.png",
+      "alertPressed": "mode_ranking_alert_pressed.png"
+    },
+    "bottom_nav": {
+      "normal": "bottom_nav.png"
+    },
+    "nav_home": {
+      "normal": "nav_home.png",
+      "pressed": "nav_home_pressed.png",
+      "alert": "nav_home_alert.png",
+      "alertPressed": "nav_home_alert_pressed.png"
+    },
+    "nav_bag": {
+      "normal": "nav_bag.png",
+      "pressed": "nav_bag_pressed.png",
+      "alert": "nav_bag_alert.png",
+      "alertPressed": "nav_bag_alert_pressed.png"
+    },
+    "nav_skill": {
+      "normal": "nav_skill.png",
+      "pressed": "nav_skill_pressed.png",
+      "alert": "nav_skill_alert.png",
+      "alertPressed": "nav_skill_alert_pressed.png"
+    },
+    "nav_codex": {
+      "normal": "nav_codex.png",
+      "pressed": "nav_codex_pressed.png",
+      "alert": "nav_codex_alert.png",
+      "alertPressed": "nav_codex_alert_pressed.png"
+    },
+    "play_panel": {
+      "normal": "play_panel.png"
+    }
+  }
+}

@@ -26,6 +26,7 @@ interface GameBottomNavProps {
   selectedCharacterId?: string | null;
   onHomePress?: () => void | Promise<void>;
   onOpenCharacterPicker?: () => void;
+  variant?: 'default' | 'lobbyPanel';
 }
 
 const MENU_ITEMS: Array<{
@@ -36,7 +37,7 @@ const MENU_ITEMS: Array<{
 }> = [
   { id: 'home', label: '홈', image: IMG_HOME },
   { id: 'bag', label: '가방', emoji: '🎒' },
-  { id: 'skill', label: '스킬', emoji: '✨' },
+  { id: 'skill', label: '스킬', emoji: '📘' },
   { id: 'codex', label: '도감', image: IMG_CODEX },
 ];
 
@@ -46,6 +47,7 @@ export default function GameBottomNav({
   selectedCharacterId,
   onHomePress,
   onOpenCharacterPicker,
+  variant = 'default',
 }: GameBottomNavProps) {
   const { width } = useWindowDimensions();
   const [storedCharacterId, setStoredCharacterId] = useState<string | null>(
@@ -54,6 +56,7 @@ export default function GameBottomNav({
 
   const baseIconSize = Math.min(width * 0.12, 50);
   const homeIconSize = Math.round(baseIconSize * 1.2);
+  const isLobbyPanel = variant === 'lobbyPanel';
 
   useEffect(() => {
     if (selectedCharacterId !== undefined) {
@@ -121,8 +124,8 @@ export default function GameBottomNav({
   );
 
   return (
-    <View style={styles.host}>
-      <View style={styles.row}>
+    <View style={[styles.host, isLobbyPanel && styles.lobbyHost]}>
+      <View style={[styles.row, isLobbyPanel && styles.lobbyRow]}>
         {MENU_ITEMS.map(item => {
           const isHome = item.id === 'home';
           const isActive = activeItem === item.id;
@@ -133,8 +136,11 @@ export default function GameBottomNav({
               key={item.id}
               style={[
                 styles.item,
+                isLobbyPanel && styles.lobbyItem,
                 isHome && styles.homeItem,
+                isLobbyPanel && isHome && styles.lobbyHomeItem,
                 isActive && styles.activeItem,
+                isLobbyPanel && isActive && styles.lobbyActiveItem,
               ]}
               activeOpacity={0.82}
               onPress={() => {
@@ -164,7 +170,13 @@ export default function GameBottomNav({
                   {item.emoji}
                 </Text>
               )}
-              <Text style={[styles.label, isActive && styles.activeLabel]}>
+              <Text
+                style={[
+                  styles.label,
+                  isLobbyPanel && styles.lobbyLabel,
+                  isActive && styles.activeLabel,
+                  isLobbyPanel && isActive && styles.lobbyActiveLabel,
+                ]}>
                 {item.label}
               </Text>
             </TouchableOpacity>
@@ -180,21 +192,59 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: 4,
   },
+  lobbyHost: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 8,
+    zIndex: 90,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
+  },
+  lobbyRow: {
+    minHeight: 76,
+    alignItems: 'stretch',
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#7b5b91',
+    backgroundColor: '#fff6e8',
+    overflow: 'hidden',
+    shadowColor: '#221236',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.24,
+    shadowRadius: 9,
+    elevation: 9,
   },
   item: {
     minWidth: 42,
     alignItems: 'center',
     opacity: 0.9,
   },
+  lobbyItem: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+    paddingVertical: 7,
+    opacity: 1,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(123, 91, 145, 0.28)',
+  },
   homeItem: {
     transform: [{ translateY: -4 }],
   },
+  lobbyHomeItem: {
+    transform: [{ translateY: 0 }],
+  },
   activeItem: {
     opacity: 1,
+  },
+  lobbyActiveItem: {
+    backgroundColor: '#9b74d8',
   },
   emojiIcon: {
     textAlign: 'center',
@@ -209,7 +259,17 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
+  lobbyLabel: {
+    color: '#5b3d67',
+    fontSize: 13,
+    textShadowColor: 'transparent',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
+  },
   activeLabel: {
     color: '#fdf1ff',
+  },
+  lobbyActiveLabel: {
+    color: '#ffffff',
   },
 });

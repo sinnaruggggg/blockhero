@@ -21,7 +21,7 @@ react {
     //   The list of variants to that are debuggable. For those we're going to
     //   skip the bundling of the JS bundle and the assets. Default is "debug", "debugOptimized".
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // debuggableVariants = ["liteDebug", "liteDebugOptimized", "prodDebug", "prodDebugOptimized"]
+    debuggableVariants = ["gameDebug", "gameDebugOptimized", "adminDebug", "adminDebugOptimized"]
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
@@ -89,8 +89,8 @@ android {
         applicationId "com.blockhero.game"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 224
-        versionName "1.3.100"
+        versionCode 225
+        versionName "1.3.101"
         buildConfigField "boolean", "IS_ADMIN_APP", "false"
         buildConfigField "String", "APP_MODE", "\"game\""
         buildConfigField "String", "ADMIN_AUTO_EMAIL", "\"\""
