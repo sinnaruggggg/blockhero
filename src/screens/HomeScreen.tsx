@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import CharacterSprite from '../components/CharacterSprite';
 import MageSprite from '../components/MageSprite';
 import KnightSprite from '../components/KnightSprite';
-import GameBottomNav from '../components/GameBottomNav';
 import ItemLoadoutModal from '../components/ItemLoadoutModal';
 import {
   CHARACTER_CLASSES,
@@ -1068,7 +1067,7 @@ export default function HomeScreen({navigation}: any) {
   const referenceWidth = HOME_REFERENCE_WIDTH * referenceScale;
   const referenceHeight = HOME_REFERENCE_HEIGHT * referenceScale;
   const referenceLeft = (windowSize.width - referenceWidth) / 2;
-  const referenceTop = (windowSize.height - referenceHeight) / 2;
+  const referenceTop = Math.max(0, (windowSize.height - referenceHeight) / 2);
 
   const referenceBoxStyle = (
     box: (typeof HOME_REFERENCE_HITBOXES)[keyof typeof HOME_REFERENCE_HITBOXES],
@@ -1755,14 +1754,6 @@ export default function HomeScreen({navigation}: any) {
           </View>
         </View>
 
-        <GameBottomNav
-          navigation={navigation}
-          activeItem="home"
-          selectedCharacterId={selectedChar}
-          onOpenCharacterPicker={() => setShowCharSelect(true)}
-          variant="lobbyPanel"
-        />
-
         <Modal
           visible={showAnnouncementModal && !!announcement}
           transparent
@@ -1977,6 +1968,7 @@ const styles = StyleSheet.create({
   referenceHomeLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 120,
+    elevation: 120,
     overflow: 'hidden',
   },
   referenceBackgroundSlot: {
