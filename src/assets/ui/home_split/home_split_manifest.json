@@ -1,6 +1,5 @@
 {
   "source": "C:/www/game/blockhero_codex/이미지/UI/메인로비",
-  "reference": "home_reference_full.png",
   "background": "background_clean.png",
   "states": {
     "profile_card": {
@@ -22,6 +21,9 @@
     "settings_button": {
       "normal": "settings_button.png",
       "pressed": "settings_button_pressed.png"
+    },
+    "logo": {
+      "normal": "logo.png"
     },
     "side_event": {
       "normal": "side_event.png",
@@ -93,9 +95,6 @@
       "alert": "mode_ranking_alert.png",
       "alertPressed": "mode_ranking_alert_pressed.png"
     },
-    "bottom_nav": {
-      "normal": "bottom_nav.png"
-    },
     "nav_home": {
       "normal": "nav_home.png",
       "pressed": "nav_home_pressed.png",
@@ -122,6 +121,13 @@
     },
     "play_panel": {
       "normal": "play_panel.png"
+    },
+    "bottom_nav": {
+      "normal": "bottom_nav.png"
     }
-  }
+  },
+  "notes": [
+    "Generated from main lobby sheet sources.",
+    "Profile card art is preserved because the sheet source contains a placeholder silhouette."
+  ]
 }

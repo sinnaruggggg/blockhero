@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_SIZE = (862, 1824)
+PEDESTAL_RAISE_PX = 150
+BOTTOM_BLEND_PX = 36
 SOURCE_BASE = ROOT / "\uc774\ubbf8\uc9c0" / "UI" / "\uba54\uc778\ub85c\ube44" / "home_background_clean.png"
 OUT_DIR = ROOT / "src" / "assets" / "ui" / "optimized"
 ARCHIVE_DIR = ROOT / "release-assets" / "main-lobby-world-backgrounds-2026-05-03"
@@ -40,11 +43,36 @@ def fit_cover(img: Image.Image, size: tuple[int, int]) -> Image.Image:
     return resized.crop((left, top, left + target_w, top + target_h))
 
 
+def raise_pedestal(img: Image.Image, shift: int = PEDESTAL_RAISE_PX) -> Image.Image:
+    """Move the lobby platform above the lower UI band without leaving a blank bottom."""
+    if shift <= 0:
+        return img
+
+    width, height = img.size
+    shift = min(shift, height // 4)
+    out = Image.new("RGB", img.size)
+    out.paste(img.crop((0, shift, width, height)), (0, 0))
+
+    fill_height = shift + BOTTOM_BLEND_PX
+    fill_source_top = max(0, height - fill_height * 2)
+    fill_source = img.crop((0, fill_source_top, width, height))
+    fill = fill_source.resize((width, fill_height), Image.Resampling.LANCZOS)
+
+    fill_y = height - fill_height
+    seam = out.crop((0, fill_y, width, fill_y + BOTTOM_BLEND_PX))
+    fill_seam = fill.crop((0, 0, width, BOTTOM_BLEND_PX))
+    mask = Image.linear_gradient("L").resize((width, BOTTOM_BLEND_PX))
+    blended = Image.composite(fill_seam, seam, mask)
+    out.paste(blended, (0, fill_y))
+    out.paste(fill.crop((0, BOTTOM_BLEND_PX, width, fill_height)), (0, fill_y + BOTTOM_BLEND_PX))
+    return out
+
+
 def save_world(world_id: int, source: Path) -> Path:
     image = Image.open(source).convert("RGB")
-    normalized = fit_cover(image, REFERENCE_SIZE)
+    normalized = raise_pedestal(fit_cover(image, REFERENCE_SIZE))
 
-    archive_path = ARCHIVE_DIR / f"world_background_{world_id:02d}_{WORLD_LABELS[world_id]}.png"
+    archive_path = ARCHIVE_DIR / f"world_background_{world_id:02d}_{WORLD_LABELS[world_id]}_raised.png"
     app_path = OUT_DIR / f"world_background_{world_id:02d}.jpg"
     normalized.save(archive_path)
     normalized.save(app_path, quality=90, optimize=True, progressive=True)
@@ -81,6 +109,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def generated_world_sort_key(path: Path) -> tuple[int, float, str]:
+    match = re.search(r"world[_-](\d{2})", path.name)
+    if match:
+        return int(match.group(1)), path.stat().st_mtime, path.name
+    return 999, path.stat().st_mtime, path.name
+
+
 def main() -> None:
     args = parse_args()
     generated_dir = args.generated_dir
@@ -89,10 +124,7 @@ def main() -> None:
     if not generated_dir.exists():
         raise FileNotFoundError(f"missing generated dir: {generated_dir}")
 
-    generated_files = sorted(
-        generated_dir.glob("*.png"),
-        key=lambda path: path.stat().st_mtime,
-    )
+    generated_files = sorted(generated_dir.glob("*.png"), key=generated_world_sort_key)
     if len(generated_files) < 9:
         raise ValueError(
             f"expected at least 9 generated PNG files for worlds 2-10, got {len(generated_files)}"

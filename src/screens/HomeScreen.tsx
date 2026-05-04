@@ -214,7 +214,6 @@ const IMG_CLEAN_NAV_CODEX = {
 };
 const IMG_LOBBY_KNIGHT = require('../assets/characters/lobby_reference/knight.png');
 const IMG_LOBBY_MAGE = require('../assets/characters/lobby_reference/mage.png');
-const IMG_LOBBY_ARCHER = require('../assets/characters/lobby_reference/archer.png');
 const IMG_LOBBY_ROGUE = require('../assets/characters/lobby_reference/rogue.png');
 const IMG_LOBBY_HEALER = require('../assets/characters/lobby_reference/healer.png');
 
@@ -231,7 +230,6 @@ const FINAL_SIZE_SHOWCASE_CHARACTERS = new Set(['archer', 'rogue', 'healer']);
 const LOBBY_REFERENCE_CHARACTER_IMAGES: Record<string, any> = {
   knight: IMG_LOBBY_KNIGHT,
   mage: IMG_LOBBY_MAGE,
-  archer: IMG_LOBBY_ARCHER,
   rogue: IMG_LOBBY_ROGUE,
   healer: IMG_LOBBY_HEALER,
 };
@@ -918,7 +916,7 @@ export default function HomeScreen({navigation}: any) {
               .map(grant => `${grant.type} x${grant.amount}`)
               .join(', ');
             setGameData(result.gameData);
-            Alert.alert(t('common.notice'), `보상??지급되?�습?�다.\n${summary}`);
+            Alert.alert(t('common.notice'), `보상이 지급되었습니다.\n${summary}`);
           }
         } catch {
           pendingGrantsCheckedRef.current = false;
@@ -974,7 +972,7 @@ export default function HomeScreen({navigation}: any) {
     }
 
     if (hasInfiniteHearts) {
-      Alert.alert(t('common.notice'), '?�트 무제??모드가 ?�성?�되???�습?�다.');
+      Alert.alert(t('common.notice'), '하트 무제한 모드가 활성화되어 있습니다.');
       return;
     }
 
@@ -1200,14 +1198,25 @@ export default function HomeScreen({navigation}: any) {
           referenceBoxStyle(HOME_REFERENCE_HITBOXES.character),
           pressed && styles.cleanButtonPressed,
         ]}>
-        <Image
-          source={
-            LOBBY_REFERENCE_CHARACTER_IMAGES[selectedCharacterClass.id] ??
-            IMG_LOBBY_HEALER
-          }
-          resizeMode="contain"
-          style={styles.referenceSlotImage}
-        />
+        {selectedCharacterClass.id === 'archer' ? (
+          <View style={styles.referenceCharacterSpriteWrap}>
+            <CharacterSprite
+              characterId="archer"
+              size={HOME_REFERENCE_HITBOXES.character.height * referenceScale * 0.98}
+              facing={SHOWCASE_CHARACTER_FACING.archer}
+              assetProfile="normal"
+            />
+          </View>
+        ) : (
+          <Image
+            source={
+              LOBBY_REFERENCE_CHARACTER_IMAGES[selectedCharacterClass.id] ??
+              IMG_LOBBY_HEALER
+            }
+            resizeMode="contain"
+            style={styles.referenceSlotImage}
+          />
+        )}
       </Pressable>
       {renderCleanButton({
         source: IMG_CLEAN_PROFILE,
@@ -1393,7 +1402,7 @@ export default function HomeScreen({navigation}: any) {
               />
               <View style={styles.playerInfo}>
                 <Text numberOfLines={1} style={styles.playerName}>
-                  블록?�사
+                  블록용사
                 </Text>
                 <View style={styles.playerLevelRow}>
                   <View style={styles.levelBadge}>
@@ -1642,7 +1651,7 @@ export default function HomeScreen({navigation}: any) {
             onPress={() => {
               setShowAnnouncementModal(true);
             }}>
-            <Text style={styles.announceText}>공�? · {announcement.title}</Text>
+            <Text style={styles.announceText}>공지 · {announcement.title}</Text>
           </TouchableOpacity>
         )}
 
@@ -1706,7 +1715,7 @@ export default function HomeScreen({navigation}: any) {
               onPress={() => setShowCharSelect(true)}
             />
             <View pointerEvents="none" style={styles.characterTapHint}>
-              <Text style={styles.characterTapHintText}>캐릭???�치</Text>
+              <Text style={styles.characterTapHintText}>캐릭터 위치</Text>
             </View>
           </Animated.View>
 
@@ -1717,7 +1726,7 @@ export default function HomeScreen({navigation}: any) {
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Ranking')}>
               <Image source={IMG_RANKING} style={styles.modeIcon} resizeMode="contain" />
-              <Text style={styles.modeLabel}>??��</Text>
+              <Text style={styles.modeLabel}>랭킹</Text>
             </TouchableOpacity>
           </View>
 
@@ -1726,14 +1735,14 @@ export default function HomeScreen({navigation}: any) {
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Levels')}>
               <Image source={IMG_LEVEL} style={styles.modeIcon} resizeMode="contain" />
-              <Text style={styles.modeLabel}>?�벨 모드</Text>
+              <Text style={styles.modeLabel}>레벨 모드</Text>
             </TouchableOpacity>
             <View style={styles.characterSpace} />
             <TouchableOpacity
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('Lobby')}>
               <Image source={IMG_BATTLE} style={styles.modeIcon} resizeMode="contain" />
-              <Text style={styles.modeLabel}>?�??모드</Text>
+              <Text style={styles.modeLabel}>대전 모드</Text>
             </TouchableOpacity>
           </View>
 
@@ -1749,7 +1758,7 @@ export default function HomeScreen({navigation}: any) {
               style={styles.modeBtnWrapper}
               onPress={() => navigation.navigate('RaidLobby')}>
               <Image source={IMG_RAID} style={styles.modeIcon} resizeMode="contain" />
-              <Text style={styles.modeLabel}>?�이??모드</Text>
+              <Text style={styles.modeLabel}>레이드 모드</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1782,7 +1791,7 @@ export default function HomeScreen({navigation}: any) {
               <TouchableOpacity
                 style={styles.announcementModalClose}
                 onPress={() => setShowAnnouncementModal(false)}>
-                <Text style={styles.announcementModalCloseText}>?�기</Text>
+                <Text style={styles.announcementModalCloseText}>닫기</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1793,9 +1802,9 @@ export default function HomeScreen({navigation}: any) {
             <View style={styles.charSelectModal}>
               <View style={styles.charSelectHeader}>
                 <Text style={styles.charSelectEyebrow}>CHARACTER LOUNGE</Text>
-                <Text style={styles.charSelectTitle}>캐릭???�택</Text>
+                <Text style={styles.charSelectTitle}>캐릭터 선택</Text>
                 <Text style={styles.charSelectSubtitle}>
-                  메인 ?�면??캐릭?��? ?�치?�서 ?�제??교체?????�습?�다.
+                  메인 화면의 캐릭터를 터치해서 언제든 교체할 수 있습니다.
                 </Text>
               </View>
 
@@ -1933,7 +1942,7 @@ export default function HomeScreen({navigation}: any) {
                     setShowCharSelect(false);
                   }
                 }}>
-                <Text style={styles.charSelectCloseText}>?�기</Text>
+                <Text style={styles.charSelectCloseText}>닫기</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1984,6 +1993,12 @@ const styles = StyleSheet.create({
   },
   referenceCharacterSlot: {
     zIndex: 12,
+  },
+  referenceCharacterSpriteWrap: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   referenceLogoSlot: {
     zIndex: 30,
